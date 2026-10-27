@@ -43,12 +43,12 @@ impl UserCommand for CopyCommand {
             return Err(Error::InvalidArgument);
         }
 
-        if let Ok(statistics) = virtual_file_system.get_statistics(&destination).await {
-            if statistics.kind == Kind::Directory {
-                destination = destination
-                    .join(Path::from_str(source.get_file_name()))
-                    .ok_or(Error::FailedToJoinPath)?;
-            }
+        if let Ok(statistics) = virtual_file_system.get_statistics(&destination).await
+            && statistics.kind == Kind::Directory
+        {
+            destination = destination
+                .join(Path::from_str(source.get_file_name()))
+                .ok_or(Error::FailedToJoinPath)?;
         }
 
         if source == destination {

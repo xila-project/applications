@@ -385,7 +385,7 @@ async fn diagnostics(
             .task_manager
             .get_parent(task)
             .await
-            .map(|parent| usize::from(parent))
+            .map(usize::from)
             .ok();
         tasks.push(serde_json::json!({
             "id": usize::from(task),
