@@ -5,3 +5,13 @@ Official Xila applications live in this workspace. The guest binaries are calcul
 Install [mise](https://mise.jdx.dev/) and the native development packages listed in the Core development instructions. `mise run build:applications` produces the Wasm guests in `target/wasm32-wasip1/release-wasm`. `mise run check:guest` checks the guest target. `mise run test:workspace` runs host tests; install Node.js 24 and run `npm ci` first for Core's graphics font converter. The Platforms seed generator accepts the built binaries through its `--applications-dir` option.
 
 This branch is part of a coordinated migration. The package publication workflow, local multi-repository overrides, and full integration and deployment checks are being completed before the migration can be considered ready.
+
+For adjacent local checkouts, generate a Cargo config without changing the committed lockfile permanently:
+
+```sh
+python3 tools/local_overrides.py --core ../core --platforms ../platforms --output /tmp/xila-local.toml
+cargo metadata --config /tmp/xila-local.toml --format-version 1
+cargo test --config /tmp/xila-local.toml -p xila-command-line-shell --test integration_test --features xila/graphics_rendering_xrgb8888
+```
+
+Cargo records patched paths in `Cargo.lock`; regenerate the lockfile without the local config before committing. Use the same Core checkout for all patches, including transitive platform dependencies.
