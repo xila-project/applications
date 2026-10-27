@@ -1,0 +1,13 @@
+[package]
+name = "xila-application-shortcuts"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+embedded-i18n = { workspace = true }
+
+[dev-dependencies]
+core_application_metadata = { package = "xila-application-metadata", git = "https://github.com/xila-project/core", rev = "5760ff375736e623413e2e92c55a854a7a35352c" }
+
+[lib]
+name = "application_shortcuts"

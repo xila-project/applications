@@ -4787,6 +4787,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "xila-application-shortcuts"
+version = "0.1.0"
+dependencies = [
+ "embedded-i18n",
+ "xila-application-metadata",
+]
+
+[[package]]
 name = "xila-audio"
 version = "0.1.0"
 source = "git+https://github.com/xila-project/core?rev=5760ff375736e623413e2e92c55a854a7a35352c#5760ff375736e623413e2e92c55a854a7a35352c"
@@ -4819,7 +4827,7 @@ dependencies = [
  "embedded-i18n",
  "nanoexpr",
  "xila",
- "xila-application-metadata",
+ "xila-application-shortcuts",
  "xila-drivers-core",
  "xila-drivers-native",
  "xila-drivers-shared",
@@ -4834,7 +4842,7 @@ name = "xila-clock"
 version = "0.1.0"
 dependencies = [
  "embedded-i18n",
- "xila-application-metadata",
+ "xila-application-shortcuts",
  "xila-wasm",
 ]
 
@@ -4986,7 +4994,7 @@ version = "0.1.0"
 dependencies = [
  "xila",
  "xila-abi-definitions",
- "xila-application-metadata",
+ "xila-application-shortcuts",
  "xila-drivers-core",
  "xila-drivers-native",
  "xila-drivers-shared",
@@ -5128,7 +5136,7 @@ name = "xila-pixel-painter"
 version = "0.1.0"
 dependencies = [
  "embedded-i18n",
- "xila-application-metadata",
+ "xila-application-shortcuts",
  "xila-wasm",
 ]
 
@@ -5141,7 +5149,7 @@ dependencies = [
  "embedded-io",
  "xila",
  "xila-abi-definitions",
- "xila-application-metadata",
+ "xila-application-shortcuts",
  "xila-drivers-core",
  "xila-drivers-native",
  "xila-drivers-shared",
@@ -5175,7 +5183,7 @@ version = "0.1.0"
 dependencies = [
  "nanoaudio",
  "nanoaudio-synth",
- "xila-application-metadata",
+ "xila-application-shortcuts",
  "xila-audio",
  "xila-file-system",
  "xila-wasm",
@@ -5213,7 +5221,7 @@ version = "0.1.0"
 dependencies = [
  "xila",
  "xila-abi-definitions",
- "xila-application-metadata",
+ "xila-application-shortcuts",
  "xila-command-line-shell",
  "xila-drivers-core",
  "xila-drivers-native",
@@ -5254,7 +5262,7 @@ name = "xila-text-editor"
 version = "0.1.0"
 dependencies = [
  "embedded-i18n",
- "xila-application-metadata",
+ "xila-application-shortcuts",
  "xila-wasm",
 ]
 
@@ -5322,7 +5330,7 @@ dependencies = [
  "embedded-i18n",
  "miniserde",
  "xila",
- "xila-application-metadata",
+ "xila-application-shortcuts",
  "xila-drivers-core",
  "xila-drivers-native",
  "xila-drivers-shared",
