@@ -23,6 +23,7 @@ jobs:
       - run: mise run ci:format-rust
       - run: mise run ci:format-toml
       - run: python3 tools/validate_manifests.py
+      - run: mise run localization:lint
   guest:
     runs-on: ubuntu-latest
     env:

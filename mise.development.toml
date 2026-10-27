@@ -24,3 +24,6 @@ extends = "dev:rust-wasi"
 
 [tasks."test:workspace"]
 extends = "dev:rust-wasi"
+
+[tasks."localization:lint"]
+tools.node = "{{ vars.node_version }}"

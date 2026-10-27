@@ -57,3 +57,6 @@ set -eu
 cargo test --locked -p xila-application-shortcuts --test compatibility
 cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth
 """
+
+[tasks."localization:lint"]
+tools.node = "{{ vars.node_version }}"

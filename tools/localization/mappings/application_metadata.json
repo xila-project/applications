@@ -1,0 +1,8 @@
+{
+  "namespace": "libraries/application_shortcuts",
+  "old_to_new": {
+    "Pixel Painter": "applications.pixel_painter",
+    "Settings": "applications.settings",
+    "Text Editor": "applications.text_editor"
+  }
+}

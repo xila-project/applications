@@ -14,3 +14,7 @@ run = "cargo build --locked --target wasm32-wasip1 --profile release-wasm -p xil
 [tasks."test:workspace"]
 description = "Test application crates on the host"
 run = "cargo test --locked --workspace --features xila/graphics_rendering_xrgb8888"
+
+[tasks."localization:lint"]
+description = "Validate application translation keys and catalogs"
+run = "node tools/localization/check.mjs && node --test tolgee.extractor.test.mjs tools/localization/catalog.test.mjs"
