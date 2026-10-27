@@ -4,3 +4,5 @@ EMBEDDED_I18N_LOCALE = "en"
 EMBEDDED_I18N_FALLBACK = "en"
 XILA_LV_FONT_CONV_DIR = { value = "node_modules/lv_font_conv", relative = true }
 LITTLEFS_CONFIG = { value = "config/littlefs/little_fs_config.h", relative = true }
+# Core's font build includes the selected workspace's translated glyphs.
+XILA_FONT_CATALOG_ROOTS = { value = ".", relative = true }
