@@ -1,0 +1,41 @@
+[task_templates."dev:rust-wasi".tools]
+rust = { version = "{{ vars.rust_version }}", profile = "minimal", components = [
+  "rustfmt",
+], targets = [
+  "wasm32-wasip1",
+], mr_boxington = true }
+"mr-boxington" = "1.26.0"
+
+[tasks."format:rust"]
+tools.rust = { version = "{{ vars.rust_version }}", profile = "minimal", components = [
+  "rustfmt",
+] }
+run = "cargo fmt --all"
+
+[tasks."format:toml"]
+tools.taplo = "{{ vars.taplo_version }}"
+run = "taplo format"
+
+[tasks."check:guest"]
+extends = "dev:rust-wasi"
+
+[tasks."build:applications"]
+extends = "dev:rust-wasi"
+
+[tasks."test:workspace"]
+extends = "dev:rust-wasi"
+
+[tasks."localization:lint"]
+tools.node = "{{ vars.node_version }}"
+
+[tasks."translate:compare"]
+tools.node = "{{ vars.node_version }}"
+run = "npm exec tolgee compare"
+
+[tasks."translate:pull"]
+tools.node = "{{ vars.node_version }}"
+run = "npm exec tolgee pull && python3 tools/localization/relocate_shortcuts.py"
+
+[tasks."translate:push"]
+tools.node = "{{ vars.node_version }}"
+run = "npm exec tolgee push"

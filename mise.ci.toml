@@ -1,0 +1,67 @@
+[wrappers.cargo]
+command = "env"
+args = [
+  "{% if env.XILA_MBX | default(value='0') == '1' %}mbx{% else %}cargo{% endif %}",
+]
+env = { MBX_CARGO_SHIM_MODE = "1" }
+
+[task_templates."ci:rust-wasi".tools]
+rust = { version = "{{ vars.rust_version }}", profile = "minimal", components = [
+  "clippy",
+  "rustfmt",
+], targets = [
+  "wasm32-wasip1",
+] }
+
+[tasks."ci:format-rust"]
+tools.rust = { version = "{{ vars.rust_version }}", profile = "minimal", components = [
+  "rustfmt",
+] }
+run = "cargo fmt --all -- --check"
+
+[tasks."ci:format-toml"]
+tools.taplo = "{{ vars.taplo_version }}"
+run = "taplo format --check"
+
+[tasks."check:guest"]
+extends = "ci:rust-wasi"
+
+[tasks."build:applications"]
+extends = "ci:rust-wasi"
+
+[tasks."test:workspace"]
+extends = "ci:rust-wasi"
+
+[tasks."ci:toolchain"]
+tools.rust = { version = "{{ vars.rust_version }}", profile = "minimal" }
+run = '''
+set -eu
+rustc --version
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+  echo "version={{ vars.rust_version }}" >> "$GITHUB_OUTPUT"
+fi
+'''
+
+[tasks."ci:clippy-guest"]
+extends = "ci:rust-wasi"
+run = "cargo clippy --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -- -D warnings"
+
+[tasks."ci:clippy-host"]
+extends = "ci:rust-wasi"
+run = "cargo clippy --locked -p xila-activity -p xila-debug-application -p xila-file-manager -p xila-settings -p xila-terminal -p xila-command-line-shell -p xila-graphical-shell --all-targets --features xila/graphics_rendering_xrgb8888 -- -D warnings"
+
+[tasks."ci:localization"]
+extends = "ci:rust-wasi"
+run = """
+set -eu
+cargo test --locked -p xila-application-shortcuts --test compatibility
+cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth
+"""
+
+[tasks."localization:lint"]
+tools.node = "{{ vars.node_version }}"
+
+[tasks."ci:lint-workflows"]
+tools."aqua:rhysd/actionlint" = "{{ vars.actionlint_version }}"
+tools."aqua:koalaman/shellcheck" = "{{ vars.shellcheck_version }}"
+run = "actionlint"

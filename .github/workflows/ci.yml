@@ -1,0 +1,121 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  MISE_ENV: ci
+  CARGO_TERM_COLOR: always
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5.2.2
+      - run: mise run ci:format-rust
+      - run: mise run ci:format-toml
+      - run: python3 tools/validate_manifests.py
+      - run: python3 -m unittest discover -s tools/ci -v
+      - run: mise run localization:lint
+      - run: mise run ci:lint-workflows
+  guest:
+    runs-on: ubuntu-latest
+    env:
+      XILA_MBX: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5.2.2
+      - id: toolchain
+        run: mise run ci:toolchain
+      - uses: jdx/mr-boxington-action@v1
+        with:
+          toolchain: ${{ steps.toolchain.outputs.version }}
+          github-cache-mode: target
+          cache-generation: v1-apps-wasi
+      - run: sudo apt-get update && sudo apt-get install -y clang libclang-dev
+      - run: mise run ci:clippy-guest
+      - run: mise run build:applications
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wasi-applications
+          path: target/wasm32-wasip1/release-wasm/*.wasm
+          if-no-files-found: error
+  host:
+    runs-on: ubuntu-latest
+    env:
+      XILA_MBX: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5.2.2
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.22.0
+      - run: npm ci
+      - id: toolchain
+        run: mise run ci:toolchain
+      - uses: jdx/mr-boxington-action@v1
+        with:
+          toolchain: ${{ steps.toolchain.outputs.version }}
+          github-cache-mode: target
+          cache-generation: v1-apps-host
+      - run: sudo apt-get update && sudo apt-get install -y clang libclang-dev pkg-config libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev libx11-dev libxkbcommon-x11-dev
+      - run: mise run ci:clippy-host
+      - run: mise run test:workspace
+  localization:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        locale: [en, fr, es, de, pt-BR, it, pl, zh-CN]
+    env:
+      XILA_MBX: "1"
+      EMBEDDED_I18N_LOCALE: ${{ matrix.locale }}
+      EMBEDDED_I18N_STRICT: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5.2.2
+      - id: toolchain
+        run: mise run ci:toolchain
+      - uses: jdx/mr-boxington-action@v1
+        with:
+          toolchain: ${{ steps.toolchain.outputs.version }}
+          github-cache-mode: objects
+          cache-generation: v1-apps-localization
+      - run: sudo apt-get update && sudo apt-get install -y clang libclang-dev
+      - run: mise run ci:localization
+  package:
+    needs: guest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [calculator, clock, weather, pixel_painter, text_editor, synth]
+    permissions:
+      contents: read
+    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@71c4da6799a958b188492b0a833bca3550b821ab
+    with:
+      wasm-artifact: wasi-applications
+      wasm-path: ${{ matrix.app }}.wasm
+      manifest-path: packaging/${{ matrix.app }}.json
+      builder-ref: 71c4da6799a958b188492b0a833bca3550b821ab
+      artifact-name: package-${{ matrix.app }}
+      publish-release: false
+  required:
+    if: always()
+    needs: [quality, guest, host, localization, package]
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          QUALITY: ${{ needs.quality.result }}
+          GUEST: ${{ needs.guest.result }}
+          HOST: ${{ needs.host.result }}
+          LOCALIZATION: ${{ needs.localization.result }}
+          PACKAGE: ${{ needs.package.result }}
+        run: test "$QUALITY" = success && test "$GUEST" = success && test "$HOST" = success && test "$LOCALIZATION" = success && test "$PACKAGE" = success
