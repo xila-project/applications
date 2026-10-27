@@ -1,0 +1,16 @@
+[vars]
+rust_version = "1.99.0"
+node_version = "24.22.0"
+taplo_version = "0.10.0"
+
+[tasks."check:guest"]
+description = "Check all WASI guest applications"
+run = "cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth"
+
+[tasks."build:applications"]
+description = "Build the six WASI application artifacts"
+run = "cargo build --locked --target wasm32-wasip1 --profile release-wasm -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth"
+
+[tasks."test:workspace"]
+description = "Test application crates on the host"
+run = "cargo test --locked --workspace --features xila/graphics_rendering_xrgb8888"
