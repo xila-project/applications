@@ -60,3 +60,8 @@ cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p 
 
 [tasks."localization:lint"]
 tools.node = "{{ vars.node_version }}"
+
+[tasks."ci:lint-workflows"]
+tools."aqua:rhysd/actionlint" = "{{ vars.actionlint_version }}"
+tools."aqua:koalaman/shellcheck" = "{{ vars.shellcheck_version }}"
+run = "actionlint"

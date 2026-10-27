@@ -23,7 +23,9 @@ jobs:
       - run: mise run ci:format-rust
       - run: mise run ci:format-toml
       - run: python3 tools/validate_manifests.py
+      - run: python3 -m unittest discover -s tools/ci -v
       - run: mise run localization:lint
+      - run: mise run ci:lint-workflows
   guest:
     runs-on: ubuntu-latest
     env:
