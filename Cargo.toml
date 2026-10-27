@@ -63,7 +63,7 @@ drivers_wasm = { package = "xila-drivers-wasm", git = "https://github.com/xila-p
 file_manager = { package = "xila-file-manager", path = "executables/file_manager" }
 command_line_shell = { package = "xila-command-line-shell", path = "executables/shell/command_line" }
 graphical_shell = { package = "xila-graphical-shell", path = "executables/shell/graphical" }
-wasm = { package = "xila-wasm", git = "https://github.com/xila-project/core", rev = "3735a377d543c08e402af1e398b5f36bbf481fc9" }
+wasm = { package = "xila-wasm", path = "executables/wasm" }
 terminal = { package = "xila-terminal", path = "executables/terminal" }
 settings = { package = "xila-settings", path = "executables/settings" }
 debug_application = { package = "xila-debug-application", path = "executables/debug" }
@@ -107,6 +107,8 @@ getargs-derive = { git = "https://github.com/AlixANNERAUD/getargs-derive.git", r
 resolver = "3"
 members = [
   "libraries/application_shortcuts",
+  "executables/wasm",
+  "executables/wasm/tests/wasm_test",
   "executables/activity",
   "executables/calculator",
   "executables/clock",
@@ -123,4 +125,4 @@ members = [
 ]
 
 [patch.crates-io]
-littlefs2-sys = { git = "https://github.com/AlixANNERAUD/littlefs2-sys.git", rev = "2c2aab090f7592d79eec991656c03797d1a22c8f" }
+littlefs2-sys = { git = "https://github.com/xila-project/core", rev = "31089029263ac40a4cd9cd4fc0be1cd3693e2113" }
