@@ -1,9 +1,15 @@
 [task_templates."dev:rust-wasi".tools]
-rust = { version = "{{ vars.rust_version }}", profile = "minimal", components = ["rustfmt"], targets = ["wasm32-wasip1"], mr_boxington = true }
+rust = { version = "{{ vars.rust_version }}", profile = "minimal", components = [
+  "rustfmt",
+], targets = [
+  "wasm32-wasip1",
+], mr_boxington = true }
 "mr-boxington" = "latest"
 
 [tasks."format:rust"]
-tools.rust = { version = "{{ vars.rust_version }}", profile = "minimal", components = ["rustfmt"] }
+tools.rust = { version = "{{ vars.rust_version }}", profile = "minimal", components = [
+  "rustfmt",
+] }
 run = "cargo fmt --all"
 
 [tasks."format:toml"]

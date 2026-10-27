@@ -1,13 +1,22 @@
 [wrappers.cargo]
 command = "env"
-args = ["{% if env.XILA_MBX | default(value='0') == '1' %}mbx{% else %}cargo{% endif %}"]
+args = [
+  "{% if env.XILA_MBX | default(value='0') == '1' %}mbx{% else %}cargo{% endif %}",
+]
 env = { MBX_CARGO_SHIM_MODE = "1" }
 
 [task_templates."ci:rust-wasi".tools]
-rust = { version = "{{ vars.rust_version }}", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["wasm32-wasip1"] }
+rust = { version = "{{ vars.rust_version }}", profile = "minimal", components = [
+  "clippy",
+  "rustfmt",
+], targets = [
+  "wasm32-wasip1",
+] }
 
 [tasks."ci:format-rust"]
-tools.rust = { version = "{{ vars.rust_version }}", profile = "minimal", components = ["rustfmt"] }
+tools.rust = { version = "{{ vars.rust_version }}", profile = "minimal", components = [
+  "rustfmt",
+] }
 run = "cargo fmt --all -- --check"
 
 [tasks."ci:format-toml"]
@@ -22,3 +31,21 @@ extends = "ci:rust-wasi"
 
 [tasks."test:workspace"]
 extends = "ci:rust-wasi"
+
+[tasks."ci:toolchain"]
+tools.rust = { version = "{{ vars.rust_version }}", profile = "minimal" }
+run = '''
+set -eu
+rustc --version
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+  echo "version={{ vars.rust_version }}" >> "$GITHUB_OUTPUT"
+fi
+'''
+
+[tasks."ci:clippy-guest"]
+extends = "ci:rust-wasi"
+run = "cargo clippy --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -- -D warnings"
+
+[tasks."ci:clippy-host"]
+extends = "ci:rust-wasi"
+run = "cargo clippy --locked --workspace --all-targets --features xila/graphics_rendering_xrgb8888 -- -D warnings"
