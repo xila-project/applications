@@ -49,3 +49,11 @@ run = "cargo clippy --locked --target wasm32-wasip1 -p xila-calculator -p xila-c
 [tasks."ci:clippy-host"]
 extends = "ci:rust-wasi"
 run = "cargo clippy --locked -p xila-activity -p xila-debug-application -p xila-file-manager -p xila-settings -p xila-terminal -p xila-command-line-shell -p xila-graphical-shell --all-targets --features xila/graphics_rendering_xrgb8888 -- -D warnings"
+
+[tasks."ci:localization"]
+extends = "ci:rust-wasi"
+run = """
+set -eu
+cargo test --locked -p xila-application-shortcuts --test compatibility
+cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth
+"""

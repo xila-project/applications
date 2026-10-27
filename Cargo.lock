@@ -4791,7 +4791,6 @@ name = "xila-application-shortcuts"
 version = "0.1.0"
 dependencies = [
  "embedded-i18n",
- "xila-application-metadata",
 ]
 
 [[package]]
