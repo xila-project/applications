@@ -1,0 +1,36 @@
+name: Application packages
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+jobs:
+  release-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - env:
+          XILA_RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 tools/validate_manifests.py
+  validate:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+  release:
+    needs: [validate, release-version]
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        app: [calculator, clock, weather, pixel_painter, text_editor, synth]
+    permissions:
+      contents: write
+    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@71c4da6799a958b188492b0a833bca3550b821ab
+    with:
+      wasm-artifact: wasi-applications
+      wasm-path: ${{ matrix.app }}.wasm
+      manifest-path: packaging/${{ matrix.app }}.json
+      builder-ref: 71c4da6799a958b188492b0a833bca3550b821ab
+      artifact-name: release-package-${{ matrix.app }}
+      publish-release: true
+      release-tag: ${{ github.ref_name }}

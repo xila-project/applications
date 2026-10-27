@@ -5,6 +5,7 @@ on:
     branches: [main]
   merge_group:
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 concurrency:
@@ -21,6 +22,7 @@ jobs:
       - uses: jdx/mise-action@v5.2.2
       - run: mise run ci:format-rust
       - run: mise run ci:format-toml
+      - run: python3 tools/validate_manifests.py
   guest:
     runs-on: ubuntu-latest
     env:
@@ -64,13 +66,30 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y clang libclang-dev pkg-config libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev libx11-dev libxkbcommon-x11-dev
       - run: mise run ci:clippy-host
       - run: mise run test:workspace
+  package:
+    needs: guest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [calculator, clock, weather, pixel_painter, text_editor, synth]
+    permissions:
+      contents: read
+    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@71c4da6799a958b188492b0a833bca3550b821ab
+    with:
+      wasm-artifact: wasi-applications
+      wasm-path: ${{ matrix.app }}.wasm
+      manifest-path: packaging/${{ matrix.app }}.json
+      builder-ref: 71c4da6799a958b188492b0a833bca3550b821ab
+      artifact-name: package-${{ matrix.app }}
+      publish-release: false
   required:
     if: always()
-    needs: [quality, guest, host]
+    needs: [quality, guest, host, package]
     runs-on: ubuntu-latest
     steps:
       - env:
           QUALITY: ${{ needs.quality.result }}
           GUEST: ${{ needs.guest.result }}
           HOST: ${{ needs.host.result }}
-        run: test "$QUALITY" = success && test "$GUEST" = success && test "$HOST" = success
+          PACKAGE: ${{ needs.package.result }}
+        run: test "$QUALITY" = success && test "$GUEST" = success && test "$HOST" = success && test "$PACKAGE" = success

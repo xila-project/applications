@@ -15,3 +15,5 @@ cargo test --config /tmp/xila-local.toml -p xila-command-line-shell --test integ
 ```
 
 Cargo records patched paths in `Cargo.lock`; regenerate the lockfile without the local config before committing. Use the same Core checkout for all patches, including transitive platform dependencies.
+
+Package manifests live in `packaging/`. The package-manager workflow produces `.xpk` archives and SHA-256 files from the WASI build; pull requests validate artifacts without publishing them. A version tag matching all application versions can publish release assets. These archives are unsigned development packages: their checksums establish content integrity, not publisher identity. ABI version 1 denotes the initial versioned application ABI; older unversioned runtimes do not declare that compatibility.
