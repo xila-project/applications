@@ -68,7 +68,21 @@ jobs:
           cache-generation: v1-apps-host
       - run: sudo apt-get update && sudo apt-get install -y clang libclang-dev pkg-config libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev libx11-dev libxkbcommon-x11-dev
       - run: mise run ci:clippy-host
+      - name: Lint Wasm host runtime
+        run: cargo clippy --locked -p xila-wasm --features graphics,xila/graphics_rendering_xrgb8888 --target x86_64-unknown-linux-gnu -- -D warnings
       - run: mise run test:workspace
+  abi:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        memory: [memory_32, memory_64]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.99.0
+      - run: cargo test --locked --manifest-path executables/wasm/tests/translation/Cargo.toml --no-default-features --features ${{ matrix.memory }}
   localization:
     runs-on: ubuntu-latest
     strategy:
@@ -109,13 +123,14 @@ jobs:
       publish-release: false
   required:
     if: always()
-    needs: [quality, guest, host, localization, package]
+    needs: [quality, guest, host, abi, localization, package]
     runs-on: ubuntu-latest
     steps:
       - env:
           QUALITY: ${{ needs.quality.result }}
           GUEST: ${{ needs.guest.result }}
           HOST: ${{ needs.host.result }}
+          ABI: ${{ needs.abi.result }}
           LOCALIZATION: ${{ needs.localization.result }}
           PACKAGE: ${{ needs.package.result }}
-        run: test "$QUALITY" = success && test "$GUEST" = success && test "$HOST" = success && test "$LOCALIZATION" = success && test "$PACKAGE" = success
+        run: test "$QUALITY" = success && test "$GUEST" = success && test "$HOST" = success && test "$ABI" = success && test "$LOCALIZATION" = success && test "$PACKAGE" = success
