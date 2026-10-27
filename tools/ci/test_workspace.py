@@ -16,6 +16,16 @@ def manifest(path):
 
 
 class ApplicationPolicy(unittest.TestCase):
+    def test_wasm_executor_and_guest_api_belong_to_applications(self):
+        workspace = manifest('Cargo.toml')['workspace']
+        self.assertEqual(workspace['dependencies']['wasm']['path'], 'executables/wasm')
+        self.assertIn('executables/wasm', workspace['members'])
+        wasm = manifest('executables/wasm/Cargo.toml')
+        self.assertEqual(wasm['package']['name'], 'xila-wasm')
+        self.assertTrue({'host', 'guest', 'memory_32', 'memory_64'} <= set(wasm['features']))
+        self.assertIn('dep:wasmi', wasm['features']['host'])
+        self.assertNotIn('dep:wasmi', wasm['features']['guest'])
+
     def test_package_and_binary_names_are_preserved(self):
         for app in GUESTS:
             cargo = manifest(f'executables/{app}/Cargo.toml')
