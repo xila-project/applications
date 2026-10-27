@@ -1991,7 +1991,7 @@ checksum = "4744e383959f0db86ede514b809b1c53251889093803c05267acc7d4e7030d70"
 [[package]]
 name = "littlefs2-sys"
 version = "0.4.0"
-source = "git+https://github.com/AlixANNERAUD/littlefs2-sys.git?branch=xila-littlefs-2.11#2c2aab090f7592d79eec991656c03797d1a22c8f"
+source = "git+https://github.com/AlixANNERAUD/littlefs2-sys.git?rev=2c2aab090f7592d79eec991656c03797d1a22c8f#2c2aab090f7592d79eec991656c03797d1a22c8f"
 dependencies = [
  "bindgen 0.70.1",
  "cc",
@@ -4720,7 +4720,7 @@ checksum = "163b33ed8786455e2fa5d72f554057ce3f3182425434f756cd39c99839d88e23"
 [[package]]
 name = "xila"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "embedded-i18n",
  "xila-abi-declarations",
@@ -4744,7 +4744,7 @@ dependencies = [
 [[package]]
 name = "xila-abi-declarations"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "bindgen 0.73.2",
  "cbindgen",
@@ -4753,7 +4753,7 @@ dependencies = [
 [[package]]
 name = "xila-abi-definitions"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "xila-file-system",
  "xila-log",
@@ -4780,9 +4780,8 @@ dependencies = [
 [[package]]
 name = "xila-application-metadata"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
- "embedded-i18n",
  "xila-task",
 ]
 
@@ -4796,7 +4795,7 @@ dependencies = [
 [[package]]
 name = "xila-audio"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "nanoaudio",
  "xila-file-system",
@@ -4807,7 +4806,7 @@ dependencies = [
 [[package]]
 name = "xila-authentication"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "embedded-i18n",
  "miniserde",
@@ -4875,7 +4874,7 @@ dependencies = [
 [[package]]
 name = "xila-debug-protocol"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "serde",
 ]
@@ -4883,7 +4882,7 @@ dependencies = [
 [[package]]
 name = "xila-device"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "xila-file-system",
 ]
@@ -4891,7 +4890,7 @@ dependencies = [
 [[package]]
 name = "xila-drivers-core"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "xila-file-system",
 ]
@@ -4899,7 +4898,7 @@ dependencies = [
 [[package]]
 name = "xila-drivers-native"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/platforms?rev=6cb1bb0b4088800ef9aef307e963a2470a627372#6cb1bb0b4088800ef9aef307e963a2470a627372"
+source = "git+https://github.com/xila-project/platforms?rev=6ced809bdb8313a2aef02561bece4bc31ec19da8#6ced809bdb8313a2aef02561bece4bc31ec19da8"
 dependencies = [
  "arboard",
  "cap-std",
@@ -4927,7 +4926,7 @@ dependencies = [
 [[package]]
 name = "xila-drivers-shared"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/platforms?rev=6cb1bb0b4088800ef9aef307e963a2470a627372#6cb1bb0b4088800ef9aef307e963a2470a627372"
+source = "git+https://github.com/xila-project/platforms?rev=6ced809bdb8313a2aef02561bece4bc31ec19da8#6ced809bdb8313a2aef02561bece4bc31ec19da8"
 dependencies = [
  "embassy-futures",
  "embedded-io",
@@ -4950,7 +4949,7 @@ dependencies = [
 [[package]]
 name = "xila-drivers-std"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/platforms?rev=6cb1bb0b4088800ef9aef307e963a2470a627372#6cb1bb0b4088800ef9aef307e963a2470a627372"
+source = "git+https://github.com/xila-project/platforms?rev=6ced809bdb8313a2aef02561bece4bc31ec19da8#6ced809bdb8313a2aef02561bece4bc31ec19da8"
 dependencies = [
  "embassy-executor",
  "libc",
@@ -4971,7 +4970,7 @@ dependencies = [
 [[package]]
 name = "xila-executable"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "embedded-i18n",
  "xila-application-metadata",
@@ -5007,7 +5006,7 @@ dependencies = [
 [[package]]
 name = "xila-file-system"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "bitflags 2.13.2",
  "embedded-i18n",
@@ -5040,7 +5039,7 @@ dependencies = [
 [[package]]
 name = "xila-graphics"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "cc",
  "cstr_core",
@@ -5063,7 +5062,7 @@ dependencies = [
 [[package]]
 name = "xila-graphics-bindgen"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5073,7 +5072,7 @@ dependencies = [
 [[package]]
 name = "xila-little-fs"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "littlefs2-sys",
  "xila-abi-declarations",
@@ -5088,7 +5087,7 @@ dependencies = [
 [[package]]
 name = "xila-log"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "log",
  "xila-synchronization",
@@ -5097,7 +5096,7 @@ dependencies = [
 [[package]]
 name = "xila-memory"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "bitflags 2.13.2",
  "critical-section",
@@ -5110,7 +5109,7 @@ dependencies = [
 [[package]]
 name = "xila-network"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "bitflags 2.13.2",
  "embassy-futures",
@@ -5161,7 +5160,7 @@ dependencies = [
 [[package]]
 name = "xila-shared"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "num",
  "xila-log",
@@ -5171,7 +5170,7 @@ dependencies = [
 [[package]]
 name = "xila-synchronization"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "embassy-sync",
 ]
@@ -5191,7 +5190,7 @@ dependencies = [
 [[package]]
 name = "xila-task"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "embassy-executor",
  "embassy-futures",
@@ -5206,7 +5205,7 @@ dependencies = [
 [[package]]
 name = "xila-task-macros"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "darling 0.24.1",
  "proc-macro2",
@@ -5235,7 +5234,7 @@ dependencies = [
 [[package]]
 name = "xila-testing"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/platforms?rev=6cb1bb0b4088800ef9aef307e963a2470a627372#6cb1bb0b4088800ef9aef307e963a2470a627372"
+source = "git+https://github.com/xila-project/platforms?rev=6ced809bdb8313a2aef02561bece4bc31ec19da8#6ced809bdb8313a2aef02561bece4bc31ec19da8"
 dependencies = [
  "xila-abi-definitions",
  "xila-authentication",
@@ -5268,7 +5267,7 @@ dependencies = [
 [[package]]
 name = "xila-time"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "embassy-time",
  "embedded-i18n",
@@ -5281,7 +5280,7 @@ dependencies = [
 [[package]]
 name = "xila-users"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "embedded-i18n",
  "xila-synchronization",
@@ -5290,7 +5289,7 @@ dependencies = [
 [[package]]
 name = "xila-virtual-file-system"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "embedded-i18n",
  "embedded-io-async",
@@ -5307,7 +5306,7 @@ dependencies = [
 [[package]]
 name = "xila-wasm"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "embassy-time",
  "getargs",
@@ -5345,7 +5344,7 @@ dependencies = [
 [[package]]
 name = "xila_http"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/core?rev=36d1fc27e8399e342702d72660f81808be2c994f#36d1fc27e8399e342702d72660f81808be2c994f"
+source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
 dependencies = [
  "httparse",
 ]

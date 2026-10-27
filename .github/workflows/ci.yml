@@ -87,8 +87,8 @@ jobs:
       - uses: jdx/mr-boxington-action@v1
         with:
           toolchain: ${{ steps.toolchain.outputs.version }}
-          github-cache-mode: target
-          cache-generation: v1-apps-locale-${{ matrix.locale }}
+          github-cache-mode: objects
+          cache-generation: v1-apps-localization
       - run: sudo apt-get update && sudo apt-get install -y clang libclang-dev
       - run: mise run ci:localization
   package:
