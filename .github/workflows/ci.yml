@@ -102,7 +102,7 @@ jobs:
         if: matrix.locale == 'ja'
         with:
           repository: xila-project/core
-          ref: f33e2149254d0eb095c10b344d758e39a65f22f5
+          ref: c656f83b6cfd019ed469332182166bdaf6188ca9
           path: .ci-core-ja
           persist-credentials: false
       - name: "Setup | Checkout Platforms"
@@ -123,7 +123,7 @@ jobs:
       - name: "Test | Localization"
         if: matrix.locale != 'ja'
         run: mise run ci:localization
-      - name: Validate Japanese with companion Core
+      - name: "Test | Japanese with companion Core"
         if: matrix.locale == 'ja'
         run: mise run ci:localization-japanese
   package:
