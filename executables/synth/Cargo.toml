@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-application_metadata = { workspace = true }
 nanoaudio = { workspace = true, default-features = false, features = ["dsp"] }
 nanoaudio-synth = { workspace = true }
 
