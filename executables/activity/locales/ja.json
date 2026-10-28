@@ -1,0 +1,24 @@
+{
+  "app": {
+    "title": "システムアクティビティ",
+    "sources": "Xilaの時刻、タスク一覧、アロケーター"
+  },
+  "metrics": {
+    "uptime": "稼働時間: {} 秒",
+    "tasks": "登録タスク: {}",
+    "memory_used": "使用メモリ: {} バイト",
+    "memory_capacity": "メモリ容量: {} バイト",
+    "capacity_unavailable": "メモリ容量: 利用不可",
+    "unsupported": "CPU負荷 / 登録デバイス: 利用不可"
+  },
+  "actions": {
+    "interval": "更新間隔: {} ミリ秒（変更）",
+    "start": "デモを開始 (4 KiB / 10 秒)",
+    "stop": "デモを停止"
+  },
+  "workload": {
+    "idle": "デモ: 停止中",
+    "running": "デモ: 実行中 (512 バイト / 25 ミリ秒)",
+    "failed": "デモ: 利用不可（割り当て失敗）"
+  }
+}

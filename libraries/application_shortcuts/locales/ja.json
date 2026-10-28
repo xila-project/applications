@@ -1,0 +1,8 @@
+{
+  "applications": {
+    "pixel_painter": "ピクセルペインター",
+    "settings": "設定",
+    "text_editor": "テキストエディター",
+    "activity": "システムアクティビティ"
+  }
+}

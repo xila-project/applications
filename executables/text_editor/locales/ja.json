@@ -1,0 +1,40 @@
+{
+  "app": {
+    "title": "テキストエディター"
+  },
+  "navigation": {
+    "previous_page": "前へ",
+    "next_page": "次へ"
+  },
+  "controls": {
+    "new_file": "新規",
+    "open_file": "開く",
+    "save_file": "保存",
+    "choose_folder": "フォルダー"
+  },
+  "file_path": {
+    "instructions": "パスを選択して、テキストファイルを作成または開いてください",
+    "placeholder": "絶対ファイルパスを入力してください",
+    "new_file_default_name": "新しいテキストファイル",
+    "picker_instructions": "開く、保存、またはフォルダーを選択してください"
+  },
+  "warnings": {
+    "unsaved_close_again": "未保存の変更があります。破棄するにはもう一度閉じてください",
+    "unsaved_new_or_open_again": "未保存の変更があります。破棄するにはもう一度「新規」または「開く」を選択してください"
+  },
+  "status": {
+    "open_or_create_first": "先にファイルを開くか作成してください",
+    "opened": "開きました",
+    "saved": "保存しました",
+    "folder_selected": "フォルダーを選択しました。新規を選んでファイルを作成してください"
+  },
+  "errors": {
+    "working_copy_creation_failed": "このディレクトリに作業用コピーを作成できませんでした",
+    "open_failed": "開けませんでした。UTF-8 テキストファイルとストレージを確認してください",
+    "save_failed_working_copy_preserved": "保存に失敗しました。作業用コピーは保持されています。パスとストレージを確認してください",
+    "page_exceeds_byte_limit": "ページのテキストは UTF-8 で 4096 バイト以内にしてください",
+    "edit_failed_close_again": "編集に失敗しました。変更を破棄するにはもう一度閉じてください",
+    "edit_failed_reopen_source": "編集に失敗しました。元のファイルを開き直してください",
+    "folder_path_too_long": "選択したフォルダーではファイル名を追加できません"
+  }
+}

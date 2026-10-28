@@ -88,7 +88,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        locale: [en, fr, es, de, pt-BR, it, pl, zh-CN]
+        locale: [en, fr, es, de, pt-BR, it, pl, zh-CN, ja]
     env:
       XILA_MBX: "1"
       EMBEDDED_I18N_LOCALE: ${{ matrix.locale }}
