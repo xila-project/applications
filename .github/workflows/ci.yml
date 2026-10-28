@@ -32,7 +32,7 @@ jobs:
       XILA_MBX: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: xila-project/workspace/.github/actions/setup-rust@f2e0febfa3d12218a5a5a7f675b4a37b880d341d
+      - uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
         with:
           cache-mode: target
           cache-generation: v1-apps-wasi
@@ -50,7 +50,7 @@ jobs:
       XILA_MBX: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: xila-project/workspace/.github/actions/setup-rust@f2e0febfa3d12218a5a5a7f675b4a37b880d341d
+      - uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
         with:
           cache-mode: target
           cache-generation: v1-apps-host
@@ -84,7 +84,7 @@ jobs:
       EMBEDDED_I18N_STRICT: "1"
     steps:
       - uses: actions/checkout@v7
-      - uses: xila-project/workspace/.github/actions/setup-rust@f2e0febfa3d12218a5a5a7f675b4a37b880d341d
+      - uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
         with:
           cache-mode: objects
           cache-generation: v1-apps-localization
