@@ -1,4 +1,7 @@
-use alloc::{string::{String, ToString}, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 use miniserde::{Deserialize, Serialize};
 use xila::file_system::{AccessFlags, Path};
 use xila::graphics::Color;
@@ -79,7 +82,9 @@ impl Shortcut {
             };
             if relative.is_empty()
                 || relative.contains('\\')
-                || relative.split('/').any(|segment| segment.is_empty() || segment == "." || segment == "..")
+                || relative
+                    .split('/')
+                    .any(|segment| segment.is_empty() || segment == "." || segment == "..")
             {
                 return Err(Error::FailedToGetShortcutFilePath);
             }
@@ -135,10 +140,19 @@ mod shortcut_tests {
 
     #[test]
     fn bundle_reference_cannot_escape_its_directory() {
-        for path in ["@bundle/../escape", "@bundle/foo/../../escape", "@bundle/", "@bundle//x"] {
+        for path in [
+            "@bundle/../escape",
+            "@bundle/foo/../../escape",
+            "@bundle/",
+            "@bundle//x",
+        ] {
             let mut shortcut = Shortcut::from_str(SHORTCUT).unwrap();
             shortcut.arguments[0] = path.into();
-            assert!(shortcut.resolve_bundle_paths(Path::from_str("/applications/bundles/test")).is_err());
+            assert!(
+                shortcut
+                    .resolve_bundle_paths(Path::from_str("/applications/bundles/test"))
+                    .is_err()
+            );
         }
     }
 }

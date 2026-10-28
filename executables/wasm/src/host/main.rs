@@ -112,11 +112,7 @@ mod parser_tests {
 }
 
 #[derive(GetArgs)]
-#[command(
-    name = "wasm",
-    about = "Run a WebAssembly executable.",
-    version
-)]
+#[command(name = "wasm", about = "Run a WebAssembly executable.", version)]
 struct WasmArguments<'a> {
     /// Path to the executable in the Xila filesystem.
     path: &'a str,
@@ -224,7 +220,9 @@ async fn main_inner(
         !name.is_empty()
             && name.len() <= 96
             && !matches!(*name, "." | "..")
-            && name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+            && name
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
     });
     if let Some(application_name) = application_name {
         let user = context.task_manager.get_user(task).await?;

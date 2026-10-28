@@ -332,12 +332,7 @@ impl Desk {
                     let Some(shortcut_path) = directory.append("shortcut.json") else {
                         continue;
                     };
-                    match Shortcut::read_from_path(
-                        self.context,
-                        &shortcut_path,
-                        &mut buffer,
-                    )
-                    .await
+                    match Shortcut::read_from_path(self.context, &shortcut_path, &mut buffer).await
                     {
                         Ok(shortcut) => {
                             self.create_drawer_shortcut(
