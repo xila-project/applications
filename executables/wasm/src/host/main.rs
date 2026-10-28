@@ -22,7 +22,6 @@ use crate::host::{
 
 const DEFAULT_STACK_SIZE: usize = 4096;
 const START_FUNCTION_NAME: &str = "_start";
-const INSTALL_FUNCTION_NAME: &str = "__install";
 
 #[cfg(test)]
 mod parser_tests {
@@ -33,14 +32,11 @@ mod parser_tests {
     };
 
     #[test]
-    fn defaults_and_install_flag_preserve_existing_behavior() {
+    fn defaults_preserve_existing_behavior() {
         let parsed = WasmArguments::from_args(["app.wasm"].into_iter()).unwrap();
         assert_eq!(parsed.path, "app.wasm");
-        assert!(!parsed.install);
         assert_eq!(parsed.stack_size, 4096);
         assert_eq!(parsed.instruction_limit.get(), 100_000);
-        let parsed = WasmArguments::from_args(["--install", "app.wasm"].into_iter()).unwrap();
-        assert!(parsed.install);
     }
 
     #[test]
@@ -53,8 +49,6 @@ mod parser_tests {
             assert_eq!(parsed.stack_size, 8192);
             assert_eq!(parsed.instruction_limit.get(), 42);
         }
-        let parsed = WasmArguments::from_args(["-i", "app.wasm"].into_iter()).unwrap();
-        assert!(parsed.install);
     }
 
     #[test]
@@ -84,15 +78,8 @@ mod parser_tests {
     }
 
     #[test]
-    fn misspelled_install_gets_a_suggestion() {
-        let error = WasmArguments::from_args(["--instal", "app.wasm"].into_iter())
-            .err()
-            .unwrap();
-        assert!(
-            error
-                .to_string()
-                .contains("similar argument exists: '--install'")
-        );
+    fn legacy_install_hook_is_not_supported() {
+        assert!(WasmArguments::from_args(["--install", "app.wasm"].into_iter()).is_err());
     }
 
     #[test]
@@ -127,15 +114,12 @@ mod parser_tests {
 #[derive(GetArgs)]
 #[command(
     name = "wasm",
-    about = "Run or install a WebAssembly executable.",
+    about = "Run a WebAssembly executable.",
     version
 )]
 struct WasmArguments<'a> {
     /// Path to the executable in the Xila filesystem.
     path: &'a str,
-    /// Run the install entry point instead of the main entry point.
-    #[arg(short = 'i', long)]
-    install: bool,
     /// Legacy stack-size setting; currently managed by wasmi rather than applied here.
     #[arg(short = 's', long, default_value_t = DEFAULT_STACK_SIZE)]
     stack_size: usize,
@@ -221,20 +205,28 @@ async fn main_inner(
     let context = standard.context;
     let WasmArguments {
         path,
-        install,
         stack_size: _stack_size,
         instruction_limit,
     } = arguments;
 
     let task = context.task_manager.get_current_task_identifier().await;
-    context
-        .task_manager
-        .set_application_identifier(
-            task,
-            application_metadata::application_identifier_for_path(path),
-        )
-        .await?;
-    if let Some(application_name) = application_metadata::application_name_for_path(path) {
+    // Application directory provisioning is a convenience for the Wasm runner,
+    // not a VFS permission override. The filesystem enforces ordinary UID/GID
+    // and mode bits. Core does not discover or identify application bundles.
+    let application_name = if let Some(rest) = path.strip_prefix("/applications/bundles/") {
+        rest.split('/').next()
+    } else {
+        path.strip_prefix("/applications/executables/")
+            .and_then(|file| file.rsplit('/').next())
+            .map(|name| name.strip_suffix(".wasm").unwrap_or(name))
+    }
+    .filter(|name| {
+        !name.is_empty()
+            && name.len() <= 96
+            && !matches!(*name, "." | "..")
+            && name.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+    });
+    if let Some(application_name) = application_name {
         let user = context.task_manager.get_user(task).await?;
         context
             .virtual_file_system
@@ -376,12 +368,7 @@ async fn main_inner(
     store.set_fuel(instruction_limit.get() as u64)?;
     match linker.instantiate_and_start(&mut store, &module) {
         Ok(instance) => {
-            let entry = if install {
-                INSTALL_FUNCTION_NAME
-            } else {
-                START_FUNCTION_NAME
-            };
-            let start = instance.get_typed_func::<(), ()>(&store, entry)?;
+            let start = instance.get_typed_func::<(), ()>(&store, START_FUNCTION_NAME)?;
             super::execution::run(&mut store, start, instruction_limit).await
         }
         Err(e) => {
