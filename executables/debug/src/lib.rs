@@ -322,6 +322,7 @@ async fn dispatch(
                 "queued_bytes": count,
                 "queued_events": text[..count].chars().count() * 2,
                 "complete": count == text.len(),
+                "unicode_window_events": if text[..count].is_ascii() { "not_applicable" } else { "unsupported" },
             })),
             Err(graphics::Error::InvalidParameter) => Err((
                 "unsupported_character",
