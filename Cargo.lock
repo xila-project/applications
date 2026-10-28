@@ -5369,8 +5369,6 @@ dependencies = [
  "wat",
  "xila",
  "xila-abi-definitions",
- "xila-application-metadata",
- "xila-application-shortcuts",
  "xila-audio",
  "xila-command-line-shell",
  "xila-drivers-core",
