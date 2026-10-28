@@ -19,6 +19,7 @@ jobs:
     name: "Quality / Rust"
     uses: xila-project/workspace/.github/workflows/quality.yml@e152177f341e45ceb6025848378f558d3aa090be
   guest:
+    name: "Build / WASI guests"
     runs-on: ubuntu-latest
     env:
       XILA_MBX: "1"
@@ -43,6 +44,7 @@ jobs:
           path: target/wasm32-wasip1/release-wasm/*.wasm
           if-no-files-found: error
   host:
+    name: "Build & Test / Native host"
     runs-on: ubuntu-latest
     env:
       XILA_MBX: "1"
@@ -60,11 +62,12 @@ jobs:
         run: mise run ci:packages-host
       - name: "Lint | Native host"
         run: mise run ci:clippy-host
-      - name: Lint Wasm host runtime
+      - name: "Lint | Wasm host runtime"
         run: cargo clippy --locked -p xila-wasm --features graphics,xila/graphics_rendering_xrgb8888 --target x86_64-unknown-linux-gnu -- -D warnings
       - name: "Test | Application workspace"
         run: mise run test:workspace
   abi:
+    name: "Test / ABI (${{ matrix.memory }})"
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -73,13 +76,14 @@ jobs:
     steps:
       - name: "Setup | Checkout sources"
         uses: actions/checkout@v7
-      - name: "Run | dtolnay/rust-toolchain"
+      - name: "Setup | Rust toolchain for ABI"
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.0
       - name: "Test | ABI translation"
         run: cargo test --locked --manifest-path executables/wasm/tests/translation/Cargo.toml --no-default-features --features ${{ matrix.memory }}
   localization:
+    name: "Test / Localization (${{ matrix.locale }})"
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -102,6 +106,7 @@ jobs:
       - name: "Test | Localization"
         run: mise run ci:localization
   package:
+    name: "Package / ${{ matrix.app }}"
     needs: guest
     strategy:
       fail-fast: false
@@ -122,7 +127,8 @@ jobs:
     needs: [quality, guest, host, abi, localization, package]
     runs-on: ubuntu-latest
     steps:
-      - env:
+      - name: "Gate | Verify mandatory checks"
+        env:
           QUALITY: ${{ needs.quality.result }}
           GUEST: ${{ needs.guest.result }}
           HOST: ${{ needs.host.result }}

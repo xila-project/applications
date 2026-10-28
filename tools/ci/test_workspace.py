@@ -81,6 +81,9 @@ class ApplicationPolicy(unittest.TestCase):
         for check in ('validate_manifests.py', 'unittest discover', 'localization:lint'):
             self.assertIn(check, extra)
         self.assertIn('needs: [quality, guest, host, abi, localization, package]', ci)
+        for line in ci.splitlines():
+            self.assertNotRegex(line, r'^      - (uses|run|env):')
+        self.assertIn('name: "Gate | Verify mandatory checks"', ci)
 
     def test_ci_caches_are_separate_and_use_one_wrapper(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
