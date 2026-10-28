@@ -107,3 +107,12 @@ python3 tools/validate_manifests.py
 python3 -m unittest discover -s tools/ci -v
 mise run localization:lint
 """
+
+[tasks."ci:application-architecture"]
+extends = "ci:rust-wasi"
+run = """
+set -eu
+cargo fmt --manifest-path examples/application-architecture/Cargo.toml --all -- --check
+cargo test --locked --manifest-path examples/application-architecture/Cargo.toml --workspace
+cargo check --locked --manifest-path examples/application-architecture/Cargo.toml --workspace --lib --target wasm32-wasip1
+"""
