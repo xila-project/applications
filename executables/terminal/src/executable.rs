@@ -1,32 +1,19 @@
 use crate::main;
 use alloc::boxed::Box;
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use xila::executable::ExecutableTrait;
 use xila::task::TaskIdentifier;
-use xila::virtual_file_system::{File, VirtualFileSystem};
+use xila::virtual_file_system::VirtualFileSystem;
 
 pub struct TerminalExecutable;
 
 impl TerminalExecutable {
+    /// Construct the executable without mutating the filesystem.
+    /// Shell shortcut discovery is handled by the graphical Shell.
     pub async fn new(
-        virtual_file_system: &VirtualFileSystem,
-        task: TaskIdentifier,
+        _virtual_file_system: &VirtualFileSystem,
+        _task: TaskIdentifier,
     ) -> Result<Self, String> {
-        let _ = virtual_file_system
-            .create_directory(task, &"/configuration/shared/applications/shortcuts")
-            .await;
-
-        File::write_to_path(
-            virtual_file_system,
-            task,
-            "/configuration/shared/applications/shortcuts/terminal.json",
-            application_metadata::shortcut("terminal")
-                .unwrap()
-                .as_bytes(),
-        )
-        .await
-        .map_err(|error| error.to_string())?;
-
         Ok(Self)
     }
 }
