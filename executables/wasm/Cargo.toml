@@ -5,7 +5,6 @@ edition = "2024"
 build = "build/main.rs"
 
 [dependencies]
-application_metadata = { package = "xila-application-metadata", git = "https://github.com/xila-project/core", rev = "3735a377d543c08e402af1e398b5f36bbf481fc9" }
 wasmi = { version = "2.0.0", default-features = false, features = [
   "validate",
   "memory64",
@@ -55,7 +54,6 @@ drivers_core = { workspace = true }
 drivers_shared = { workspace = true }
 drivers_std = { workspace = true }
 abi_definitions = { workspace = true }
-application_shortcuts = { package = "xila-application-shortcuts", path = "../../libraries/application_shortcuts" }
 command_line_shell = { workspace = true }
 executable = { workspace = true, features = ["building"] }
 testing = { workspace = true }
