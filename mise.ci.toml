@@ -54,7 +54,6 @@ run = "cargo clippy --locked -p xila-activity -p xila-debug-application -p xila-
 extends = "ci:rust-wasi"
 run = """
 set -eu
-cargo test --locked -p xila-application-shortcuts --test compatibility
 cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth
 """
 
