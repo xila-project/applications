@@ -8,47 +8,23 @@ mod error;
 mod file_manager;
 
 use alloc::boxed::Box;
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use core::num::NonZeroUsize;
 use xila::executable::{self, ExecutableTrait, Standard};
 use xila::task::TaskIdentifier;
-use xila::virtual_file_system::{File, VirtualFileSystem};
+use xila::virtual_file_system::VirtualFileSystem;
 
 pub use error::*;
 pub use file_manager::*;
 
-pub const SHORTCUT: &str = r#"
-{
-    "name": "File manager",
-    "command": "/applications/executables/file_manager",
-    "arguments": [],
-    "terminal": false,
-    "icon_string": "Fm",
-    "icon_color": [0, 188, 212]
-}"#;
-
 pub struct FileManagerExecutable;
 
 impl FileManagerExecutable {
+    /// Kept for native callers; launch metadata belongs to the Shell.
     pub async fn new(
-        virtual_file_system: &VirtualFileSystem,
-        task: TaskIdentifier,
+        _virtual_file_system: &VirtualFileSystem,
+        _task: TaskIdentifier,
     ) -> core::result::Result<Self, String> {
-        let _ = virtual_file_system
-            .create_directory(task, &"/configuration/shared/applications/shortcuts")
-            .await;
-
-        File::write_to_path(
-            virtual_file_system,
-            task,
-            "/configuration/shared/applications/shortcuts/file_manager.json",
-            application_metadata::shortcut("file_manager")
-                .unwrap()
-                .as_bytes(),
-        )
-        .await
-        .map_err(|error| error.to_string())?;
-
         Ok(Self)
     }
 }
