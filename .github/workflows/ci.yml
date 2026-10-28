@@ -125,6 +125,8 @@ jobs:
         run: mise run ci:localization
       - name: "Test | Japanese with companion Core"
         if: matrix.locale == 'ja'
+        env:
+          XILA_MBX: "0"
         run: mise run ci:localization-japanese
   package:
     name: "Package / ${{ matrix.app }}"

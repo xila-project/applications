@@ -85,6 +85,15 @@ class ApplicationPolicy(unittest.TestCase):
             self.assertNotRegex(line, r'^      - (uses|run|env):')
         self.assertIn('name: "Gate | Verify mandatory checks"', ci)
 
+    def test_japanese_checkout_validation_uses_wasi_and_bypasses_mbx(self):
+        ci = (ROOT / '.github/workflows/ci.yml').read_text()
+        step = ci.split('name: "Test | Japanese with companion Core"', 1)[1].split('  package:', 1)[0]
+        self.assertIn('XILA_MBX: "0"', step)
+        self.assertIn('mise run ci:localization-japanese', step)
+        task = manifest('mise.ci.toml')['tasks']['ci:localization-japanese']
+        self.assertEqual(task['extends'], 'ci:rust-wasi')
+        self.assertIn('--target wasm32-wasip1', task['run'])
+
     def test_ci_caches_are_separate_and_use_one_wrapper(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
         self.assertIn('mise run ci:packages-host', ci)
