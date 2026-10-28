@@ -8,8 +8,10 @@ jobs:
   release-version:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - env:
+      - name: "Setup | Checkout application sources"
+        uses: actions/checkout@v7
+      - name: "Validate | Tagged release manifests"
+        env:
           XILA_RELEASE_TAG: ${{ github.ref_name }}
         run: python3 tools/validate_manifests.py
   validate:
