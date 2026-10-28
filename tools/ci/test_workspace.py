@@ -78,7 +78,7 @@ class ApplicationPolicy(unittest.TestCase):
         self.assertIn('v1-apps-host', ci)
         self.assertIn('v1-apps-wasi', ci)
         self.assertIn('v1-apps-localization', ci)
-        self.assertIn('github-cache-mode: objects', ci)
+        self.assertIn('cache-mode: objects', ci)
         config = manifest('mise.ci.toml')
         self.assertEqual(config['wrappers']['cargo']['env']['MBX_CARGO_SHIM_MODE'], '1')
         self.assertNotIn('mr-boxington', str(config.get('task_templates', {})))
