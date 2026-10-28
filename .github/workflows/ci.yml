@@ -36,7 +36,7 @@ jobs:
         with:
           cache-mode: target
           cache-generation: v1-apps-wasi
-      - run: sudo apt-get update && sudo apt-get install -y clang libclang-dev
+      - run: mise run ci:packages-linker
       - run: mise run ci:clippy-guest
       - run: mise run build:applications
       - uses: actions/upload-artifact@v7
@@ -54,11 +54,8 @@ jobs:
         with:
           cache-mode: target
           cache-generation: v1-apps-host
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24.22.0
-      - run: npm ci
-      - run: sudo apt-get update && sudo apt-get install -y clang libclang-dev pkg-config libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev libx11-dev libxkbcommon-x11-dev
+      - run: mise run ci:deps-npm
+      - run: mise run ci:packages-host
       - run: mise run ci:clippy-host
       - name: Lint Wasm host runtime
         run: cargo clippy --locked -p xila-wasm --features graphics,xila/graphics_rendering_xrgb8888 --target x86_64-unknown-linux-gnu -- -D warnings
@@ -91,7 +88,7 @@ jobs:
         with:
           cache-mode: objects
           cache-generation: v1-apps-localization
-      - run: sudo apt-get update && sudo apt-get install -y clang libclang-dev
+      - run: mise run ci:packages-linker
       - run: mise run ci:localization
   package:
     needs: guest

@@ -75,6 +75,9 @@ class ApplicationPolicy(unittest.TestCase):
 
     def test_ci_caches_are_separate_and_use_one_wrapper(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.assertIn('mise run ci:packages-host', ci)
+        self.assertIn('mise run ci:packages-linker', ci)
+        self.assertNotIn('apt-get', ci)
         self.assertIn('v1-apps-host', ci)
         self.assertIn('v1-apps-wasi', ci)
         self.assertIn('v1-apps-localization', ci)
