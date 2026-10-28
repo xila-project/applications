@@ -73,6 +73,15 @@ class ApplicationPolicy(unittest.TestCase):
         self.assertNotIn('pull_request:', release)
         self.assertIn('@71c4da6799a958b188492b0a833bca3550b821ab', ci)
 
+    def test_shared_quality_keeps_app_specific_checks(self):
+        ci = (ROOT / '.github/workflows/ci.yml').read_text()
+        tasks = manifest('mise.ci.toml')['tasks']
+        self.assertIn('xila-project/workspace/.github/workflows/quality.yml@', ci)
+        extra = tasks['ci:quality-extra']['run']
+        for check in ('validate_manifests.py', 'unittest discover', 'localization:lint'):
+            self.assertIn(check, extra)
+        self.assertIn('needs: [quality, guest, host, abi, localization, package]', ci)
+
     def test_ci_caches_are_separate_and_use_one_wrapper(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
         self.assertIn('mise run ci:packages-host', ci)

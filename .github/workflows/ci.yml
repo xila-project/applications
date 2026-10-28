@@ -16,30 +16,28 @@ env:
   CARGO_TERM_COLOR: always
 jobs:
   quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v5.2.2
-      - run: mise run ci:format-rust
-      - run: mise run ci:format-toml
-      - run: python3 tools/validate_manifests.py
-      - run: python3 -m unittest discover -s tools/ci -v
-      - run: mise run localization:lint
-      - run: mise run ci:lint-workflows
+    name: "Quality / Rust"
+    uses: xila-project/workspace/.github/workflows/quality.yml@e152177f341e45ceb6025848378f558d3aa090be
   guest:
     runs-on: ubuntu-latest
     env:
       XILA_MBX: "1"
     steps:
-      - uses: actions/checkout@v7
-      - uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
+      - name: "Setup | Checkout sources"
+        uses: actions/checkout@v7
+      - name: "Setup | Rust toolchain and build cache"
+        uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
         with:
           cache-mode: target
           cache-generation: v1-apps-wasi
-      - run: mise run ci:packages-linker
-      - run: mise run ci:clippy-guest
-      - run: mise run build:applications
-      - uses: actions/upload-artifact@v7
+      - name: "Setup | Clang and linker dependencies"
+        run: mise run ci:packages-linker
+      - name: "Lint | WASI guests"
+        run: mise run ci:clippy-guest
+      - name: "Build | WASI applications"
+        run: mise run build:applications
+      - name: "Report | Upload build artifacts"
+        uses: actions/upload-artifact@v7
         with:
           name: wasi-applications
           path: target/wasm32-wasip1/release-wasm/*.wasm
@@ -49,17 +47,23 @@ jobs:
     env:
       XILA_MBX: "1"
     steps:
-      - uses: actions/checkout@v7
-      - uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
+      - name: "Setup | Checkout sources"
+        uses: actions/checkout@v7
+      - name: "Setup | Rust toolchain and build cache"
+        uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
         with:
           cache-mode: target
           cache-generation: v1-apps-host
-      - run: mise run ci:deps-npm
-      - run: mise run ci:packages-host
-      - run: mise run ci:clippy-host
+      - name: "Setup | Locked npm dependencies"
+        run: mise run ci:deps-npm
+      - name: "Setup | Native build dependencies"
+        run: mise run ci:packages-host
+      - name: "Lint | Native host"
+        run: mise run ci:clippy-host
       - name: Lint Wasm host runtime
         run: cargo clippy --locked -p xila-wasm --features graphics,xila/graphics_rendering_xrgb8888 --target x86_64-unknown-linux-gnu -- -D warnings
-      - run: mise run test:workspace
+      - name: "Test | Application workspace"
+        run: mise run test:workspace
   abi:
     runs-on: ubuntu-latest
     strategy:
@@ -67,11 +71,14 @@ jobs:
       matrix:
         memory: [memory_32, memory_64]
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - name: "Setup | Checkout sources"
+        uses: actions/checkout@v7
+      - name: "Run | dtolnay/rust-toolchain"
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.99.0
-      - run: cargo test --locked --manifest-path executables/wasm/tests/translation/Cargo.toml --no-default-features --features ${{ matrix.memory }}
+      - name: "Test | ABI translation"
+        run: cargo test --locked --manifest-path executables/wasm/tests/translation/Cargo.toml --no-default-features --features ${{ matrix.memory }}
   localization:
     runs-on: ubuntu-latest
     strategy:
@@ -83,13 +90,17 @@ jobs:
       EMBEDDED_I18N_LOCALE: ${{ matrix.locale }}
       EMBEDDED_I18N_STRICT: "1"
     steps:
-      - uses: actions/checkout@v7
-      - uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
+      - name: "Setup | Checkout sources"
+        uses: actions/checkout@v7
+      - name: "Setup | Rust toolchain and build cache"
+        uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
         with:
           cache-mode: objects
           cache-generation: v1-apps-localization
-      - run: mise run ci:packages-linker
-      - run: mise run ci:localization
+      - name: "Setup | Clang and linker dependencies"
+        run: mise run ci:packages-linker
+      - name: "Test | Localization"
+        run: mise run ci:localization
   package:
     needs: guest
     strategy:

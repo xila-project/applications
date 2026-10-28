@@ -90,3 +90,12 @@ run = "mise -E ci,host bootstrap packages apply --manager apt --update --yes"
 description = "Install locked application Node dependencies with the pinned toolchain"
 tools.node = "{{ vars.node_version }}"
 run = "npm ci"
+
+[tasks."ci:quality-extra"]
+description = "Validate application manifests, workflows, and localization"
+run = """
+set -eu
+python3 tools/validate_manifests.py
+python3 -m unittest discover -s tools/ci -v
+mise run localization:lint
+"""
