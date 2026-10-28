@@ -73,12 +73,27 @@ class ApplicationPolicy(unittest.TestCase):
         self.assertNotIn('pull_request:', release)
         self.assertIn('@71c4da6799a958b188492b0a833bca3550b821ab', ci)
 
+    def test_shared_quality_keeps_app_specific_checks(self):
+        ci = (ROOT / '.github/workflows/ci.yml').read_text()
+        tasks = manifest('mise.ci.toml')['tasks']
+        self.assertIn('xila-project/workspace/.github/workflows/quality.yml@', ci)
+        extra = tasks['ci:quality-extra']['run']
+        for check in ('validate_manifests.py', 'unittest discover', 'localization:lint'):
+            self.assertIn(check, extra)
+        self.assertIn('needs: [quality, guest, host, abi, localization, package]', ci)
+        for line in ci.splitlines():
+            self.assertNotRegex(line, r'^      - (uses|run|env):')
+        self.assertIn('name: "Gate | Verify mandatory checks"', ci)
+
     def test_ci_caches_are_separate_and_use_one_wrapper(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.assertIn('mise run ci:packages-host', ci)
+        self.assertIn('mise run ci:packages-linker', ci)
+        self.assertNotIn('apt-get', ci)
         self.assertIn('v1-apps-host', ci)
         self.assertIn('v1-apps-wasi', ci)
         self.assertIn('v1-apps-localization', ci)
-        self.assertIn('github-cache-mode: objects', ci)
+        self.assertIn('cache-mode: objects', ci)
         config = manifest('mise.ci.toml')
         self.assertEqual(config['wrappers']['cargo']['env']['MBX_CARGO_SHIM_MODE'], '1')
         self.assertNotIn('mr-boxington', str(config.get('task_templates', {})))
