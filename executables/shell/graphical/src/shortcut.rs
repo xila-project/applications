@@ -103,3 +103,42 @@ impl Shortcut {
     //     self._Terminal
     // }
 }
+
+#[cfg(test)]
+mod shortcut_tests {
+    use super::*;
+
+    const SHORTCUT: &str = r#"{
+        "$schema": "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json",
+        "name": "Calculator",
+        "command": "/applications/executables/wasm",
+        "arguments": ["@bundle/executables/calculator.wasm", "--", "hello"],
+        "terminal": false,
+        "icon_string": "Ca",
+        "icon_color": [158, 158, 158]
+    }"#;
+
+    #[test]
+    fn resolves_bundle_relative_executable_without_manifest() {
+        let mut shortcut = Shortcut::from_str(SHORTCUT).unwrap();
+        shortcut
+            .resolve_bundle_paths(Path::from_str("/applications/bundles/xila.calculator"))
+            .unwrap();
+        assert_eq!(shortcut.command, "/applications/executables/wasm");
+        assert_eq!(
+            shortcut.arguments[0],
+            "/applications/bundles/xila.calculator/executables/calculator.wasm"
+        );
+        assert_eq!(shortcut.arguments[1], "--");
+        assert_eq!(shortcut.arguments[2], "hello");
+    }
+
+    #[test]
+    fn bundle_reference_cannot_escape_its_directory() {
+        for path in ["@bundle/../escape", "@bundle/foo/../../escape", "@bundle/", "@bundle//x"] {
+            let mut shortcut = Shortcut::from_str(SHORTCUT).unwrap();
+            shortcut.arguments[0] = path.into();
+            assert!(shortcut.resolve_bundle_paths(Path::from_str("/applications/bundles/test")).is_err());
+        }
+    }
+}
