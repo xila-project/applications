@@ -317,6 +317,47 @@ impl Desk {
                 }
             }
 
+            // Shell presentation is separate from signed package metadata:
+            // read bundle-local shortcut.json files without parsing a package manifest.
+            // A fresh scan on drawer opening makes new apps visible without reboot.
+            let bundles_path = xila::file_system::Path::from_str("/applications/bundles");
+            if let Ok(bundles) = Directory::open(virtual_file_system, task, bundles_path).await {
+                for bundle in bundles {
+                    if bundle.kind != Kind::Directory {
+                        continue;
+                    }
+                    let Some(directory) = bundles_path.append(&bundle.name) else {
+                        continue;
+                    };
+                    let Some(shortcut_path) = directory.append("shortcut.json") else {
+                        continue;
+                    };
+                    match Shortcut::read_from_path(
+                        self.context,
+                        &shortcut_path,
+                        &mut buffer,
+                    )
+                    .await
+                    {
+                        Ok(shortcut) => {
+                            self.create_drawer_shortcut(
+                                shortcut_path.as_str(),
+                                &shortcut.name,
+                                shortcut.get_icon_color(),
+                                &shortcut.icon_string,
+                                drawer,
+                            )?;
+                        }
+                        Err(error) => {
+                            warning!(
+                                "Skipping bundle shortcut at {}: {error:?}",
+                                shortcut_path.as_str()
+                            );
+                        }
+                    }
+                }
+            }
+
             Ok(())
         }
     }
@@ -330,7 +371,22 @@ impl Desk {
 
         let mut buffer = vec![];
 
-        let shortcut = Shortcut::read(self.context, shortcut_name, &mut buffer).await?;
+        let mut shortcut = if shortcut_name.starts_with('/') {
+            Shortcut::read_from_path(
+                self.context,
+                xila::file_system::Path::from_str(shortcut_name),
+                &mut buffer,
+            )
+            .await?
+        } else {
+            Shortcut::read(self.context, shortcut_name, &mut buffer).await?
+        };
+        if shortcut_name.starts_with('/') {
+            let bundle = xila::file_system::Path::from_str(shortcut_name)
+                .go_parent()
+                .ok_or(Error::FailedToGetShortcutFilePath)?;
+            shortcut.resolve_bundle_paths(bundle)?;
+        }
 
         let standard = Standard::open(
             &"/devices/standard_io/null",
