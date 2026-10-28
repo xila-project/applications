@@ -89,6 +89,7 @@ class ApplicationPolicy(unittest.TestCase):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
         step = ci.split('name: "Test | Japanese with companion Core"', 1)[1].split('  package:', 1)[0]
         self.assertIn('XILA_MBX: "0"', step)
+        self.assertIn('CARGO_TARGET_DIR: ${{ runner.temp }}/xila-ja-target', step)
         self.assertIn('mise run ci:localization-japanese', step)
         task = manifest('mise.ci.toml')['tasks']['ci:localization-japanese']
         self.assertEqual(task['extends'], 'ci:rust-wasi')

@@ -127,6 +127,7 @@ jobs:
         if: matrix.locale == 'ja'
         env:
           XILA_MBX: "0"
+          CARGO_TARGET_DIR: ${{ runner.temp }}/xila-ja-target
         run: mise run ci:localization-japanese
   package:
     name: "Package / ${{ matrix.app }}"
