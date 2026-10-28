@@ -34,6 +34,8 @@ impl ExecutableTrait for DebugExecutable {
 async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), NonZeroUsize> {
     let context = standard.context;
     let graphics = graphics::ffi_manager();
+    let task = context.task_manager.get_current_task_identifier().await;
+    let launch_icon = graphics::task_launch_icon(context.task_manager, task).await;
     let background = arguments.iter().any(|argument| argument == "--background");
     let mut window = if background {
         None
@@ -42,6 +44,9 @@ async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), 
             let _lock = graphics.lock().await;
             let mut window = graphics.create_window().await.map_err(|_| code(1))?;
             window.set_icon("Db", graphics::Color::BLACK);
+            if let Some((icon, explicit)) = launch_icon {
+                window.apply_launch_spec(icon, explicit);
+            }
             let label = unsafe { graphics::lvgl::lv_label_create(window.as_object_mutable()) };
             if label.is_null() {
                 return Err(code(1));

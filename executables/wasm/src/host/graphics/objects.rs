@@ -100,6 +100,7 @@ const _: () = assert!(core::mem::size_of::<Entry>() <= 192);
 
 pub struct GraphicsState {
     pub(crate) manager: Option<&'static Manager>,
+    pub(crate) launch_icon: Option<(xila::graphics::IconSpec, bool)>,
     entries: Vec<Entry>,
     grid_tracks: usize,
     widget_options_bytes: usize,
@@ -114,6 +115,7 @@ impl GraphicsState {
     pub fn new(manager: Option<&'static Manager>) -> Self {
         Self {
             manager,
+            launch_icon: None,
             entries: Vec::new(),
             grid_tracks: 0,
             widget_options_bytes: 0,

@@ -44,10 +44,15 @@ pub struct FileItem {
 impl FileManager {
     pub async fn new(context: &'static xila::executable::ExecutableContext) -> Result<Self> {
         let graphics_manager = graphics::ffi_manager();
+        let task = context.task_manager.get_current_task_identifier().await;
+        let launch_icon = graphics::task_launch_icon(context.task_manager, task).await;
         let manager = graphics::lock!(graphics_manager, {
             let mut window = graphics_manager.create_window().await?;
 
             window.set_icon("Fm", palette::get(Hue::Cyan, palette::Tone::MAIN));
+            if let Some((icon, explicit)) = launch_icon {
+                window.apply_launch_spec(icon, explicit);
+            }
 
             let mut manager = Self {
                 context,

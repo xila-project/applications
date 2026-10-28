@@ -26,6 +26,8 @@ pub struct FileItem {
 impl Settings {
     pub async fn new(context: &'static xila::executable::ExecutableContext) -> Result<Self> {
         let graphics_manager = graphics::ffi_manager();
+        let task = context.task_manager.get_current_task_identifier().await;
+        let launch_icon = graphics::task_launch_icon(context.task_manager, task).await;
         // On construction failure, release the lock before OwnedWindow::drop
         // acquires it to delete the partially built widget tree.
         let mut window;
@@ -33,6 +35,9 @@ impl Settings {
         window = graphics_manager.create_window().await?;
 
         window.set_icon("Se", palette::get(Hue::Grey, palette::Tone::MAIN));
+        if let Some((icon, explicit)) = launch_icon {
+            window.apply_launch_spec(icon, explicit);
+        }
 
         // Flatten window chrome so the tabview fills the window edge-to-edge
         unsafe {

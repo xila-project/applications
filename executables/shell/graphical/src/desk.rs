@@ -8,11 +8,12 @@ use crate::{
 use alloc::{
     collections::btree_map::BTreeMap,
     ffi::CString,
+    format,
     string::{String, ToString},
     vec,
     vec::Vec,
 };
-use xila::graphics::{self, Color, EventKind, Logo, OwnedWindow, Point, lvgl};
+use xila::graphics::{self, Color, EventKind, IconSpec, Logo, OwnedWindow, Point, lvgl};
 use xila::log::{self, error, warning};
 use xila::virtual_file_system::Directory;
 use xila::{executable, graphics::theme};
@@ -42,7 +43,10 @@ unsafe extern "C" fn event_handler(event: *mut lvgl::lv_event_t) {
         let raw_code = lvgl::lv_event_get_code(event);
         let code = EventKind::from_lvgl_code(raw_code);
 
-        if code == EventKind::ChildCreated || code == EventKind::ChildDeleted {
+        if code == EventKind::ChildCreated
+            || code == EventKind::ChildDeleted
+            || code == EventKind::Custom4
+        {
             let target = lvgl::lv_event_get_target(event) as *mut lvgl::lv_obj_t;
             let target_parent = lvgl::lv_obj_get_parent(target);
 
@@ -238,8 +242,7 @@ impl Desk {
         &mut self,
         entry_name: &str,
         name: &str,
-        icon_color: Color,
-        icon_string: &str,
+        icon_spec: IconSpec,
         drawer: *mut lvgl::lv_obj_t,
     ) -> Result<()> {
         let icon = unsafe {
@@ -255,7 +258,7 @@ impl Desk {
                 lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
             );
 
-            let icon = create_icon(container, icon_color, icon_string, Self::DRAWER_ICON_SIZE)?;
+            let icon = create_icon(container, icon_spec, Self::DRAWER_ICON_SIZE)?;
 
             let label = lvgl::lv_label_create(container);
 
@@ -305,8 +308,7 @@ impl Desk {
                         self.create_drawer_shortcut(
                             &shortcut_entry.name,
                             &shortcut.name,
-                            shortcut.get_icon_color(),
-                            &shortcut.icon_string,
+                            shortcut.icon_spec(&shortcut_entry.name).0,
                             drawer,
                         )?;
                     }
@@ -394,12 +396,19 @@ impl Desk {
         .await
         .map_err(Error::FailedToOpenStandardFile)?;
 
-        executable::execute(
+        let (icon, explicit) = shortcut.icon_spec(shortcut_name);
+        let mode = if explicit { "explicit" } else { "auto" };
+        let environment = vec![(
+            graphics::ICON_ENVIRONMENT.to_string(),
+            format!("{mode};{}", icon.encode()),
+        )];
+        executable::execute_with_environment(
             self.context,
             &*shortcut.command,
             shortcut.arguments,
             standard,
             None,
+            environment,
         )
         .await
         .map_err(Error::FailedToExecuteShortcut)?;
@@ -517,7 +526,7 @@ impl Desk {
         }
     }
 
-    async fn get_visible_windows(&self) -> Result<Vec<(usize, String, Color)>> {
+    async fn get_visible_windows(&self) -> Result<Vec<(usize, IconSpec)>> {
         let graphics_manager = self.graphics_manager;
         let window_count = graphics_manager.get_window_count().await?;
 
@@ -532,9 +541,9 @@ impl Desk {
                 continue;
             }
 
-            match graphics_manager.get_window_icon(index).await {
-                Ok((icon_string, icon_color)) => {
-                    windows.push((window_identifier, icon_string, icon_color));
+            match graphics_manager.get_window_icon_spec(index).await {
+                Ok(icon_spec) => {
+                    windows.push((window_identifier, icon_spec));
                 }
                 Err(error) => {
                     warning!(
@@ -567,10 +576,10 @@ impl Desk {
         }
     }
 
-    unsafe fn rebuild_dock_icons(&self, windows: &[(usize, String, Color)]) -> Result<()> {
+    unsafe fn rebuild_dock_icons(&self, windows: &[(usize, IconSpec)]) -> Result<()> {
         unsafe {
-            for (window_identifier, icon_string, icon_color) in windows {
-                let icon = create_icon(self.dock, *icon_color, icon_string, Self::DOCK_ICON_SIZE)?;
+            for (window_identifier, icon_spec) in windows {
+                let icon = create_icon(self.dock, *icon_spec, Self::DOCK_ICON_SIZE)?;
 
                 lvgl::lv_obj_set_user_data(icon, *window_identifier as *mut c_void);
             }
@@ -593,7 +602,7 @@ impl Desk {
             .is_some_and(|window_identifier| {
                 !visible_windows
                     .iter()
-                    .any(|(visible_identifier, _, _)| *visible_identifier == window_identifier)
+                    .any(|(visible_identifier, _)| *visible_identifier == window_identifier)
             })
         {
             unsafe {
@@ -790,23 +799,23 @@ impl Desk {
 
 #[cfg(test)]
 mod tests {
-    use alloc::{string::String, vec, vec::Vec};
+    use alloc::{vec, vec::Vec};
 
-    use xila::graphics::Color;
+    use xila::graphics::{Color, IconSpec};
 
-    fn visible_window_identifiers(windows: &[(usize, String, Color)]) -> Vec<usize> {
+    fn visible_window_identifiers(windows: &[(usize, IconSpec)]) -> Vec<usize> {
         windows
             .iter()
-            .map(|(window_identifier, _, _)| *window_identifier)
+            .map(|(window_identifier, _)| *window_identifier)
             .collect()
     }
 
     #[test]
     fn preserves_original_order_of_non_desk_windows() {
         let windows = vec![
-            (42, String::from("A"), Color::BLACK),
-            (77, String::from("B"), Color::WHITE),
-            (3, String::from("C"), Color::new(12, 34, 56)),
+            (42, IconSpec::automatic("A", "A", Color::BLACK)),
+            (77, IconSpec::automatic("B", "B", Color::WHITE)),
+            (3, IconSpec::automatic("C", "C", Color::new(12, 34, 56))),
         ];
 
         assert_eq!(visible_window_identifiers(&windows), vec![42, 77, 3]);
@@ -815,8 +824,8 @@ mod tests {
     #[test]
     fn allows_detecting_disappeared_menu_target() {
         let windows = vec![
-            (2, String::from("A"), Color::BLACK),
-            (3, String::from("B"), Color::WHITE),
+            (2, IconSpec::automatic("A", "A", Color::BLACK)),
+            (3, IconSpec::automatic("B", "B", Color::WHITE)),
         ];
 
         let visible = visible_window_identifiers(&windows);

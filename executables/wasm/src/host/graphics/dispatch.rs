@@ -1258,8 +1258,11 @@ pub fn dispatch(
         | Function::TileviewCreate => {
             state.ensure_capacity()?;
             let (pointer, kind, parent) = if function == Function::WindowCreate {
-                let window = xila::task::block_on(manager.create_window())
+                let mut window = xila::task::block_on(manager.create_window())
                     .map_err(|_| GraphicsError::NativeFailure)?;
+                if let Some((icon, explicit)) = state.launch_icon {
+                    window.apply_launch_spec(icon, explicit);
+                }
                 let window: NonNull<Window> = window.into();
                 (window.as_ptr().cast(), Kind::Window, None)
             } else {

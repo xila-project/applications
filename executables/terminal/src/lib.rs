@@ -67,7 +67,8 @@ async fn mount_and_open(
 }
 
 async fn inner_main(task: TaskIdentifier, standard: &Standard<'static>) -> Result<()> {
-    let terminal = Terminal::new(graphics::ffi_manager()).await?;
+    let launch_icon = graphics::task_launch_icon(standard.context.task_manager, task).await;
+    let terminal = Terminal::new(graphics::ffi_manager(), launch_icon).await?;
 
     let terminal = Box::leak(Box::new(terminal));
 

@@ -33,11 +33,17 @@ impl Terminal {
     const CLEAR: &'static str = "\x1B[2J";
     const HOME: &'static str = "\x1B[H";
 
-    pub async fn new(graphics_manager: &'static graphics::Manager) -> Result<Self> {
+    pub async fn new(
+        graphics_manager: &'static graphics::Manager,
+        launch_icon: Option<(graphics::IconSpec, bool)>,
+    ) -> Result<Self> {
         let inner = graphics::lock!(graphics_manager, {
             let mut window = graphics_manager.create_window().await?;
             unsafe {
                 window.set_icon(">_", Color::BLACK);
+                if let Some((icon, explicit)) = launch_icon {
+                    window.apply_launch_spec(icon, explicit);
+                }
 
                 lvgl::lv_obj_set_flex_flow(
                     window.as_object_mutable(),

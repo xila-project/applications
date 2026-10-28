@@ -276,13 +276,20 @@ async fn main_inner(
         xila::file_system::Path::from_str("/"),
     );
 
+    #[cfg(feature = "graphics")]
+    let launch_icon = xila::graphics::task_launch_icon(context.task_manager, task).await;
+
     let mut store = Store::new(
         &engine,
         GlobalStore {
             context,
             pending: None,
             #[cfg(feature = "graphics")]
-            graphics: super::graphics::GraphicsState::new(context.graphics_manager),
+            graphics: {
+                let mut graphics = super::graphics::GraphicsState::new(context.graphics_manager);
+                graphics.launch_icon = launch_icon;
+                graphics
+            },
             wasi: WasiContext {
                 files: alloc::collections::BTreeMap::new(),
                 next_fd: 3,
