@@ -257,7 +257,14 @@ async fn dispatch(
                             "id": element.id,
                             "parent_id": element.parent_id,
                             "role": element.role,
+                            "semantic_role": element.semantic_role,
+                            "name": element.name,
                             "text": element.text,
+                            "hidden": element.hidden,
+                            "disabled": element.disabled,
+                            "focused": element.focused,
+                            "clickable": element.clickable,
+                            "checked": element.checked,
                             "bounds": element.bounds,
                         })
                     })
