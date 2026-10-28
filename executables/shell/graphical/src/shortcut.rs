@@ -1,4 +1,4 @@
-use alloc::{string::String, vec::Vec};
+use alloc::{string::{String, ToString}, vec::Vec};
 use miniserde::{Deserialize, Serialize};
 use xila::file_system::{AccessFlags, Path};
 use xila::graphics::Color;
@@ -36,7 +36,7 @@ impl Shortcut {
         buffer.clear();
 
         shortcut_file
-            .read_to_end(buffer, 256)
+            .read_to_end(buffer, 2048)
             .await
             .map_err(Error::FailedToReadShortcutFile)?;
 
@@ -68,6 +68,31 @@ impl Shortcut {
 
     pub fn from_str(string: &str) -> Result<Self> {
         miniserde::json::from_str(string).map_err(Error::FailedToDeserializeShortcut)
+    }
+
+    /// Resolve bundle-relative executable/asset arguments against the
+    /// directory containing this shortcut. Never interpret a manifest here.
+    pub fn resolve_bundle_paths(&mut self, bundle: &Path) -> Result<()> {
+        fn resolve(value: &str, bundle: &Path) -> Result<String> {
+            let Some(relative) = value.strip_prefix("@bundle/") else {
+                return Ok(value.to_string());
+            };
+            if relative.is_empty()
+                || relative.contains('\\')
+                || relative.split('/').any(|segment| segment.is_empty() || segment == "." || segment == "..")
+            {
+                return Err(Error::FailedToGetShortcutFilePath);
+            }
+            bundle
+                .append(relative)
+                .map(|path| path.as_str().to_string())
+                .ok_or(Error::FailedToGetShortcutFilePath)
+        }
+        self.command = resolve(&self.command, bundle)?;
+        for arg in &mut self.arguments {
+            *arg = resolve(arg, bundle)?;
+        }
+        Ok(())
     }
 
     pub fn get_icon_color(&self) -> Color {
