@@ -42,9 +42,12 @@ installed at e.g.
 the existing Xila Wasm executable. `--allow-untrusted` must not be used
 for unattended deployment.
 
-**Important:** the package installation uses the caller's VFS permissions.
-Administrators must provision writable permissions on
-`/applications/packages`; there is no privilege escalation inside this CLI.
+**Important:** system-wide installation currently requires the invoking
+Xila task to run as **root** (UID 0). The default `administrator` account
+created for fresh disk images is UID 1000 and does not get automatic
+privilege escalation through this CLI. An authenticated privileged package
+service or a `sudo`-style command is future work; do not change the global
+package directory to world-writable to make installation succeed.
 
 The application must be explicitly registered in each native platform's
 `mount_executables!` invocation (see xila-project/platforms).
