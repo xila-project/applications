@@ -1,0 +1,122 @@
+{
+  "authentication": {
+    "prompts": {
+      "password": "パスワード: ",
+      "username": "ユーザー名: "
+    }
+  },
+  "dns": {
+    "errors": {
+      "unknown_host": "{} を解決できません: 不明なホスト"
+    },
+    "records": {
+      "unit": {
+        "one": "ドメインのレコード",
+        "other": "ドメインのレコード"
+      }
+    },
+    "status": {
+      "no_records_found": "ドメイン '{}' の {} レコードが見つかりませんでした"
+    }
+  },
+  "errors": {
+    "argument_parsing_error": "引数の解析に失敗しました: {}",
+    "authentication_failed": "認証に失敗しました: {}",
+    "failed_to_create_directory": "ディレクトリの作成に失敗しました: {}",
+    "failed_to_create_socket": "ソケットの作成に失敗しました: {}",
+    "failed_to_create_symbolic_link": "シンボリックリンクの作成に失敗しました: {}",
+    "failed_to_execute_command": "コマンドを実行できませんでした",
+    "failed_to_get_environment_variable": "環境変数を取得できませんでした",
+    "failed_to_get_metadata": "メタデータの取得に失敗しました: {}",
+    "failed_to_get_task_identifier": "タスク識別子を取得できませんでした",
+    "failed_to_get_task_user": "タスクユーザーの取得に失敗しました: {}",
+    "failed_to_join_path": "パスを結合できませんでした",
+    "failed_to_join_task": "タスクの終了待機に失敗しました",
+    "failed_to_open_directory": "ディレクトリのオープンに失敗しました: {}",
+    "failed_to_open_file": "ファイルのオープンに失敗しました: {}",
+    "failed_to_read_directory_entry": "ディレクトリエントリの読み取りに失敗しました: {}",
+    "failed_to_read_environment_variable": "環境変数の読み取りに失敗しました: {}",
+    "failed_to_read_file": "ファイルの読み取りに失敗しました: {}",
+    "failed_to_read_symbolic_link": "シンボリックリンクの読み取りに失敗しました: {}",
+    "failed_to_remove_directory": "ディレクトリの削除に失敗しました: {}",
+    "failed_to_remove_environment_variable": "環境変数の削除に失敗しました: {}",
+    "failed_to_rename_path": "パスの名前変更に失敗しました: {}",
+    "failed_to_resolve_domain": "ドメインの名前解決に失敗しました: {}",
+    "failed_to_resolve_domain_for_records": "ドメイン '{}' の {} レコードを解決できませんでした: {}",
+    "failed_to_set_current_directory": "カレントディレクトリの設定に失敗しました: {}",
+    "failed_to_set_environment_variable": "環境変数の設定に失敗しました: {}",
+    "failed_to_set_permissions": "権限の設定に失敗しました: {}",
+    "failed_to_set_shell_nesting_depth": "シェルのネスト深度の設定に失敗しました",
+    "failed_to_set_task_user": "タスクユーザーの設定に失敗しました: {}",
+    "failed_to_tokenize_command_line": "コマンドラインを分割できませんでした",
+    "failed_to_write_file": "ファイルの書き込みに失敗しました: {}",
+    "format_failed": "書式エラー",
+    "invalid_argument": "無効な引数",
+    "invalid_number_of_arguments": "引数の数が正しくありません",
+    "invalid_option": "無効なオプション",
+    "invalid_path": "無効なパス",
+    "invalid_utf_8_input": "無効な UTF-8 入力",
+    "line_too_long": "行が長すぎます",
+    "maximum_nested_shell_depth_exceeded": "シェルの最大ネスト深度を超えました",
+    "missing_file_name_after_redirect_in": "入力リダイレクトの後にファイル名がありません",
+    "missing_file_name_after_redirect_out": "出力リダイレクトの後にファイル名がありません",
+    "missing_positional_argument": "位置引数がありません: {}",
+    "option_does_not_require_a_value": "このオプションに値は必要ありません",
+    "option_requires_a_value": "このオプションには値が必要です",
+    "syntax_error_at_byte": "バイト {} の構文エラー: {}",
+    "too_many_background_jobs": "バックグラウンドジョブが多すぎます",
+    "with_details": "エラー: {}"
+  },
+  "execution": {
+    "errors": {
+      "command_line_too_long": "コマンドラインが長すぎます",
+      "command_not_found": "コマンドが見つかりません",
+      "missing_command": "コマンドが指定されていません"
+    }
+  },
+  "help": {
+    "available_executables_title": "パス内の実行ファイル:",
+    "built_in_commands_title": "組み込みコマンド:",
+    "execute_command_usage": "使用方法: shell -c COMMAND",
+    "external_executable_description": "外部実行ファイルです。使用方法は実行ファイル側で提供されます。",
+    "run_script_usage": "使用方法: shell -s PATH"
+  },
+  "listing": {
+    "columns": {
+      "accessed": "アクセス日時",
+      "created": "作成日時",
+      "group": "グループ",
+      "inode": "inode",
+      "kind": "種類",
+      "links": "リンク",
+      "modified": "更新日時",
+      "permissions": "権限",
+      "size": "サイズ",
+      "status": "状態",
+      "user": "ユーザー"
+    }
+  },
+  "ping": {
+    "errors": {
+      "request_timeout": "icmp_seq {} の要求がタイムアウトしました"
+    },
+    "reply": {
+      "byte_unit": {
+        "one": "バイトの応答元",
+        "other": "バイトの応答元"
+      },
+      "time_label": "時間"
+    },
+    "request": {
+      "payload_byte_unit": {
+        "one": "データバイト",
+        "other": "データバイト"
+      }
+    }
+  },
+  "sleep": {
+    "errors": {
+      "invalid_duration": "無効な待機時間です。ms、s、m、h を付けた非負整数を指定してください（最大 18446744073709551615 ナノ秒）。"
+    }
+  }
+}

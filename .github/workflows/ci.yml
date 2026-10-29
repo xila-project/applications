@@ -88,7 +88,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        locale: [en, fr, es, de, pt-BR, it, pl, zh-CN]
+        locale: [en, fr, es, de, pt-BR, it, pl, zh-CN, ja]
     env:
       XILA_MBX: "1"
       EMBEDDED_I18N_LOCALE: ${{ matrix.locale }}
@@ -96,6 +96,23 @@ jobs:
     steps:
       - name: "Setup | Checkout sources"
         uses: actions/checkout@v7
+      # These checkouts only affect Japanese CI validation.
+      - name: "Setup | Checkout companion Core"
+        uses: actions/checkout@v7
+        if: matrix.locale == 'ja'
+        with:
+          repository: xila-project/core
+          ref: c656f83b6cfd019ed469332182166bdaf6188ca9
+          path: .ci-core-ja
+          persist-credentials: false
+      - name: "Setup | Checkout Platforms"
+        uses: actions/checkout@v7
+        if: matrix.locale == 'ja'
+        with:
+          repository: xila-project/platforms
+          ref: 6ced809bdb8313a2aef02561bece4bc31ec19da8
+          path: .ci-platforms-ja
+          persist-credentials: false
       - name: "Setup | Rust toolchain and build cache"
         uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
         with:
@@ -104,7 +121,17 @@ jobs:
       - name: "Setup | Clang and linker dependencies"
         run: mise run ci:packages-linker
       - name: "Test | Localization"
+        if: matrix.locale != 'ja'
         run: mise run ci:localization
+      - name: "Test | Japanese with companion Core"
+        if: matrix.locale == 'ja'
+        env:
+          XILA_MBX: "0"
+          CARGO_TARGET_DIR: ${{ runner.temp }}/xila-ja-target
+        run: |
+          cp -a .ci-core-ja "$RUNNER_TEMP/xila-core-ja"
+          cp -a .ci-platforms-ja "$RUNNER_TEMP/xila-platforms-ja"
+          mise run ci:localization-japanese
   package:
     name: "Package / ${{ matrix.app }}"
     needs: guest
