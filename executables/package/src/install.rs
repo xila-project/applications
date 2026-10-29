@@ -283,7 +283,11 @@ async fn extract(
         .await;
         // Never abandon an open VFS handle on validation failure.
         let closed = close_output(vfs, &mut active).await;
-        result.and(closed)
+        match (result, closed) {
+            (Err(e), _) => Err(e),
+            (Ok(_), Err(e)) => Err(e),
+            (Ok(manifest), Ok(())) => Ok(manifest),
+        }
     }
     .await;
     let close = source
