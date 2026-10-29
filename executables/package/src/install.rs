@@ -442,7 +442,10 @@ pub async fn install(
     // Only a privileged task may create or publish system-wide packages.
     // The built-in "administrator" user (UID 1000) is NOT automatically root.
     // Do not give it writable /applications permissions or escalate it here.
-    let user = vfs.task_manager().get_user(task).await
+    let user = vfs
+        .task_manager()
+        .get_user(task)
+        .await
         .map_err(|e| error("cannot determine installing user", e))?;
     if user != xila::users::UserIdentifier::ROOT {
         return Err("package install requires a privileged root task".into());
