@@ -67,16 +67,18 @@ class ApplicationPolicy(unittest.TestCase):
         release = (ROOT / '.github/workflows/release.yml').read_text()
         self.assertIn('publish-release: false', ci)
         self.assertIn("sign-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}", ci)
-        self.assertIn("NETBIRD_SETUP_KEY: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NETBIRD_SETUP_KEY || '' }}", ci)
+        self.assertNotIn('NETBIRD_SETUP_KEY:', ci)
         self.assertNotIn('contents: write', ci)
         self.assertIn('publish-release: true', release)
         self.assertIn('tags: ["v*"]', release)
         self.assertIn('XILA_RELEASE_TAG', release)
         self.assertNotIn('pull_request:', release)
-        pin = '1dc97659b37404d8d3e3300c52cbdc9b4cb78247'
-        self.assertIn('@' + pin, ci)
-        self.assertIn('@' + pin, release)
-        self.assertIn('builder-ref: ' + pin, release)
+        ci_pin = '2f6dd71a606aa3508316ef07605fb7089608cf0e'
+        release_pin = '1dc97659b37404d8d3e3300c52cbdc9b4cb78247'
+        self.assertIn('@' + ci_pin, ci)
+        self.assertIn('builder-ref: ' + ci_pin, ci)
+        self.assertIn('@' + release_pin, release)
+        self.assertIn('builder-ref: ' + release_pin, release)
         self.assertEqual(ci.count('id-token: write'), 1)
         self.assertIn('id-token: write', release)
         self.assertIn('NETBIRD_SETUP_KEY: ${{ secrets.NETBIRD_SETUP_KEY }}', release)
