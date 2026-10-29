@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json",
+  "name": "Text Editor",
+  "command": "/applications/executables/wasm",
+  "arguments": [
+    "@bundle/bin/text_editor.wasm"
+  ],
+  "terminal": false,
+  "icon_string": "Te",
+  "icon_color": [
+    106,
+    196,
+    129
+  ]
+}
