@@ -24,12 +24,18 @@ pub struct View {
 }
 
 impl View {
-    pub async fn new(graphics: &'static graphics::Manager) -> Result<Self, NonZeroUsize> {
+    pub async fn new(
+        graphics: &'static graphics::Manager,
+        launch_icon: Option<(graphics::IconSpec, bool)>,
+    ) -> Result<Self, NonZeroUsize> {
         // Drop the lock before OwnedWindow on every construction error.
         let mut window;
         let _lock = graphics.lock().await;
         window = graphics.create_window().await.map_err(|_| crate::code(1))?;
         window.set_icon("Ac", graphics::Color::BLACK);
+        if let Some((icon, explicit)) = launch_icon {
+            window.apply_launch_spec(icon, explicit);
+        }
         let root = window.as_object_mutable();
         unsafe {
             lvgl::lv_obj_set_layout(root, lvgl::lv_layout_t_LV_LAYOUT_FLEX);

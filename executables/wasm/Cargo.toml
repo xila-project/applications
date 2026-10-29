@@ -41,7 +41,7 @@ graphics = [
 ]
 
 [build-dependencies]
-graphics_bindgen = { package = "xila-graphics-bindgen", git = "https://github.com/xila-project/core", rev = "3735a377d543c08e402af1e398b5f36bbf481fc9", optional = true }
+graphics_bindgen = { package = "xila-graphics-bindgen", git = "https://github.com/xila-project/core", rev = "683d7e19658d149e14e4fca59d86f43f23fae812", optional = true }
 lvgl_rust_sys = { workspace = true, optional = true }
 quote = { workspace = true, optional = true }
 syn = { workspace = true, features = ["full", "extra-traits"], optional = true }

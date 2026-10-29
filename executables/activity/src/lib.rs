@@ -31,7 +31,9 @@ async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), 
     let mut config = Config::parse(&arguments).map_err(|_| code(2))?;
     let context = standard.context;
     let graphics = context.graphics_manager.ok_or(code(1))?;
-    let mut view = View::new(graphics).await?;
+    let task = context.task_manager.get_current_task_identifier().await;
+    let launch_icon = xila::graphics::task_launch_icon(context.task_manager, task).await;
+    let mut view = View::new(graphics, launch_icon).await?;
     let mut workload: Option<Workload> = None;
     let mut failed = false;
     let mut shown_controls = None;
