@@ -90,10 +90,10 @@ unsafe extern "C" fn delete_icon(event: *mut lvgl::lv_event_t) {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 static CALLBACK_REGISTRATION_COUNT: core::sync::atomic::AtomicUsize =
     core::sync::atomic::AtomicUsize::new(0);
-#[cfg(test)]
+#[cfg(all(test, target_os = "linux"))]
 static FAIL_CALLBACK_REGISTRATION_AT: core::sync::atomic::AtomicUsize =
     core::sync::atomic::AtomicUsize::new(0);
 
@@ -103,7 +103,7 @@ unsafe fn add_icon_callback(
     code: lvgl::lv_event_code_t,
     data: *mut core::ffi::c_void,
 ) -> *mut lvgl::lv_event_dsc_t {
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "linux"))]
     {
         use core::sync::atomic::Ordering;
         let count = CALLBACK_REGISTRATION_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
