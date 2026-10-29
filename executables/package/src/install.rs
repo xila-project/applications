@@ -404,7 +404,18 @@ async fn new_staging(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<St
         let id = NEXT_STAGING.fetch_add(1, Ordering::Relaxed);
         let path = format!("{INSTALLED_ROOT}/.incoming-{id:x}");
         match Directory::create(vfs, task, Path::from_str(&path)).await {
-            Ok(()) => return Ok(path),
+            Ok(()) => {
+                // No unverified executable bytes may be visible to another
+                // user. The directory initially contains no files; restrict
+                // it before opening the untrusted archive or writing payloads.
+                let private = Permissions::from_octal(0o700)
+                    .map_err(|_| "invalid quarantine permissions".to_string())?;
+                if let Err(error) = vfs.set_permissions(task, Path::from_str(&path), private).await {
+                    let _ = vfs.remove(task, Path::from_str(&path)).await;
+                    return Err(error("cannot protect staging directory", error));
+                }
+                return Ok(path);
+            }
             Err(xila::virtual_file_system::Error::AlreadyExists) => continue,
             Err(e) => return Err(error("cannot create package staging directory", e)),
         }
