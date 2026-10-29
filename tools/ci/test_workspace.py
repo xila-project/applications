@@ -68,12 +68,14 @@ class ApplicationPolicy(unittest.TestCase):
         self.assertIn('publish-release: false', ci)
         self.assertIn("sign-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}", ci)
         self.assertNotIn('NETBIRD_SETUP_KEY:', ci)
+        self.assertIn('XILA_DEV_SIGNING_SEED_B64:', ci)
+        self.assertIn('secrets.XILA_DEV_SIGNING_SEED_B64', ci)
         self.assertNotIn('contents: write', ci)
         self.assertIn('publish-release: true', release)
         self.assertIn('tags: ["v*"]', release)
         self.assertIn('XILA_RELEASE_TAG', release)
         self.assertNotIn('pull_request:', release)
-        ci_pin = '2f6dd71a606aa3508316ef07605fb7089608cf0e'
+        ci_pin = '49e81b21827a4ff76e28b142863020414af12c98'
         release_pin = '1dc97659b37404d8d3e3300c52cbdc9b4cb78247'
         self.assertIn('@' + ci_pin, ci)
         self.assertIn('builder-ref: ' + ci_pin, ci)
