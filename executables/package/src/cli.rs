@@ -62,7 +62,7 @@ pub fn parse(args: &[String]) -> Result<Command<'_>, &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::{string::ToString, vec};
+    use alloc::{string::ToString, vec, vec::Vec};
     fn args(parts: &[&str]) -> Vec<String> {
         parts.iter().map(|part| (*part).to_string()).collect()
     }
