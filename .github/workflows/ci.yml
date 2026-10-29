@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v7
       - name: "Diagnostic | Cargo lock resolution"
         run: |
-          cargo metadata --format-version 1 --no-deps > /tmp/xila-metadata.json
+          cargo metadata --format-version 1 > /tmp/xila-metadata.json
           git diff -- Cargo.lock
       - name: "Diagnostic | Canonical TOML formatter"
         run: |
