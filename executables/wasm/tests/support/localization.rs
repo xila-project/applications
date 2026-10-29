@@ -13,6 +13,7 @@ pub fn text(application: &str, key: &str) -> String {
         "pl" => "pl",
         "pt-br" => "pt-BR",
         "zh-cn" => "zh-CN",
+        "ja" => "ja",
         _ => panic!("unsupported guest test locale: {locale}"),
     };
     assert!(matches!(

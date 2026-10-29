@@ -257,7 +257,14 @@ async fn dispatch(
                             "id": element.id,
                             "parent_id": element.parent_id,
                             "role": element.role,
+                            "semantic_role": element.semantic_role,
+                            "name": element.name,
                             "text": element.text,
+                            "hidden": element.hidden,
+                            "disabled": element.disabled,
+                            "focused": element.focused,
+                            "clickable": element.clickable,
+                            "checked": element.checked,
                             "bounds": element.bounds,
                         })
                     })
@@ -301,11 +308,29 @@ async fn dispatch(
                 .map_err(input_error),
             None => Err(("unsupported_key", "Key is not supported.".into())),
         },
-        Request::Text { text } => match graphics_manager.inject_text(&text).await {
-            Ok(count) => Ok(serde_json::json!({"queued_events": count * 2})),
+        Request::PressKey { key: name } => match parse_key(&name) {
+            Some(key) => graphics_manager
+                .inject_key_press(key)
+                .await
+                .map(|()| serde_json::json!({"key": name, "status": "queued"}))
+                .map_err(input_error),
+            None => Err(("unsupported_key", "Key is not supported.".into())),
+        },
+        Request::Text { text } => match graphics_manager.inject_text_chunk(&text).await {
+            Ok(count) => Ok(serde_json::json!({
+                "status": "queued",
+                "queued_bytes": count,
+                "queued_events": text[..count].chars().count() * 2,
+                "complete": count == text.len(),
+                "unicode_window_events": if text[..count].is_ascii() { "not_applicable" } else { "unsupported" },
+            })),
             Err(graphics::Error::InvalidParameter) => Err((
                 "unsupported_character",
-                "Only printable ASCII is supported.".into(),
+                "Control characters are not supported.".into(),
+            )),
+            Err(graphics::Error::AlreadyInUse) => Err((
+                "queue_full",
+                "The input queue is full; retry the unqueued text.".into(),
             )),
             Err(error) => Err(input_error(error)),
         },

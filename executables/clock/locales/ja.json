@@ -1,0 +1,86 @@
+{
+  "alarm": {
+    "controls": {
+      "decrement_hour": "時 −",
+      "decrement_minute": "分 −",
+      "delete": "削除",
+      "disable": "無効にする",
+      "increment_hour": "時 ＋",
+      "increment_minute": "分 ＋",
+      "save_and_enable": "保存して有効にする"
+    },
+    "instructions": {
+      "repeat_days_utc": "選択した曜日に繰り返します。未選択の場合は一度だけ実行します。時刻はすべて UTC です。"
+    },
+    "status": {
+      "disabled": "無効",
+      "enabled": "有効: ",
+      "no_saved_alarm": "保存されたアラームはありません"
+    },
+    "weekdays": {
+      "friday": "金",
+      "monday": "月",
+      "saturday": "土",
+      "sunday": "日",
+      "thursday": "木",
+      "tuesday": "火",
+      "wednesday": "水"
+    }
+  },
+  "alerts": {
+    "alarm_ringing": "アラーム！ ",
+    "alarm_snoozed": "アラームをスヌーズしました。 ",
+    "dismiss": "閉じる",
+    "instructions": "時計アプリの起動中に通知を表示します。",
+    "snooze_five_minutes": "5 分スヌーズ",
+    "timer_finished": "タイマーが終了しました！ "
+  },
+  "clock": {
+    "controls": {
+      "toggle_hour_format": "12 / 24 時間表示"
+    },
+    "errors": {
+      "host_unavailable": "ホストの時計を利用できません"
+    },
+    "instructions": {
+      "utc_only": "UTC / ホスト時刻。都市別のタイムゾーンはまだ利用できません。"
+    }
+  },
+  "errors": {
+    "settings_save_failed": "設定を保存できませんでした。 "
+  },
+  "stopwatch": {
+    "controls": {
+      "record_lap": "ラップ",
+      "reset": "リセット",
+      "toggle_pause": "開始 / 一時停止"
+    },
+    "laps": {
+      "recorded": {
+        "one": "{count} 周を記録しました",
+        "other": "{count} 周を記録しました"
+      }
+    }
+  },
+  "tabs": {
+    "alarm": "アラーム",
+    "clock": "時計",
+    "stopwatch": "ストップウォッチ",
+    "timer": "タイマー"
+  },
+  "timer": {
+    "controls": {
+      "cancel": "キャンセル",
+      "decrement_minute": "分 −",
+      "decrement_second": "秒 −",
+      "increment_minute": "分 ＋",
+      "increment_second": "秒 ＋",
+      "restart": "再開",
+      "start": "開始",
+      "toggle_pause": "一時停止 / 再開"
+    },
+    "labels": {
+      "duration": "時間"
+    }
+  }
+}

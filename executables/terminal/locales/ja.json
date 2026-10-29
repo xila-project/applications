@@ -1,0 +1,14 @@
+{
+  "input": {
+    "command_placeholder": "コマンドを入力してください..."
+  },
+  "errors": {
+    "failed_to_create_object": "オブジェクトを作成できませんでした",
+    "failed_to_execute": "実行に失敗しました: {}",
+    "failed_to_get_task_identifier": "タスク識別子を取得できませんでした: {}",
+    "failed_to_mount_device": "デバイスをマウントできませんでした: {}",
+    "graphics": "グラフィックス: {}",
+    "resource_busy": "リソースが使用中です",
+    "utf_8": "UTF-8: {}"
+  }
+}

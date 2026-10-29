@@ -22,6 +22,14 @@ CI uses separate mr-boxington target caches for host and WASI builds. On the fir
 
 `mise run localization:lint` checks application catalogs, placeholders, plural forms and semantic IDs. Tolgee keeps the existing `libraries/application_metadata` namespace for the moved shortcuts catalog; use `mise run translate:pull` to place that namespace in `libraries/application_shortcuts/locales` after a pull. No translation synchronization is performed automatically by CI.
 
+Japanese (`ja`) catalogs are experimental and require native-speaker and
+on-device layout review. Use `EMBEDDED_I18N_LOCALE=ja` and
+`EMBEDDED_I18N_STRICT=1` for the guest build. A localized graphical runtime
+must also collect these catalogs with `XILA_FONT_CATALOG_ROOTS` and use a Core
+revision with Japanese font subsetting; see Core's embedded-font documentation
+for the optional, verified Japanese source font. Catalog subsetting does not
+provide arbitrary Japanese input or IME support.
+
 ## Application-owned shortcuts
 
 Each WASI application owns its graphical Shell shortcut alongside its Rust
