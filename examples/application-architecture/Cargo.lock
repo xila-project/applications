@@ -7,15 +7,24 @@ name = "example-counter-cli"
 version = "0.1.0"
 dependencies = [
  "example-counter-core",
+ "xila-application",
 ]
 
 [[package]]
 name = "example-counter-core"
 version = "0.1.0"
+dependencies = [
+ "xila-application",
+]
 
 [[package]]
 name = "example-counter-gui"
 version = "0.1.0"
 dependencies = [
  "example-counter-core",
+ "xila-application",
 ]
+
+[[package]]
+name = "xila-application"
+version = "0.1.0"

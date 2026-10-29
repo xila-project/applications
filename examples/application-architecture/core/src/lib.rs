@@ -22,6 +22,15 @@ impl Counter {
         self.value
     }
 }
+impl xila_application::Application for Counter {
+    type Message = Message;
+    type Error = core::convert::Infallible;
+
+    fn update(&mut self, message: Message) -> Result<(), Self::Error> {
+        Counter::update(self, message);
+        Ok(())
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

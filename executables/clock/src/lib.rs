@@ -89,6 +89,31 @@ impl Stopwatch {
     }
 }
 
+/// Inputs use a caller-supplied monotonic time so the model stays portable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StopwatchMessage {
+    Toggle(u64),
+    Lap(u64),
+    Reset,
+}
+
+impl xila_application::Application for Stopwatch {
+    type Message = StopwatchMessage;
+    type Error = core::convert::Infallible;
+
+    fn update(&mut self, message: Self::Message) -> Result<(), Self::Error> {
+        match message {
+            StopwatchMessage::Toggle(now) if self.is_running() => self.pause(now),
+            StopwatchMessage::Toggle(now) => self.start(now),
+            StopwatchMessage::Lap(now) => {
+                self.lap(now);
+            }
+            StopwatchMessage::Reset => self.reset(),
+        }
+        Ok(())
+    }
+}
+
 #[derive(Default)]
 pub struct Timer {
     duration: u64,

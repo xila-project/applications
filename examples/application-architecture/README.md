@@ -51,22 +51,25 @@ business logic in a frontend: dependency review, tests and code review remain
 necessary. Avoid dependency cycles. A core shared by native and Wasm must itself
 compile for each target; sharing a Rust API does not imply a stable Wasm or C ABI.
 
-A common trait is **not** required here. A generic `update` trait can give
-static dispatch when several cores really need one reusable adapter, but its
-associated message and view types must represent real needs, including effects
-and errors. Introduce one locally when those needs are known. Dynamic dispatch,
-boxed messages, or a global framework would add complexity and potentially
-code or allocation costs without demonstrated reuse.
+The optional `xila-application` library provides `Application` for typed
+updates, `Frontend` for input translation and rendering, and `dispatch` to run
+those steps in order. It uses static dispatch, has no dependencies or allocator,
+and leaves scheduling and platform effects to the application. An input can be
+ignored without repainting. Update errors stop rendering; a rendering error
+does not undo an already successful update. Use `render` for the initial view.
+For batched event loops, an application may use `Application` without
+`dispatch` and render at its own cadence, as Clock's stopwatch does.
+Stateless or single-interface programs can continue using ordinary functions.
 
 ## Example
 
-The independent workspace in this directory has three crates and no external
-dependencies:
+The independent workspace in this directory has three example crates and uses
+the local `xila-application` library:
 
 - `core`: a `no_std`, fixed-size counter with a private value, typed messages,
-  a bounded update and a read-only value.
+  a bounded update and a read-only value; it implements `Application`.
 - `gui`: a `no_std` **adapter skeleton** mapping buttons to messages and returning
-  view data. It intentionally does not create an LVGL window: a real graphical
+  view data through the shared dispatcher. It intentionally does not create an LVGL window: a real graphical
   frontend must map LVGL events, render the returned value, and own window
   lifetime and error handling. Its tests exercise that mapping.
 - `cli`: a `no_std` command adapter with a small native `std` executable. It
