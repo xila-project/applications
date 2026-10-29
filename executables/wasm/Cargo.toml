@@ -5,7 +5,7 @@ edition = "2024"
 build = "build/main.rs"
 
 [dependencies]
-application_metadata = { package = "xila-application-metadata", git = "https://github.com/xila-project/core", rev = "4d693a81964266c65196cd6a59a79a30b21f30ab" }
+application_metadata = { package = "xila-application-metadata", git = "https://github.com/xila-project/core", rev = "683d7e19658d149e14e4fca59d86f43f23fae812" }
 wasmi = { version = "2.0.0", default-features = false, features = [
   "validate",
   "memory64",
@@ -42,7 +42,7 @@ graphics = [
 ]
 
 [build-dependencies]
-graphics_bindgen = { package = "xila-graphics-bindgen", git = "https://github.com/xila-project/core", rev = "4d693a81964266c65196cd6a59a79a30b21f30ab", optional = true }
+graphics_bindgen = { package = "xila-graphics-bindgen", git = "https://github.com/xila-project/core", rev = "683d7e19658d149e14e4fca59d86f43f23fae812", optional = true }
 lvgl_rust_sys = { workspace = true, optional = true }
 quote = { workspace = true, optional = true }
 syn = { workspace = true, features = ["full", "extra-traits"], optional = true }
