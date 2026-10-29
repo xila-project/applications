@@ -15,22 +15,6 @@ env:
   MISE_ENV: ci
   CARGO_TERM_COLOR: always
 jobs:
-  lock-debug:
-    name: "Diagnostic / Resolve Cargo lock and TOML formatting"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: "Diagnostic | Cargo lock resolution"
-        run: |
-          cargo metadata --format-version 1 > /tmp/xila-metadata.json
-          git diff -- Cargo.lock
-      - name: "Diagnostic | Canonical TOML formatter"
-        run: |
-          cargo --version
-          curl -fsSL https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-linux-x86_64.gz | gzip -dc > /tmp/taplo
-          chmod +x /tmp/taplo
-          /tmp/taplo format executables/package/Cargo.toml
-          git diff -- executables/package/Cargo.toml
   quality:
     name: "Quality / Rust"
     uses: xila-project/workspace/.github/workflows/quality.yml@e152177f341e45ceb6025848378f558d3aa090be
@@ -130,12 +114,12 @@ jobs:
         app: [calculator, clock, weather, pixel_painter, text_editor, synth]
     permissions:
       contents: read
-    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@7a7ae7d255e169bacaee468e22ae5719674a0f84
+    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@ba152a83f809d5118f15b8e6aad34122468b9db7
     with:
       wasm-artifact: wasi-applications
       wasm-path: ${{ matrix.app }}.wasm
       manifest-path: packaging/${{ matrix.app }}.json
-      builder-ref: 7a7ae7d255e169bacaee468e22ae5719674a0f84
+      builder-ref: ba152a83f809d5118f15b8e6aad34122468b9db7
       artifact-name: package-${{ matrix.app }}
       publish-release: false
   required:
