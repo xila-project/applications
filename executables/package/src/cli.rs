@@ -62,7 +62,7 @@ pub fn parse(args: &[String]) -> Result<Command<'_>, &'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::{vec, string::ToString};
+    use alloc::{string::ToString, vec};
     fn args(parts: &[&str]) -> Vec<String> {
         parts.iter().map(|part| (*part).to_string()).collect()
     }
@@ -82,7 +82,11 @@ mod tests {
     #[test]
     fn unfamiliar_publisher_requires_an_explicit_override_or_key() {
         assert_eq!(
-            parse(&args(&["install", "/temporary/example.xpk", "--allow-untrusted"])),
+            parse(&args(&[
+                "install",
+                "/temporary/example.xpk",
+                "--allow-untrusted"
+            ])),
             Ok(Command::Install {
                 archive: "/temporary/example.xpk",
                 public_key: None,
@@ -90,16 +94,28 @@ mod tests {
             })
         );
         assert_eq!(
-            parse(&args(&["install", "x.xpk", "--public-key", "/keys/user.pub"])),
+            parse(&args(&[
+                "install",
+                "x.xpk",
+                "--public-key",
+                "/keys/user.pub"
+            ])),
             Ok(Command::Install {
                 archive: "x.xpk",
                 public_key: Some("/keys/user.pub"),
                 allow_untrusted: false,
             })
         );
-        assert!(parse(&args(&[
-            "install", "x.xpk", "--allow-untrusted", "--public-key", "/keys/test.pub"
-        ])).is_err());
+        assert!(
+            parse(&args(&[
+                "install",
+                "x.xpk",
+                "--allow-untrusted",
+                "--public-key",
+                "/keys/test.pub"
+            ]))
+            .is_err()
+        );
     }
 
     #[test]
