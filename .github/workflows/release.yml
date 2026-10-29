@@ -27,12 +27,12 @@ jobs:
         app: [calculator, clock, weather, pixel_painter, text_editor, synth]
     permissions:
       contents: write
-    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@7a7ae7d255e169bacaee468e22ae5719674a0f84
+    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@ba152a83f809d5118f15b8e6aad34122468b9db7
     with:
       wasm-artifact: wasi-applications
       wasm-path: ${{ matrix.app }}.wasm
       manifest-path: packaging/${{ matrix.app }}.json
-      builder-ref: 7a7ae7d255e169bacaee468e22ae5719674a0f84
+      builder-ref: ba152a83f809d5118f15b8e6aad34122468b9db7
       artifact-name: release-package-${{ matrix.app }}
       publish-release: true
       release-tag: ${{ github.ref_name }}
