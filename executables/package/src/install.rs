@@ -19,7 +19,7 @@ use xila::{
     task::TaskIdentifier,
     virtual_file_system::{Directory, File, VirtualFileSystem},
 };
-use xila_package_manifest::{Manifest, MANIFEST_PATH, SIGNATURE_PATH, validate_path};
+use xila_package_manifest::{MANIFEST_PATH, Manifest, SIGNATURE_PATH, validate_path};
 use xila_package_reader::StreamingVerifier;
 use xila_package_verification::PublicKey;
 
@@ -80,7 +80,11 @@ async fn open_target(
         vfs,
         task,
         Path::from_str(&path),
-        Flags::new(AccessFlags::Write, Some(CreateFlags::CREATE_EXCLUSIVE), None),
+        Flags::new(
+            AccessFlags::Write,
+            Some(CreateFlags::CREATE_EXCLUSIVE),
+            None,
+        ),
     )
     .await
     .map_err(|e| error("cannot create package file", e))
@@ -127,8 +131,14 @@ async fn close_output(
     output: &mut Option<File<'static>>,
 ) -> Result<(), String> {
     if let Some(mut file) = output.take() {
-        let flush = file.flush().await.map_err(|e| error("file flush failed", e));
-        let close = file.close(vfs).await.map_err(|e| error("file close failed", e));
+        let flush = file
+            .flush()
+            .await
+            .map_err(|e| error("file flush failed", e));
+        let close = file
+            .close(vfs)
+            .await
+            .map_err(|e| error("file close failed", e));
         flush.and(close)?;
     }
     Ok(())
@@ -162,7 +172,10 @@ async fn read_public_key(
             .map_err(|_| "trusted Ed25519 public key is invalid".to_string())
     }
     .await;
-    let close = file.close(vfs).await.map_err(|e| error("public key close failed", e));
+    let close = file
+        .close(vfs)
+        .await
+        .map_err(|e| error("public key close failed", e));
     match (operation, close) {
         (Err(e), _) => Err(e),
         (Ok(_), Err(e)) => Err(e),
@@ -186,11 +199,16 @@ fn check_compatibility(manifest: &Manifest) -> Result<(), String> {
     if !manifest.capabilities.is_empty() {
         return Err("package requests capabilities; installation policy is not implemented".into());
     }
-    let app = manifest.application.as_ref()
+    let app = manifest
+        .application
+        .as_ref()
         .ok_or_else(|| "package is not an application".to_string())?;
     if !app.entrypoint.starts_with("bin/")
         || !app.entrypoint.ends_with(".wasm")
-        || !manifest.files.iter().any(|file| file.path == app.entrypoint)
+        || !manifest
+            .files
+            .iter()
+            .any(|file| file.path == app.entrypoint)
     {
         return Err("application entrypoint is not a bundled WASI binary".into());
     }
@@ -239,7 +257,8 @@ async fn extract(
                         }
                     }
                     Some(StreamEvent::Data { bytes, remaining }) => {
-                        let output = active.as_mut()
+                        let output = active
+                            .as_mut()
                             .ok_or_else(|| "TAR payload without an open file".to_string())?;
                         write_all(output, bytes).await?;
                         if remaining == 0 {
@@ -252,8 +271,11 @@ async fn extract(
             if active.is_some() {
                 return Err("incomplete package file".into());
             }
-            parser.finish().map_err(|e| format!("invalid TAR end: {e:?}"))?;
-            let manifest = verifier.finish()
+            parser
+                .finish()
+                .map_err(|e| format!("invalid TAR end: {e:?}"))?;
+            let manifest = verifier
+                .finish()
                 .map_err(|e| format!("package verification failed: {e:?}"))?;
             check_compatibility(&manifest)?;
             Ok(manifest)
@@ -264,7 +286,10 @@ async fn extract(
         result.and(closed)
     }
     .await;
-    let close = source.close(vfs).await.map_err(|e| error("archive close failed", e));
+    let close = source
+        .close(vfs)
+        .await
+        .map_err(|e| error("archive close failed", e));
     match (operation, close) {
         (Err(e), _) => Err(e),
         (Ok(_), Err(e)) => Err(e),
@@ -292,18 +317,25 @@ async fn remove_tree(
             .map_err(|e| error("cannot open staging directory", e))?;
         let mut children = Vec::new();
         let scan = async {
-            while let Some(entry) = directory.read().await
+            while let Some(entry) = directory
+                .read()
+                .await
                 .map_err(|e| error("cannot read staging directory", e))?
             {
                 if matches!(entry.name.as_str(), "." | "..") {
                     continue;
                 }
-                children.push((format!("{path}/{}", entry.name), entry.kind == Kind::Directory));
+                children.push((
+                    format!("{path}/{}", entry.name),
+                    entry.kind == Kind::Directory,
+                ));
             }
             Ok::<_, String>(())
         }
         .await;
-        let close = directory.close(vfs).await
+        let close = directory
+            .close(vfs)
+            .await
             .map_err(|e| error("cannot close staging directory", e));
         scan.and(close)?;
         pending.push((path, true));
@@ -320,19 +352,24 @@ async fn seal_tree(
     root: &str,
 ) -> Result<(), String> {
     let mut pending = alloc::vec![root.to_string()];
-    let readonly_file = Permissions::from_octal(0o444)
-        .map_err(|_| "invalid file mode".to_string())?;
-    let readonly_directory = Permissions::from_octal(0o555)
-        .map_err(|_| "invalid directory mode".to_string())?;
+    let readonly_file =
+        Permissions::from_octal(0o444).map_err(|_| "invalid file mode".to_string())?;
+    let readonly_directory =
+        Permissions::from_octal(0o555).map_err(|_| "invalid directory mode".to_string())?;
     while let Some(path) = pending.pop() {
-        let stat = vfs.get_link_statistics_for_task(task, &Path::from_str(&path))
-            .await.map_err(|e| error("cannot inspect staged path", e))?;
+        let stat = vfs
+            .get_link_statistics_for_task(task, &Path::from_str(&path))
+            .await
+            .map_err(|e| error("cannot inspect staged path", e))?;
         if stat.kind == Kind::Directory {
             let mut directory = Directory::open(vfs, task, Path::from_str(&path))
-                .await.map_err(|e| error("cannot open staged directory", e))?;
+                .await
+                .map_err(|e| error("cannot open staged directory", e))?;
             let mut children = Vec::new();
             let scan = async {
-                while let Some(entry) = directory.read().await
+                while let Some(entry) = directory
+                    .read()
+                    .await
                     .map_err(|e| error("cannot read staged directory", e))?
                 {
                     if !matches!(entry.name.as_str(), "." | "..") {
@@ -340,14 +377,20 @@ async fn seal_tree(
                     }
                 }
                 Ok::<_, String>(())
-            }.await;
-            let close = directory.close(vfs).await.map_err(|e| error("close failed", e));
+            }
+            .await;
+            let close = directory
+                .close(vfs)
+                .await
+                .map_err(|e| error("close failed", e));
             scan.and(close)?;
             pending.extend(children);
-            vfs.set_permissions(task, Path::from_str(&path), readonly_directory).await
+            vfs.set_permissions(task, Path::from_str(&path), readonly_directory)
+                .await
                 .map_err(|e| error("cannot seal package directory", e))?;
         } else if stat.kind == Kind::File {
-            vfs.set_permissions(task, Path::from_str(&path), readonly_file).await
+            vfs.set_permissions(task, Path::from_str(&path), readonly_file)
+                .await
                 .map_err(|e| error("cannot seal package file", e))?;
         } else {
             return Err("special file found in staged package".into());
@@ -356,10 +399,7 @@ async fn seal_tree(
     Ok(())
 }
 
-async fn new_staging(
-    vfs: &VirtualFileSystem,
-    task: TaskIdentifier,
-) -> Result<String, String> {
+async fn new_staging(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<String, String> {
     for _ in 0..64 {
         let id = NEXT_STAGING.fetch_add(1, Ordering::Relaxed);
         let path = format!("{INSTALLED_ROOT}/.incoming-{id:x}");
@@ -399,9 +439,12 @@ pub async fn install(
         let dest = format!("{INSTALLED_ROOT}/{}", manifest.name);
         // Never silently replace already-installed code. Root-authorized
         // concurrent installs require a higher-level exclusive transaction.
-        match vfs.get_link_statistics_for_task(task, &Path::from_str(&dest)).await {
+        match vfs
+            .get_link_statistics_for_task(task, &Path::from_str(&dest))
+            .await
+        {
             Err(xila::virtual_file_system::Error::FileSystem(
-                xila::file_system::Error::NotFound
+                xila::file_system::Error::NotFound,
             )) => {}
             Ok(_) => return Err(format!("package {} is already installed", manifest.name)),
             Err(e) => return Err(error("cannot inspect installation destination", e)),
@@ -411,7 +454,8 @@ pub async fn install(
             .await
             .map_err(|e| error("cannot publish verified package", e))?;
         Ok(manifest.name)
-    }.await;
+    }
+    .await;
 
     match operation {
         Ok(name) => Ok(name),
@@ -425,16 +469,15 @@ pub async fn install(
     }
 }
 
-pub async fn list(
-    vfs: &VirtualFileSystem,
-    task: TaskIdentifier,
-) -> Result<Vec<String>, String> {
+pub async fn list(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<Vec<String>, String> {
     let mut directory = Directory::open(vfs, task, Path::from_str(INSTALLED_ROOT))
         .await
         .map_err(|e| error("cannot open installed packages", e))?;
     let mut result = Vec::new();
     let operation = async {
-        while let Some(entry) = directory.read().await
+        while let Some(entry) = directory
+            .read()
+            .await
             .map_err(|e| error("cannot list installed packages", e))?
         {
             if entry.kind == Kind::Directory
@@ -446,8 +489,12 @@ pub async fn list(
         }
         result.sort();
         Ok::<_, String>(())
-    }.await;
-    let close = directory.close(vfs).await.map_err(|e| error("close failed", e));
+    }
+    .await;
+    let close = directory
+        .close(vfs)
+        .await
+        .map_err(|e| error("close failed", e));
     operation.and(close)?;
     Ok(result)
 }
@@ -458,7 +505,7 @@ mod tests {
 
     #[test]
     fn rejects_unsupported_capabilities_and_external_executable() {
-        use xila_package_manifest::{Application, ManifestFile, FORMAT_VERSION};
+        use xila_package_manifest::{Application, FORMAT_VERSION, ManifestFile};
         let mut manifest = Manifest {
             schema: None,
             format_version: FORMAT_VERSION,
