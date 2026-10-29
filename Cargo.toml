@@ -19,7 +19,6 @@ repository = "https://github.com/xila-project/core"
 xila = { git = "https://github.com/xila-project/core", rev = "683d7e19658d149e14e4fca59d86f43f23fae812" }
 xila_http = { git = "https://github.com/xila-project/core", rev = "683d7e19658d149e14e4fca59d86f43f23fae812", default-features = false }
 verification = { git = "https://github.com/xila-project/package_manager", rev = "f5e3f0b323a79a80d106ce2b88b77bfa8667d71b", default-features = false }
-application_metadata = { package = "xila-application-shortcuts", path = "libraries/application_shortcuts" }
 audio = { package = "xila-audio", git = "https://github.com/xila-project/core", rev = "683d7e19658d149e14e4fca59d86f43f23fae812" }
 nanoaudio = { git = "https://github.com/AlixANNERAUD/nanoaudio.git", rev = "596076c64827fd8bf9e8319addc2f215e0cde8be", default-features = false }
 nanoaudio-cpal = { git = "https://github.com/AlixANNERAUD/nanoaudio.git", rev = "596076c64827fd8bf9e8319addc2f215e0cde8be", default-features = false }

@@ -41,14 +41,6 @@ impl Shortcut {
 
         buffer.clear();
 
-<<<<<<< HEAD
-        shortcut_file
-            .read_to_end(buffer, 2048)
-            .await
-            .map_err(Error::FailedToReadShortcutFile)?;
-
-        shortcut_file
-=======
         let result = async {
             let mut chunk = [0; 256];
             loop {
@@ -72,7 +64,6 @@ impl Shortcut {
         }
         .await;
         let close = shortcut_file
->>>>>>> a3a5a74 (feat(shell): render application-provided procedural icons)
             .close(virtual_file_system)
             .await
             .map_err(Error::FailedToReadShortcutFile);
@@ -103,7 +94,6 @@ impl Shortcut {
         miniserde::json::from_str(string).map_err(Error::FailedToDeserializeShortcut)
     }
 
-<<<<<<< HEAD
     /// Resolve bundle-relative executable/asset arguments against the
     /// directory containing this shortcut. Never interpret a manifest here.
     pub fn resolve_bundle_paths(&mut self, bundle: &Path) -> Result<()> {
@@ -131,9 +121,6 @@ impl Shortcut {
         Ok(())
     }
 
-    pub fn get_icon_color(&self) -> Color {
-        Color::new(self.icon_color[0], self.icon_color[1], self.icon_color[2])
-=======
     /// Resolve a compact, validated icon; invalid custom data falls back to auto.
     pub fn icon_spec(&self, identity: &str) -> (IconSpec, bool) {
         use miniserde::json::{Number, Value};
@@ -202,7 +189,6 @@ impl Shortcut {
         parse()
             .map(|icon| (icon, true))
             .unwrap_or((fallback, false))
->>>>>>> a3a5a74 (feat(shell): render application-provided procedural icons)
     }
 
     // pub fn is_terminal(&self) -> bool {
@@ -211,7 +197,6 @@ impl Shortcut {
 }
 
 #[cfg(test)]
-<<<<<<< HEAD
 mod shortcut_tests {
     use super::*;
 
@@ -256,7 +241,10 @@ mod shortcut_tests {
                     .is_err()
             );
         }
-=======
+    }
+}
+
+#[cfg(test)]
 mod icon_metadata_tests {
     use super::*;
     use xila::graphics::IconMotif;
@@ -280,6 +268,5 @@ mod icon_metadata_tests {
         let shortcut = Shortcut::from_str(&source).unwrap();
         let (_, explicit) = shortcut.icon_spec("calculator.json");
         assert!(!explicit);
->>>>>>> a3a5a74 (feat(shell): render application-provided procedural icons)
     }
 }

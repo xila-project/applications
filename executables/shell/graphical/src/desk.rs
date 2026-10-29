@@ -340,8 +340,7 @@ impl Desk {
                             self.create_drawer_shortcut(
                                 shortcut_path.as_str(),
                                 &shortcut.name,
-                                shortcut.get_icon_color(),
-                                &shortcut.icon_string,
+                                shortcut.icon_spec(shortcut_path.as_str()).0,
                                 drawer,
                             )?;
                         }

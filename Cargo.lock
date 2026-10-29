@@ -4867,7 +4867,6 @@ dependencies = [
  "embedded-i18n",
  "nanoexpr",
  "xila",
- "xila-application-shortcuts",
  "xila-drivers-core",
  "xila-drivers-native",
  "xila-drivers-shared",
@@ -4882,7 +4881,6 @@ name = "xila-clock"
 version = "0.1.0"
 dependencies = [
  "embedded-i18n",
- "xila-application-shortcuts",
  "xila-wasm",
 ]
 
@@ -5034,7 +5032,6 @@ version = "0.1.0"
 dependencies = [
  "xila",
  "xila-abi-definitions",
- "xila-application-shortcuts",
  "xila-drivers-core",
  "xila-drivers-native",
  "xila-drivers-shared",
@@ -5176,7 +5173,6 @@ name = "xila-pixel-painter"
 version = "0.1.0"
 dependencies = [
  "embedded-i18n",
- "xila-application-shortcuts",
  "xila-wasm",
 ]
 
@@ -5189,7 +5185,6 @@ dependencies = [
  "embedded-io",
  "xila",
  "xila-abi-definitions",
- "xila-application-shortcuts",
  "xila-drivers-core",
  "xila-drivers-native",
  "xila-drivers-shared",
@@ -5223,7 +5218,6 @@ version = "0.1.0"
 dependencies = [
  "nanoaudio",
  "nanoaudio-synth",
- "xila-application-shortcuts",
  "xila-audio",
  "xila-file-system",
  "xila-wasm",
@@ -5261,7 +5255,6 @@ version = "0.1.0"
 dependencies = [
  "xila",
  "xila-abi-definitions",
- "xila-application-shortcuts",
  "xila-command-line-shell",
  "xila-drivers-core",
  "xila-drivers-native",
@@ -5302,7 +5295,6 @@ name = "xila-text-editor"
 version = "0.1.0"
 dependencies = [
  "embedded-i18n",
- "xila-application-shortcuts",
  "xila-wasm",
 ]
 
@@ -5384,7 +5376,6 @@ dependencies = [
  "embedded-i18n",
  "miniserde",
  "xila",
- "xila-application-shortcuts",
  "xila-drivers-core",
  "xila-drivers-native",
  "xila-drivers-shared",
