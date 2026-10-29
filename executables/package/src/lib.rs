@@ -19,7 +19,11 @@ impl ExecutableTrait for PackageExecutable {
 async fn run(standard: &mut Standard<'static>, arguments: &[String]) -> Result<(), String> {
     let command = cli::parse(arguments).map_err(String::from)?;
     let vfs = standard.context.virtual_file_system;
-    let task = standard.context.task_manager.get_current_task_identifier().await;
+    let task = standard
+        .context
+        .task_manager
+        .get_current_task_identifier()
+        .await;
     match command {
         cli::Command::Help => {
             write!(standard.out(), "{}", cli::USAGE).map_err(|_| "write failed")?;
@@ -39,19 +43,22 @@ async fn run(standard: &mut Standard<'static>, arguments: &[String]) -> Result<(
                 writeln!(
                     standard.out(),
                     "Installed {package} (publisher NOT authenticated; hashes verified)."
-                ).map_err(|_| "write failed")?;
+                )
+                .map_err(|_| "write failed")?;
             } else {
                 writeln!(
                     standard.out(),
                     "Installed {package} (Ed25519 signature and payload hashes verified)."
-                ).map_err(|_| "write failed")?;
+                )
+                .map_err(|_| "write failed")?;
             }
             writeln!(
                 standard.out(),
                 "Installed under {}/{}; no signature checks at launch.",
                 install::INSTALLED_ROOT,
                 package
-            ).map_err(|_| "write failed")?;
+            )
+            .map_err(|_| "write failed")?;
         }
     }
     standard.out().flush().await.map_err(|e| e.to_string())?;
