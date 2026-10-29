@@ -5241,6 +5241,8 @@ dependencies = [
 name = "xila-package-application"
 version = "0.1.0"
 dependencies = [
+ "getargs",
+ "getargs-derive",
  "tar-no-std",
  "xila",
  "xila-abi-declarations",
