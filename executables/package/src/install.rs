@@ -163,7 +163,11 @@ async fn read_public_key(
     }
     .await;
     let close = file.close(vfs).await.map_err(|e| error("public key close failed", e));
-    operation.and(close)
+    match (operation, close) {
+        (Err(e), _) => Err(e),
+        (Ok(_), Err(e)) => Err(e),
+        (Ok(key), Ok(())) => Ok(key),
+    }
 }
 
 fn check_compatibility(manifest: &Manifest) -> Result<(), String> {
@@ -261,7 +265,11 @@ async fn extract(
     }
     .await;
     let close = source.close(vfs).await.map_err(|e| error("archive close failed", e));
-    operation.and(close)
+    match (operation, close) {
+        (Err(e), _) => Err(e),
+        (Ok(_), Err(e)) => Err(e),
+        (Ok(manifest), Ok(())) => Ok(manifest),
+    }
 }
 
 /// Remove failed / interrupted staging trees without touching live installs.
@@ -405,13 +413,16 @@ pub async fn install(
         Ok(manifest.name)
     }.await;
 
-    if operation.is_err() {
-        let cleanup = remove_tree(vfs, task, &staging).await;
-        if let Err(cleanup) = cleanup {
-            return Err(format!("{}; cleanup also failed: {cleanup}", operation.unwrap_err()));
+    match operation {
+        Ok(name) => Ok(name),
+        Err(problem) => {
+            if let Err(cleanup) = remove_tree(vfs, task, &staging).await {
+                Err(format!("{problem}; cleanup also failed: {cleanup}"))
+            } else {
+                Err(problem)
+            }
         }
     }
-    operation
 }
 
 pub async fn list(
