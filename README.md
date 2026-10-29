@@ -22,6 +22,26 @@ CI uses separate mr-boxington target caches for host and WASI builds. On the fir
 
 `mise run localization:lint` checks application catalogs, placeholders, plural forms and semantic IDs. Tolgee keeps the existing `libraries/application_metadata` namespace for the moved shortcuts catalog; use `mise run translate:pull` to place that namespace in `libraries/application_shortcuts/locales` after a pull. No translation synchronization is performed automatically by CI.
 
+## Application-owned shortcuts
+
+Each WASI application owns its graphical Shell shortcut alongside its Rust
+sources at `executables/<app>/shortcut.json`. The source manifest in
+`packaging/<app>.json` only defines package identity, ABI requirements,
+capabilities and executable metadata; **the shortcut itself never lives in
+`packaging/`**.
+
+The shared package builder stages that JSON as `shortcut.json` at the bundle
+root, alongside `bin/<app>.wasm`. The generated runtime manifest authenticates
+**both files** with SHA-256. Once the native `package install` command publishes
+the bundle to `/applications/bundles/<package-id>/`, the graphical Shell
+discovers its `shortcut.json` automatically on the next drawer scan, without
+a duplicate shortcut in `/configuration/shared/applications/shortcuts`.
+
+Shortcuts invoke `/applications/executables/wasm` with an argument such as
+`@bundle/bin/clock.wasm`; the Shell resolves `@bundle/` against the installed
+bundle directory. The source descriptor is validated both before packaging and
+by graphical Shell tests. No signature is checked again at launch.
+
 ## Native package manager
 
 The `executables/package` crate implements the **native Xila CLI-only** command `package install` / `package list` (registered in the native Platforms example), with bounded-memory TAR + SHA-256 verification at **installation**, not at launch. It trusts `/configuration/system/packages/trusted.pub` by default, accepts an explicitly supplied `--public-key`, and has an explicit `--allow-untrusted` override for unknown/unsigned publishers. Even with that override, invalid TARs or SHA-256 mismatches always fail. See [package CLI documentation](executables/package/README.md). CLI installation does not yet create launcher shortcuts, manage updates or download packages.
