@@ -1,4 +1,4 @@
-use crate::model::{CalculatorLogic, CalculatorModel, Message};
+use crate::model::{CalculatorLogic, CalculatorModel, Message, View};
 use embedded_i18n::translate;
 use std::{ptr::null_mut, thread::sleep};
 use wasm::{
@@ -8,7 +8,7 @@ use wasm::{
     object_set_height, object_set_width, percentage, size_content, window_create, window_pop_event,
     window_set_icon,
 };
-use xila_application::Application;
+use xila_application::{DispatchError, Frontend, dispatch, render};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[allow(dead_code)] // Indirectly constructed with from_u8
@@ -231,22 +231,14 @@ impl Interface {
         }
     }
 
-    fn update_display(&mut self) -> wasm::Result<()> {
-        unsafe {
-            let view = CalculatorLogic.view(&self.model);
-            let display_text = view.display;
-            let mode_indicator = if view.radians {
-                translate!("angle_mode.radians_indicator")
-            } else {
-                translate!("angle_mode.degrees_indicator")
-            };
-            let full_text = format!("{}{}", display_text, mode_indicator);
-
-            let text_with_null = format!("{}\0", full_text);
-            label_set_text(self.display_label, text_with_null.as_ptr() as *mut _)?;
-        }
-
-        Ok(())
+    fn update_display(&self) -> wasm::Result<()> {
+        render(
+            &CalculatorLogic,
+            &self.model,
+            &mut CalculatorFrontend {
+                label: self.display_label,
+            },
+        )
     }
 
     unsafe fn handle_button_matrix_event(&mut self) -> wasm::Result<()> {
@@ -262,6 +254,59 @@ impl Interface {
     }
 
     fn handle_button_press(&mut self, button: ButtonIdentifier) -> wasm::Result<()> {
+        let mut frontend = CalculatorFrontend {
+            label: self.display_label,
+        };
+        match dispatch(&mut CalculatorLogic, &mut self.model, &mut frontend, button) {
+            Ok(_) => Ok(()),
+            Err(DispatchError::Frontend(error)) => Err(error),
+            Err(DispatchError::Application(never)) => match never {},
+        }
+    }
+
+    pub unsafe fn run(&mut self) -> wasm::Result<()> {
+        // Create GUI components
+        // Initial display update
+        self.update_display()?;
+
+        // Main event loop
+        loop {
+            let mut code = EventCode::All as u32;
+            let mut target: *mut Object = null_mut();
+
+            unsafe {
+                window_pop_event(
+                    self.window,
+                    &mut code as *mut _ as *mut _,
+                    &mut target as *mut _ as *mut _,
+                )?;
+            }
+
+            if code == EVENT_CLOSE_REQUESTED {
+                return Ok(());
+            } else if code == EventCode::Clicked as u32 {
+                // Check if the event came from our button matrix
+                if target == self.button_matrix {
+                    unsafe {
+                        self.handle_button_matrix_event()?;
+                    }
+                }
+            } else if code == EventCode::All as u32 {
+                sleep(std::time::Duration::from_millis(10));
+            }
+        }
+    }
+}
+
+struct CalculatorFrontend {
+    label: *mut Object,
+}
+
+impl Frontend<CalculatorLogic> for CalculatorFrontend {
+    type Input = ButtonIdentifier;
+    type Error = wasm::Error;
+
+    fn translate(&mut self, button: ButtonIdentifier) -> wasm::Result<Option<Message>> {
         use ButtonIdentifier as Button;
         let message = match button {
             Button::Clear => Message::Clear,
@@ -317,40 +362,16 @@ impl Interface {
             Button::Eight => Message::Character('8'),
             Button::Nine => Message::Character('9'),
         };
-        let _ = CalculatorLogic.update(&mut self.model, message);
-        self.update_display()
+        Ok(Some(message))
     }
 
-    pub unsafe fn run(&mut self) -> wasm::Result<()> {
-        // Create GUI components
-        // Initial display update
-        self.update_display()?;
-
-        // Main event loop
-        loop {
-            let mut code = EventCode::All as u32;
-            let mut target: *mut Object = null_mut();
-
-            unsafe {
-                window_pop_event(
-                    self.window,
-                    &mut code as *mut _ as *mut _,
-                    &mut target as *mut _ as *mut _,
-                )?;
-            }
-
-            if code == EVENT_CLOSE_REQUESTED {
-                return Ok(());
-            } else if code == EventCode::Clicked as u32 {
-                // Check if the event came from our button matrix
-                if target == self.button_matrix {
-                    unsafe {
-                        self.handle_button_matrix_event()?;
-                    }
-                }
-            } else if code == EventCode::All as u32 {
-                sleep(std::time::Duration::from_millis(10));
-            }
-        }
+    fn render(&mut self, view: View<'_>) -> wasm::Result<()> {
+        let indicator = if view.radians {
+            translate!("angle_mode.radians_indicator")
+        } else {
+            translate!("angle_mode.degrees_indicator")
+        };
+        let text = format!("{}{}\0", view.display, indicator);
+        unsafe { label_set_text(self.label, text.as_ptr() as *mut _) }
     }
 }
