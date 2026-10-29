@@ -1,4 +1,3 @@
-use crate::model::{CalculatorLogic, CalculatorModel, Message, View};
 use embedded_i18n::translate;
 use std::{ptr::null_mut, thread::sleep};
 use wasm::{
@@ -9,6 +8,7 @@ use wasm::{
     window_set_icon,
 };
 use xila_application::{DispatchError, Frontend, dispatch, render};
+use xila_calculator::model::{CalculatorLogic, CalculatorModel, Message, View};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[allow(dead_code)] // Indirectly constructed with from_u8
