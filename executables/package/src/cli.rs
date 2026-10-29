@@ -81,7 +81,11 @@ mod tests {
             }))
         );
         let conflict = args(&[
-            "install", "x.xpk", "--allow-untrusted", "--public-key", "/keys/test.pub"
+            "install",
+            "x.xpk",
+            "--allow-untrusted",
+            "--public-key",
+            "/keys/test.pub",
         ]);
         assert!(parse(&conflict).is_err());
     }
