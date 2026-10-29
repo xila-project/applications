@@ -26,7 +26,7 @@ The installer reads the archive in 512-byte blocks via the Xila VFS and
 `tar-no-std` PR #73. It uses the shared incremental verification logic from
 `xila-project/package_manager`, and writes to a newly created quarantine
 directory. The directory is renamed into
-`/applications/packages/<package-id>/` **only after** the entire archive
+`/applications/bundles/<package-id>/` **only after** the entire archive
 is verified and closed. A failed package is removed from quarantine; an
 existing installed package is not deliberately replaced. Failed cleanup is
 reported. Interrupted power-loss cleanup / durable transaction journal are
