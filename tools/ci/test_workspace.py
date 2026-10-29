@@ -71,11 +71,11 @@ class ApplicationPolicy(unittest.TestCase):
         self.assertIn('tags: ["v*"]', release)
         self.assertIn('XILA_RELEASE_TAG', release)
         self.assertNotIn('pull_request:', release)
-        pin = '70b503ba2faa08dcba2936db94cccfe286cd4a76'
+        pin = 'a50520f1402d8374fb8c7f614fed91bd512d0ac6'
         self.assertIn('@' + pin, ci)
         self.assertIn('@' + pin, release)
         self.assertIn('builder-ref: ' + pin, release)
-        self.assertNotIn('id-token: write', ci)
+        self.assertEqual(ci.count('id-token: write'), 1)
         self.assertIn('id-token: write', release)
         self.assertIn('NETBIRD_SETUP_KEY: ${{ secrets.NETBIRD_SETUP_KEY }}', release)
 

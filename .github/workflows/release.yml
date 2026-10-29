@@ -18,6 +18,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
+      id-token: write
   release:
     needs: [validate, release-version]
     strategy:
@@ -30,12 +31,12 @@ jobs:
       id-token: write
     secrets:
       NETBIRD_SETUP_KEY: ${{ secrets.NETBIRD_SETUP_KEY }}
-    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@70b503ba2faa08dcba2936db94cccfe286cd4a76
+    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@a50520f1402d8374fb8c7f614fed91bd512d0ac6
     with:
       wasm-artifact: wasi-applications
       wasm-path: ${{ matrix.app }}.wasm
       manifest-path: packaging/${{ matrix.app }}.json
-      builder-ref: 70b503ba2faa08dcba2936db94cccfe286cd4a76
+      builder-ref: a50520f1402d8374fb8c7f614fed91bd512d0ac6
       artifact-name: release-package-${{ matrix.app }}
       publish-release: true
       release-tag: ${{ github.ref_name }}
