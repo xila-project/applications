@@ -143,13 +143,13 @@ jobs:
       contents: read
       id-token: write
     secrets:
-      NETBIRD_SETUP_KEY: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NETBIRD_SETUP_KEY || '' }}
-    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@1dc97659b37404d8d3e3300c52cbdc9b4cb78247
+      XILA_DEV_SIGNING_SEED_B64: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.XILA_DEV_SIGNING_SEED_B64 || '' }}
+    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@49e81b21827a4ff76e28b142863020414af12c98
     with:
       wasm-artifact: wasi-applications
       wasm-path: ${{ matrix.app }}.wasm
       manifest-path: packaging/${{ matrix.app }}.json
-      builder-ref: 1dc97659b37404d8d3e3300c52cbdc9b4cb78247
+      builder-ref: 49e81b21827a4ff76e28b142863020414af12c98
       artifact-name: package-${{ matrix.app }}
       publish-release: false
       sign-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
