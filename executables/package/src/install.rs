@@ -353,9 +353,9 @@ async fn seal_tree(
 ) -> Result<(), String> {
     let mut pending = alloc::vec![root.to_string()];
     let readonly_file =
-        Permissions::from_octal(0o444).map_err(|_| "invalid file mode".to_string())?;
+        Permissions::from_octal(0o444).ok_or_else(|| "invalid file mode".to_string())?;
     let readonly_directory =
-        Permissions::from_octal(0o555).map_err(|_| "invalid directory mode".to_string())?;
+        Permissions::from_octal(0o555).ok_or_else(|| "invalid directory mode".to_string())?;
     while let Some(path) = pending.pop() {
         let stat = vfs
             .get_link_statistics_for_task(task, &Path::from_str(&path))
@@ -409,7 +409,7 @@ async fn new_staging(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<St
                 // user. The directory initially contains no files; restrict
                 // it before opening the untrusted archive or writing payloads.
                 let private = Permissions::from_octal(0o700)
-                    .map_err(|_| "invalid quarantine permissions".to_string())?;
+                    .ok_or_else(|| "invalid quarantine permissions".to_string())?;
                 if let Err(error) = vfs.set_permissions(task, Path::from_str(&path), private).await {
                     let _ = vfs.remove(task, Path::from_str(&path)).await;
                     return Err(error("cannot protect staging directory", error));
