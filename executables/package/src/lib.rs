@@ -21,7 +21,14 @@ impl ExecutableTrait for PackageExecutable {
 }
 
 async fn run(standard: &mut Standard<'static>, arguments: &[String]) -> Result<(), String> {
-    let command = cli::parse(arguments).map_err(String::from)?;
+    let command = match cli::parse(arguments) {
+        Ok(command) => command,
+        Err(error) if error.is_help() || error.is_version() => {
+            writeln!(standard.out(), "{error}").map_err(|_| "write failed")?;
+            return Ok(());
+        }
+        Err(error) => return Err(error.to_string()),
+    };
     let vfs = standard.context.virtual_file_system;
     let task = standard
         .context
@@ -29,19 +36,16 @@ async fn run(standard: &mut Standard<'static>, arguments: &[String]) -> Result<(
         .get_current_task_identifier()
         .await;
     match command {
-        cli::Command::Help => {
-            write!(standard.out(), "{}", cli::USAGE).map_err(|_| "write failed")?;
-        }
         cli::Command::List => {
             for name in install::list(vfs, task).await? {
                 writeln!(standard.out(), "{name}").map_err(|_| "write failed")?;
             }
         }
-        cli::Command::Install {
+        cli::Command::Install(cli::Install {
             archive,
             public_key,
             allow_untrusted,
-        } => {
+        }) => {
             let package = install::install(vfs, task, archive, public_key, allow_untrusted).await?;
             if allow_untrusted {
                 writeln!(
@@ -75,7 +79,7 @@ pub async fn main(
     arguments: Vec<String>,
 ) -> Result<(), NonZeroUsize> {
     if let Err(problem) = run(&mut standard, &arguments).await {
-        let _ = writeln!(standard.error(), "package: {problem}\n{}", cli::USAGE);
+        let _ = writeln!(standard.error(), "package: {problem}");
         let _ = standard.error().flush().await;
         return Err(NonZeroUsize::new(1).unwrap());
     }
