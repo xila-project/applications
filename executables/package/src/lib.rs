@@ -4,7 +4,11 @@ extern crate alloc;
 mod cli;
 mod install;
 
-use alloc::{boxed::Box, string::{String, ToString}, vec::Vec};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+    vec::Vec,
+};
 use core::{fmt::Write, num::NonZeroUsize};
 use xila::executable::{self, ExecutableTrait, Standard};
 
