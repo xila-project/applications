@@ -71,7 +71,13 @@ class ApplicationPolicy(unittest.TestCase):
         self.assertIn('tags: ["v*"]', release)
         self.assertIn('XILA_RELEASE_TAG', release)
         self.assertNotIn('pull_request:', release)
-        self.assertIn('@71c4da6799a958b188492b0a833bca3550b821ab', ci)
+        pin = 'a50520f1402d8374fb8c7f614fed91bd512d0ac6'
+        self.assertIn('@' + pin, ci)
+        self.assertIn('@' + pin, release)
+        self.assertIn('builder-ref: ' + pin, release)
+        self.assertEqual(ci.count('id-token: write'), 1)
+        self.assertIn('id-token: write', release)
+        self.assertIn('NETBIRD_SETUP_KEY: ${{ secrets.NETBIRD_SETUP_KEY }}', release)
 
     def test_shared_quality_keeps_app_specific_checks(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
