@@ -4827,6 +4827,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "xila-application"
+version = "0.1.0"
+
+[[package]]
 name = "xila-application-metadata"
 version = "0.1.0"
 source = "git+https://github.com/xila-project/core?rev=3684ff78b3ad893cc4111bfad3ceba87a8920ddd#3684ff78b3ad893cc4111bfad3ceba87a8920ddd"
@@ -4881,6 +4885,7 @@ name = "xila-clock"
 version = "0.1.0"
 dependencies = [
  "embedded-i18n",
+ "xila-application",
  "xila-wasm",
 ]
 
