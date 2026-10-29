@@ -96,6 +96,7 @@ class ApplicationPolicy(unittest.TestCase):
         task = manifest('mise.ci.toml')['tasks']['ci:localization-japanese']
         self.assertEqual(task['extends'], 'ci:rust-wasi')
         self.assertIn('--target wasm32-wasip1', task['run'])
+        self.assertNotIn('xila-application-shortcuts', task['run'])
         self.assertIn('--core "$RUNNER_TEMP/xila-core-ja"', task['run'])
 
     def test_ci_caches_are_separate_and_use_one_wrapper(self):
