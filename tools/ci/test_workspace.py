@@ -73,7 +73,7 @@ class ApplicationPolicy(unittest.TestCase):
         self.assertIn('tags: ["v*"]', release)
         self.assertIn('XILA_RELEASE_TAG', release)
         self.assertNotIn('pull_request:', release)
-        pin = '7a545fe25f386aa5a38bedc37b6a41b492214ef8'
+        pin = '1dc97659b37404d8d3e3300c52cbdc9b4cb78247'
         self.assertIn('@' + pin, ci)
         self.assertIn('@' + pin, release)
         self.assertIn('builder-ref: ' + pin, release)
