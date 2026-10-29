@@ -7,7 +7,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 GUESTS = ('calculator', 'clock', 'weather', 'pixel_painter', 'text_editor', 'synth')
 NATIVE = {'activity': 'xila-activity', 'debug': 'xila-debug-application', 'file_manager': 'xila-file-manager',
-          'settings': 'xila-settings', 'terminal': 'xila-terminal', 'shell/command_line': 'xila-command-line-shell',
+          'settings': 'xila-settings', 'terminal': 'xila-terminal', 'package': 'xila-package-application', 'shell/command_line': 'xila-command-line-shell',
           'shell/graphical': 'xila-graphical-shell'}
 
 
@@ -71,7 +71,11 @@ class ApplicationPolicy(unittest.TestCase):
         self.assertIn('tags: ["v*"]', release)
         self.assertIn('XILA_RELEASE_TAG', release)
         self.assertNotIn('pull_request:', release)
-        self.assertIn('@71c4da6799a958b188492b0a833bca3550b821ab', ci)
+        reference = re.search(r'package-wasm.yml@([0-9a-f]{40})', ci)
+        self.assertIsNotNone(reference, "packaging workflow must pin an immutable SHA")
+        self.assertIn(f"builder-ref: {reference.group(1)}", ci)
+        self.assertIn(f"package-wasm.yml@{reference.group(1)}", release)
+        self.assertIn(f"builder-ref: {reference.group(1)}", release)
 
     def test_shared_quality_keeps_app_specific_checks(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()

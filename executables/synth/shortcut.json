@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json",
+  "name": "Synth",
+  "command": "/applications/executables/wasm",
+  "arguments": [
+    "@bundle/bin/synth.wasm"
+  ],
+  "terminal": false,
+  "icon_string": "Sy",
+  "icon_color": [
+    234,
+    161,
+    87
+  ]
+}

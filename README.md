@@ -16,7 +16,7 @@ cargo test --config /tmp/xila-local.toml -p xila-command-line-shell --test integ
 
 Cargo records patched paths in `Cargo.lock`; regenerate the lockfile without the local config before committing. Use the same Core checkout for all patches, including transitive platform dependencies.
 
-Package manifests live in `packaging/`. The package-manager workflow produces `.xpk` archives and SHA-256 files from the WASI build; pull requests validate artifacts without publishing them. A version tag matching all application versions can publish release assets. These archives are unsigned development packages: their checksums establish content integrity, not publisher identity. ABI version 1 denotes the initial versioned application ABI; older unversioned runtimes do not declare that compatibility.
+Editable v1 developer package manifests live in `packaging/`. These contain application identity, entrypoint and ABI but **no generated hashes**. The reusable package-manager CI workflow stages each compiled WASI binary, builds and verifies a canonical `.app` bundle, and archives it as `.xpk` with a SHA-256 sidecar. Pull requests test the new bundle format without publishing them. A version tag matching all application versions can publish release assets. These archives are unsigned development packages: their checksums establish content integrity, not publisher identity. ABI version 1 denotes the initial versioned application ABI; older unversioned runtimes do not declare that compatibility.
 
 CI uses separate mr-boxington target caches for host and WASI builds. On the first host Clippy run, mr-boxington reported 0 hits, 953 compilations without usable prior inputs or predictions, 26 bypasses and 0 seconds of estimated compiler work saved. This was a cold run; it does not establish warm-build reuse. Check subsequent job diagnostics and Cargo's build output before drawing cache conclusions.
 
@@ -29,3 +29,27 @@ must also collect these catalogs with `XILA_FONT_CATALOG_ROOTS` and use a Core
 revision with Japanese font subsetting; see Core's embedded-font documentation
 for the optional, verified Japanese source font. Catalog subsetting does not
 provide arbitrary Japanese input or IME support.
+
+## Application-owned shortcuts
+
+Each WASI application owns its graphical Shell shortcut alongside its Rust
+sources at `executables/<app>/shortcut.json`. The source manifest in
+`packaging/<app>.json` only defines package identity, ABI requirements,
+capabilities and executable metadata; **the shortcut itself never lives in
+`packaging/`**.
+
+The shared package builder stages that JSON as `shortcut.json` at the bundle
+root, alongside `bin/<app>.wasm`. The generated runtime manifest authenticates
+**both files** with SHA-256. Once the native `package install` command publishes
+the bundle to `/applications/bundles/<package-id>/`, the graphical Shell
+discovers its `shortcut.json` automatically on the next drawer scan, without
+a duplicate shortcut in `/configuration/shared/applications/shortcuts`.
+
+Shortcuts invoke `/applications/executables/wasm` with an argument such as
+`@bundle/bin/clock.wasm`; the Shell resolves `@bundle/` against the installed
+bundle directory. The source descriptor is validated both before packaging and
+by graphical Shell tests. No signature is checked again at launch.
+
+## Native package manager
+
+The `executables/package` crate implements the **native Xila CLI-only** command `package install` / `package list` (registered in the native Platforms example), with bounded-memory TAR + SHA-256 verification at **installation**, not at launch. It trusts `/configuration/system/packages/trusted.pub` by default, accepts an explicitly supplied `--public-key`, and has an explicit `--allow-untrusted` override for unknown/unsigned publishers. Even with that override, invalid TARs or SHA-256 mismatches always fail. See [package CLI documentation](executables/package/README.md). CLI installation does not yet create launcher shortcuts, manage updates or download packages.

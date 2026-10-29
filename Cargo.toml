@@ -107,6 +107,7 @@ resolver = "3"
 members = [
   "executables/wasm",
   "executables/wasm/tests/wasm_test",
+  "executables/package",
   "executables/activity",
   "executables/calculator",
   "executables/clock",
