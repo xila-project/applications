@@ -119,6 +119,9 @@ run = """
 set -eu
 cargo fmt --manifest-path examples/application-architecture/Cargo.toml --all -- --check
 cargo test --locked -p xila-application -p xila-clock --lib
+cargo run --quiet --locked -p xila-calculator --features cli --bin calculator-cli -- '2+3' | grep -x '5'
+if cargo run --quiet --locked -p xila-calculator --features cli --bin calculator-cli -- '1/0'; then exit 1; fi
+cargo check --locked --target wasm32-wasip1 -p xila-calculator --features cli --bin calculator-cli
 cargo test --locked -p xila-application --tests
 cargo test --locked --manifest-path examples/application-architecture/Cargo.toml --workspace
 cargo check --locked --manifest-path examples/application-architecture/Cargo.toml --workspace --lib --target wasm32-wasip1

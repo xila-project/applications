@@ -6,6 +6,7 @@ use xila_application::Application;
 pub struct CalculatorModel {
     expression: String,
     result: bool,
+    error: bool,
     degrees: bool,
 }
 
@@ -24,6 +25,7 @@ pub enum Message {
 
 pub struct View<'a> {
     pub display: &'a str,
+    pub error: bool,
     pub radians: bool,
 }
 
@@ -37,27 +39,37 @@ impl Application for CalculatorLogic {
     fn update(&mut self, model: &mut CalculatorModel, message: Message) -> Result<(), Self::Error> {
         match message {
             Message::Clear => {
+                model.error = false;
                 model.expression.clear();
                 model.result = false;
             }
             Message::Backspace => {
+                model.error = false;
                 model.expression.pop();
                 model.result = false;
             }
             Message::ToggleAngle => model.degrees = !model.degrees,
             Message::Evaluate if !model.expression.is_empty() => {
                 model.expression = match evaluate_expression(&model.expression, !model.degrees) {
-                    Ok(result) => result.to_string(),
-                    Err(error) => format!(translate!("errors.calculation_with_details"), error),
+                    Ok(result) => {
+                        model.error = false;
+                        result.to_string()
+                    }
+                    Err(error) => {
+                        model.error = true;
+                        format!(translate!("errors.calculation_with_details"), error)
+                    }
                 };
                 model.result = true;
             }
             Message::Evaluate => {}
             Message::Operator(ch) => {
+                model.error = false;
                 model.result = false;
                 model.expression.push(ch);
             }
             Message::Character(ch) => {
+                model.error = false;
                 if model.result {
                     model.expression.clear();
                     model.result = false;
@@ -65,6 +77,7 @@ impl Application for CalculatorLogic {
                 model.expression.push(ch);
             }
             Message::Append(text) => {
+                model.error = false;
                 if model.result {
                     model.expression.clear();
                     model.result = false;
@@ -72,6 +85,7 @@ impl Application for CalculatorLogic {
                 model.expression.push_str(text);
             }
             Message::Random(text) => {
+                model.error = false;
                 if model.result {
                     model.expression.clear();
                     model.result = false;
@@ -89,6 +103,7 @@ impl Application for CalculatorLogic {
             } else {
                 &model.expression
             },
+            error: model.error,
             radians: !model.degrees,
         }
     }
@@ -125,10 +140,12 @@ mod tests {
         logic.update(&mut model, Message::Append("1/0")).unwrap();
         logic.update(&mut model, Message::Evaluate).unwrap();
         assert!(logic.view(&model).display.contains("Error"));
+        assert!(logic.view(&model).error);
         logic
             .update(&mut model, Message::Random("0.125".to_string()))
             .unwrap();
         assert_eq!(logic.view(&model).display, "0.125");
+        assert!(!logic.view(&model).error);
         logic.update(&mut model, Message::Clear).unwrap();
         assert_eq!(logic.view(&model).display, "0");
     }

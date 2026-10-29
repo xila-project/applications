@@ -108,8 +108,9 @@ can use the same contracts with their existing Xila event and I/O adapters.
 - **Calculator:** `model.rs` owns expression data and transition logic independently
   of the guest GUI; the latter maps buttons to messages and supplies the clock
   input for its random button. The package exposes its model as a library for
-  native or Wasm frontends; the engine still localizes its own errors. An actual
-  CLI frontend and a separately packaged core would need further work.
+  native or Wasm frontends, including an optional `calculator-cli` binary. The
+  engine still localizes its own errors; a separately packaged core and a Xila
+  shell integration would need further work.
 - **Clock:** `executables/clock/src/lib.rs` contains bounded stopwatch, timer
   and alarm behavior used by the Wasm graphical interface. Its library is a
   useful starting point, though the package still has application metadata and
