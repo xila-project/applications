@@ -10,7 +10,10 @@ xila = { workspace = true }
 abi_declarations = { workspace = true }
 xila-package-reader = { git = "https://github.com/xila-project/package_manager", rev = "38d5bb8d42618b42fa02e93de255f5da23846efb" }
 xila-package-manifest = { git = "https://github.com/xila-project/package_manager", rev = "38d5bb8d42618b42fa02e93de255f5da23846efb" }
-xila-package-verification = { git = "https://github.com/xila-project/package_manager", rev = "38d5bb8d42618b42fa02e93de255f5da23846efb", default-features = false, features = ["sha256", "ed25519"] }
+xila-package-verification = { git = "https://github.com/xila-project/package_manager", rev = "38d5bb8d42618b42fa02e93de255f5da23846efb", default-features = false, features = [
+  "sha256",
+  "ed25519",
+] }
 tar-no-std = { git = "https://github.com/AlixANNERAUD/tar-no-std", rev = "ecdd39990ae4143d36b7f2adcf3eff2f971fea11", default-features = false }
 
 [lib]
