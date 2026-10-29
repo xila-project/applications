@@ -55,7 +55,10 @@ The optional `xila-application` library separates a data model, application
 logic (`Application`), and presentation (`Frontend`). The frontend translates
 inputs into messages. Logic updates the model and exposes a view to render; the
 frontend receives the view, not mutable access to the model or logic.
-`dispatch` connects these steps in order. A view can be a small value or borrow
+`process` translates and updates without rendering, and returns a typed effect
+for the caller to execute; the caller can batch events and render on its own
+schedule. For effect-free updates, `dispatch` also renders immediately. A view
+can be a small value or borrow
 model data, so presenting state does not require an allocation or a copy. It uses static dispatch, has no dependencies or allocator,
 and leaves scheduling and platform effects to the application. An input can be
 ignored without repainting. Update errors stop rendering; a rendering error
@@ -102,13 +105,11 @@ can use the same contracts with their existing Xila event and I/O adapters.
 
 ## Existing applications and migration cost
 
-- **Calculator:** `executables/calculator/src/engine.rs` evaluates expressions,
-  and `interface.rs` maps its graphical controls and maintains expression/UI
-  state. Its engine is currently a private module of the binary, and localizes
-  errors itself. A shared CLI would first move domain evaluation and typed
-  errors into an independent core crate and let each frontend localize/present
-  errors. It must preserve expression semantics and localization IDs. Until
-  then, tests of the module do not make it a separate Cargo boundary.
+- **Calculator:** `model.rs` owns expression data and transition logic independently
+  of the guest GUI; the latter maps buttons to messages and supplies the clock
+  input for its random button. The engine still localizes its own errors and
+  remains in the executable package. An actual CLI frontend and a fully
+  separated core crate would need further work.
 - **Clock:** `executables/clock/src/lib.rs` contains bounded stopwatch, timer
   and alarm behavior used by the Wasm graphical interface. Its library is a
   useful starting point, though the package still has application metadata and
@@ -130,3 +131,8 @@ build and maintenance work, and generics may increase code size through
 monomorphization. Measure on representative MCU and Wasm builds before claiming
 savings; this example is a structure demonstration, not a benchmark or a broad
 migration mandate.
+
+Pixel Painter and Text Editor share the library's allocation-free confirmation
+state, invalidated after edits; their file operations and platform event loops
+remain application-specific. This removes duplicate state bookkeeping, but the
+current pilots do not establish net code-size or heap savings across applications.

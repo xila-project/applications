@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 use wasm::*;
+use xila_application::{Confirmation, Confirmations};
 
 struct Interface {
     window: *mut Object,
@@ -22,9 +23,7 @@ struct Interface {
     page_start: u64,
     page_length: usize,
     dirty: bool,
-    revision: u64,
-    confirm_open: Option<u64>,
-    confirm_close: Option<u64>,
+    confirmations: Confirmations,
     working_unusable: bool,
     picker: Option<(*mut Object, FilePickerMode)>,
     retained_picker: Option<*mut Object>,
@@ -55,22 +54,22 @@ pub fn run() -> wasm::Result<()> {
             }
             if code == EVENT_CLOSE_REQUESTED {
                 if ui.working_unusable {
-                    if ui.confirm_close != Some(ui.revision) {
+                    if !ui.confirmations.is_confirmed(Confirmation::Close) {
                         ui.status(translate!("errors.edit_failed_close_again"))?;
-                        ui.confirm_close = Some(ui.revision);
+                        ui.confirmations.confirm(Confirmation::Close);
                         continue;
                     }
                 } else if !ui.commit_page()? {
                     continue;
                 }
-                if !ui.dirty || ui.confirm_close == Some(ui.revision) {
+                if !ui.dirty || ui.confirmations.is_confirmed(Confirmation::Close) {
                     unsafe {
                         object_delete(u16::try_from(ui.window as usize).map_err(|_| -1)?)?;
                     }
                     return Ok(());
                 }
                 ui.status(translate!("warnings.unsaved_close_again"))?;
-                ui.confirm_close = Some(ui.revision);
+                ui.confirmations.confirm(Confirmation::Close);
             } else if ui.picker.is_some() {
                 continue;
             } else if code == EventCode::ValueChanged as u32 && target == ui.actions {
@@ -94,9 +93,7 @@ pub fn run() -> wasm::Result<()> {
                 && target == ui.text
                 && ui.working_unusable
             {
-                ui.revision = ui.revision.wrapping_add(1);
-                ui.confirm_open = None;
-                ui.confirm_close = None;
+                ui.confirmations.changed();
             } else if (code == EventCode::Ready as u32 || code == EventCode::Cancel as u32)
                 && target == ui.keyboard
             {
@@ -176,9 +173,7 @@ impl Interface {
                 page_start: 0,
                 page_length: 0,
                 dirty: false,
-                revision: 0,
-                confirm_open: None,
-                confirm_close: None,
+                confirmations: Confirmations::default(),
                 working_unusable: false,
                 picker: None,
                 retained_picker: None,
@@ -237,13 +232,13 @@ impl Interface {
             );
             if result.is_err() {
                 self.dirty = true;
-                self.revision = self.revision.wrapping_add(1);
+                self.confirmations.changed();
                 self.working_unusable = true;
                 self.status(translate!("errors.edit_failed_reopen_source"))?;
                 return Ok(false);
             }
             self.dirty = true;
-            self.revision = self.revision.wrapping_add(1);
+            self.confirmations.changed();
             self.show_page()?;
         }
         Ok(true)
@@ -291,7 +286,7 @@ impl Interface {
                 self.original_page.clear();
                 self.dirty = true;
                 self.working_unusable = false;
-                self.revision = self.revision.wrapping_add(1);
+                self.confirmations.changed();
                 self.show_page()?;
                 self.status(translate!("file_path.new_file_default_name"))?;
             }
@@ -401,7 +396,7 @@ impl Interface {
                 self.original_page.clear();
                 self.dirty = false;
                 self.working_unusable = false;
-                self.revision = self.revision.wrapping_add(1);
+                self.confirmations.changed();
                 self.show_page()?;
                 self.status(translate!("status.opened"))?;
             }
@@ -431,7 +426,7 @@ impl Interface {
         };
         if save_result.is_ok() {
             self.dirty = false;
-            self.revision = self.revision.wrapping_add(1);
+            self.confirmations.changed();
             self.status(translate!("status.saved"))?;
         } else {
             self.status(translate!("errors.save_failed_working_copy_preserved"))?;
@@ -440,12 +435,12 @@ impl Interface {
     }
 
     fn allow_discard(&mut self) -> wasm::Result<bool> {
-        if self.dirty && self.confirm_open != Some(self.revision) {
-            self.confirm_open = Some(self.revision);
+        if self.dirty && !self.confirmations.is_confirmed(Confirmation::Open) {
+            self.confirmations.confirm(Confirmation::Open);
             self.status(translate!("warnings.unsaved_new_or_open_again"))?;
             return Ok(false);
         }
-        self.confirm_open = None;
+        self.confirmations.clear(Confirmation::Open);
         Ok(true)
     }
 

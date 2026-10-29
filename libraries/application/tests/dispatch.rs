@@ -7,6 +7,7 @@ impl Application for CounterLogic {
     type Model = CounterData;
     type Message = u8;
     type Error = &'static str;
+    type Effect = ();
     type View<'a> = u8;
     fn update(&mut self, model: &mut CounterData, amount: u8) -> Result<(), Self::Error> {
         model.0 = model.0.checked_add(amount).ok_or("overflow")?;
@@ -81,6 +82,7 @@ fn render_can_borrow_model_data_without_copying() {
         type Model = [u8; 3];
         type Message = ();
         type Error = core::convert::Infallible;
+        type Effect = ();
         type View<'a> = &'a [u8];
         fn update(&mut self, _: &mut Self::Model, _: ()) -> Result<(), Self::Error> {
             Ok(())
@@ -109,4 +111,55 @@ fn render_can_borrow_model_data_without_copying() {
     };
     render(&Logic, &model, &mut screen).unwrap();
     assert_eq!(screen.seen, model.as_ptr());
+}
+
+#[test]
+fn queued_updates_return_effects_without_repainting_until_requested() {
+    use xila_application::process;
+    struct EffectLogic;
+    impl Application for EffectLogic {
+        type Model = u8;
+        type Message = u8;
+        type Error = core::convert::Infallible;
+        type Effect = u8;
+        type View<'a> = u8;
+        fn update(&mut self, model: &mut u8, value: u8) -> Result<u8, Self::Error> {
+            *model += value;
+            Ok(*model)
+        }
+        fn view<'a>(&'a self, model: &'a u8) -> u8 {
+            *model
+        }
+    }
+    #[derive(Default)]
+    struct Display {
+        renders: usize,
+        value: u8,
+    }
+    impl Frontend<EffectLogic> for Display {
+        type Input = u8;
+        type Error = core::convert::Infallible;
+        fn translate(&mut self, input: u8) -> Result<Option<u8>, Self::Error> {
+            Ok(Some(input))
+        }
+        fn render(&mut self, view: u8) -> Result<(), Self::Error> {
+            self.renders += 1;
+            self.value = view;
+            Ok(())
+        }
+    }
+    let mut logic = EffectLogic;
+    let mut model = 0;
+    let mut display = Display::default();
+    assert_eq!(
+        process(&mut logic, &mut model, &mut display, 1),
+        Ok(Some(1))
+    );
+    assert_eq!(
+        process(&mut logic, &mut model, &mut display, 2),
+        Ok(Some(3))
+    );
+    assert_eq!(display.renders, 0);
+    render(&logic, &model, &mut display).unwrap();
+    assert_eq!((display.renders, display.value), (1, 3));
 }

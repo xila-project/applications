@@ -21,6 +21,7 @@ impl xila_application::Application for CounterLogic {
     type Model = Counter;
     type Message = Message;
     type Error = core::convert::Infallible;
+    type Effect = ();
     type View<'a> = u8;
 
     fn update(&mut self, model: &mut Counter, message: Message) -> Result<(), Self::Error> {

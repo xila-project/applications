@@ -4871,6 +4871,7 @@ dependencies = [
  "embedded-i18n",
  "nanoexpr",
  "xila",
+ "xila-application",
  "xila-drivers-core",
  "xila-drivers-native",
  "xila-drivers-shared",
@@ -5178,6 +5179,7 @@ name = "xila-pixel-painter"
 version = "0.1.0"
 dependencies = [
  "embedded-i18n",
+ "xila-application",
  "xila-wasm",
 ]
 
@@ -5300,6 +5302,7 @@ name = "xila-text-editor"
 version = "0.1.0"
 dependencies = [
  "embedded-i18n",
+ "xila-application",
  "xila-wasm",
 ]
 

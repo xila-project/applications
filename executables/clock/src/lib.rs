@@ -105,6 +105,7 @@ impl xila_application::Application for StopwatchLogic {
     type View<'a> = &'a Stopwatch;
     type Message = StopwatchMessage;
     type Error = core::convert::Infallible;
+    type Effect = ();
 
     fn update(&mut self, model: &mut Stopwatch, message: Self::Message) -> Result<(), Self::Error> {
         match message {
