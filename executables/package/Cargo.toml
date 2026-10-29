@@ -9,7 +9,7 @@ license = "Apache-2.0"
 xila = { workspace = true }
 abi_declarations = { workspace = true }
 getargs = { version = "0.5", default-features = false }
-getargs-derive = { version = "=0.1.0", default-features = false }
+getargs-derive = { workspace = true }
 xila-package-reader = { git = "https://github.com/xila-project/package_manager", rev = "38d5bb8d42618b42fa02e93de255f5da23846efb" }
 xila-package-manifest = { git = "https://github.com/xila-project/package_manager", rev = "38d5bb8d42618b42fa02e93de255f5da23846efb" }
 xila-package-verification = { git = "https://github.com/xila-project/package_manager", rev = "38d5bb8d42618b42fa02e93de255f5da23846efb", default-features = false, features = [
