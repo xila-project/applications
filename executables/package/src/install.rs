@@ -414,12 +414,12 @@ async fn new_staging(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<St
                 // it before opening the untrusted archive or writing payloads.
                 let private = Permissions::from_octal(0o700)
                     .ok_or_else(|| "invalid quarantine permissions".to_string())?;
-                if let Err(error) = vfs
+                if let Err(problem) = vfs
                     .set_permissions(task, Path::from_str(&path), private)
                     .await
                 {
                     let _ = vfs.remove(task, Path::from_str(&path)).await;
-                    return Err(error("cannot protect staging directory", error));
+                    return Err(error("cannot protect staging directory", problem));
                 }
                 return Ok(path);
             }
