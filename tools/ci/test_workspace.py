@@ -90,10 +90,13 @@ class ApplicationPolicy(unittest.TestCase):
         step = ci.split('name: "Test | Japanese with companion Core"', 1)[1].split('  package:', 1)[0]
         self.assertIn('XILA_MBX: "0"', step)
         self.assertIn('CARGO_TARGET_DIR: ${{ runner.temp }}/xila-ja-target', step)
+        self.assertIn('cp -a .ci-core-ja "$RUNNER_TEMP/xila-core-ja"', step)
+        self.assertIn('cp -a .ci-platforms-ja "$RUNNER_TEMP/xila-platforms-ja"', step)
         self.assertIn('mise run ci:localization-japanese', step)
         task = manifest('mise.ci.toml')['tasks']['ci:localization-japanese']
         self.assertEqual(task['extends'], 'ci:rust-wasi')
         self.assertIn('--target wasm32-wasip1', task['run'])
+        self.assertIn('--core "$RUNNER_TEMP/xila-core-ja"', task['run'])
 
     def test_ci_caches_are_separate_and_use_one_wrapper(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()

@@ -61,10 +61,10 @@ cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p 
 extends = "ci:rust-wasi"
 run = """
 set -eu
-python3 tools/local_overrides.py --core .ci-core-ja --platforms .ci-platforms-ja --output /tmp/xila-ja-patches.toml
-cargo metadata --config /tmp/xila-ja-patches.toml --format-version 1 > /dev/null
-cargo --config /tmp/xila-ja-patches.toml test --locked -p xila-application-shortcuts --test compatibility
-cargo --config /tmp/xila-ja-patches.toml check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth
+python3 tools/local_overrides.py --core "$RUNNER_TEMP/xila-core-ja" --platforms "$RUNNER_TEMP/xila-platforms-ja" --output "$RUNNER_TEMP/xila-ja-patches.toml"
+cargo metadata --config "$RUNNER_TEMP/xila-ja-patches.toml" --format-version 1 > /dev/null
+cargo --config "$RUNNER_TEMP/xila-ja-patches.toml" test --locked -p xila-application-shortcuts --test compatibility
+cargo --config "$RUNNER_TEMP/xila-ja-patches.toml" check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth
 """
 
 [tasks."localization:lint"]

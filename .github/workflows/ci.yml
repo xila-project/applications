@@ -128,7 +128,10 @@ jobs:
         env:
           XILA_MBX: "0"
           CARGO_TARGET_DIR: ${{ runner.temp }}/xila-ja-target
-        run: mise run ci:localization-japanese
+        run: |
+          cp -a .ci-core-ja "$RUNNER_TEMP/xila-core-ja"
+          cp -a .ci-platforms-ja "$RUNNER_TEMP/xila-platforms-ja"
+          mise run ci:localization-japanese
   package:
     name: "Package / ${{ matrix.app }}"
     needs: guest
