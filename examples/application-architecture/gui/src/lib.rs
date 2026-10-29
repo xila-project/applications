@@ -1,5 +1,5 @@
 #![no_std]
-use example_counter_core::{Counter, Message};
+use example_counter_core::{Counter, CounterLogic, Message};
 use xila_application::{Frontend, dispatch};
 
 #[derive(Clone, Copy)]
@@ -12,7 +12,7 @@ pub enum Button {
 struct ButtonFrontend {
     value: u8,
 }
-impl Frontend<Counter> for ButtonFrontend {
+impl Frontend<CounterLogic> for ButtonFrontend {
     type Input = Button;
     type Error = core::convert::Infallible;
 
@@ -23,14 +23,14 @@ impl Frontend<Counter> for ButtonFrontend {
             Button::Clear => Message::Reset,
         }))
     }
-    fn render(&mut self, counter: &Counter) -> Result<(), Self::Error> {
-        self.value = counter.value();
+    fn render(&mut self, value: u8) -> Result<(), Self::Error> {
+        self.value = value;
         Ok(())
     }
 }
 pub fn handle_button(counter: &mut Counter, button: Button) -> u8 {
     let mut frontend = ButtonFrontend::default();
-    let _ = dispatch(counter, &mut frontend, button);
+    let _ = dispatch(&mut CounterLogic, counter, &mut frontend, button);
     frontend.value
 }
 #[cfg(test)]

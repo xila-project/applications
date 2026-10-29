@@ -51,9 +51,12 @@ business logic in a frontend: dependency review, tests and code review remain
 necessary. Avoid dependency cycles. A core shared by native and Wasm must itself
 compile for each target; sharing a Rust API does not imply a stable Wasm or C ABI.
 
-The optional `xila-application` library provides `Application` for typed
-updates, `Frontend` for input translation and rendering, and `dispatch` to run
-those steps in order. It uses static dispatch, has no dependencies or allocator,
+The optional `xila-application` library separates a data model, application
+logic (`Application`), and presentation (`Frontend`). The frontend translates
+inputs into messages. Logic updates the model and exposes a view to render; the
+frontend receives the view, not mutable access to the model or logic.
+`dispatch` connects these steps in order. A view can be a small value or borrow
+model data, so presenting state does not require an allocation or a copy. It uses static dispatch, has no dependencies or allocator,
 and leaves scheduling and platform effects to the application. An input can be
 ignored without repainting. Update errors stop rendering; a rendering error
 does not undo an already successful update. Use `render` for the initial view.
@@ -67,7 +70,7 @@ The independent workspace in this directory has three example crates and uses
 the local `xila-application` library:
 
 - `core`: a `no_std`, fixed-size counter with a private value, typed messages,
-  a bounded update and a read-only value; it implements `Application`.
+  a bounded update and a read-only value; `CounterLogic` implements `Application` separately from the `Counter` data.
 - `gui`: a `no_std` **adapter skeleton** mapping buttons to messages and returning
   view data through the shared dispatcher. It intentionally does not create an LVGL window: a real graphical
   frontend must map LVGL events, render the returned value, and own window

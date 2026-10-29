@@ -122,12 +122,20 @@ fn snooze_uses_elapsed_time_and_dismiss_cancels_a_pending_alert() {
 fn stopwatch_messages_share_transitions_between_frontends() {
     use xila_application::Application;
     let mut watch = Stopwatch::default();
-    watch.update(StopwatchMessage::Toggle(100)).unwrap();
-    watch.update(StopwatchMessage::Lap(150)).unwrap();
-    watch.update(StopwatchMessage::Toggle(200)).unwrap();
+    StopwatchLogic
+        .update(&mut watch, StopwatchMessage::Toggle(100))
+        .unwrap();
+    StopwatchLogic
+        .update(&mut watch, StopwatchMessage::Lap(150))
+        .unwrap();
+    StopwatchLogic
+        .update(&mut watch, StopwatchMessage::Toggle(200))
+        .unwrap();
     assert_eq!(watch.elapsed(500), 100);
     assert_eq!(watch.laps(), &[50]);
-    watch.update(StopwatchMessage::Reset).unwrap();
+    StopwatchLogic
+        .update(&mut watch, StopwatchMessage::Reset)
+        .unwrap();
     assert_eq!(watch.elapsed(500), 0);
     assert!(watch.laps().is_empty());
 }

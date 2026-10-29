@@ -97,20 +97,29 @@ pub enum StopwatchMessage {
     Reset,
 }
 
-impl xila_application::Application for Stopwatch {
+/// Stopwatch transition logic; the caller owns the data and time source.
+pub struct StopwatchLogic;
+
+impl xila_application::Application for StopwatchLogic {
+    type Model = Stopwatch;
+    type View<'a> = &'a Stopwatch;
     type Message = StopwatchMessage;
     type Error = core::convert::Infallible;
 
-    fn update(&mut self, message: Self::Message) -> Result<(), Self::Error> {
+    fn update(&mut self, model: &mut Stopwatch, message: Self::Message) -> Result<(), Self::Error> {
         match message {
-            StopwatchMessage::Toggle(now) if self.is_running() => self.pause(now),
-            StopwatchMessage::Toggle(now) => self.start(now),
+            StopwatchMessage::Toggle(now) if model.is_running() => model.pause(now),
+            StopwatchMessage::Toggle(now) => model.start(now),
             StopwatchMessage::Lap(now) => {
-                self.lap(now);
+                model.lap(now);
             }
-            StopwatchMessage::Reset => self.reset(),
+            StopwatchMessage::Reset => model.reset(),
         }
         Ok(())
+    }
+
+    fn view<'a>(&'a self, model: &'a Stopwatch) -> &'a Stopwatch {
+        model
     }
 }
 

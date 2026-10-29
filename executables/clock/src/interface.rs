@@ -1,4 +1,6 @@
-use clock::{Alarm, AlarmAlert, Settings, Stopwatch, StopwatchMessage, Timer, storage::Store};
+use clock::{
+    Alarm, AlarmAlert, Settings, Stopwatch, StopwatchLogic, StopwatchMessage, Timer, storage::Store,
+};
 use embedded_i18n::translate;
 use std::{
     ffi::{CStr, CString},
@@ -437,13 +439,13 @@ impl Interface {
                     self.persist();
                 }
                 Action::StopwatchToggle => {
-                    let _ = self.watch.update(StopwatchMessage::Toggle(now));
+                    let _ = StopwatchLogic.update(&mut self.watch, StopwatchMessage::Toggle(now));
                 }
                 Action::Lap => {
-                    let _ = self.watch.update(StopwatchMessage::Lap(now));
+                    let _ = StopwatchLogic.update(&mut self.watch, StopwatchMessage::Lap(now));
                 }
                 Action::StopwatchReset => {
-                    let _ = self.watch.update(StopwatchMessage::Reset);
+                    let _ = StopwatchLogic.update(&mut self.watch, StopwatchMessage::Reset);
                 }
                 Action::TimerAdjust(delta) => {
                     self.timer_seconds =

@@ -1,5 +1,5 @@
 #![no_std]
-use example_counter_core::{Counter, Message};
+use example_counter_core::{Counter, CounterLogic, Message};
 use xila_application::{DispatchError, Frontend, dispatch};
 #[derive(Debug, PartialEq, Eq)]
 pub struct UnknownCommand;
@@ -8,7 +8,7 @@ struct CommandFrontend<'a> {
     value: u8,
     marker: core::marker::PhantomData<&'a str>,
 }
-impl<'a> Frontend<Counter> for CommandFrontend<'a> {
+impl<'a> Frontend<CounterLogic> for CommandFrontend<'a> {
     type Input = &'a str;
     type Error = UnknownCommand;
 
@@ -20,14 +20,14 @@ impl<'a> Frontend<Counter> for CommandFrontend<'a> {
             _ => return Err(UnknownCommand),
         }))
     }
-    fn render(&mut self, counter: &Counter) -> Result<(), Self::Error> {
-        self.value = counter.value();
+    fn render(&mut self, value: u8) -> Result<(), Self::Error> {
+        self.value = value;
         Ok(())
     }
 }
 pub fn handle_command(counter: &mut Counter, command: &str) -> Result<u8, UnknownCommand> {
     let mut frontend = CommandFrontend::default();
-    match dispatch(counter, &mut frontend, command) {
+    match dispatch(&mut CounterLogic, counter, &mut frontend, command) {
         Ok(_) => Ok(frontend.value),
         Err(DispatchError::Frontend(error)) => Err(error),
         Err(DispatchError::Application(never)) => match never {},
