@@ -438,8 +438,15 @@ pub async fn install(
     if allow_untrusted && key_path.is_some() {
         return Err("cannot combine --public-key with --allow-untrusted".into());
     }
-    // Xila VFS permissions on /applications are the authorization boundary.
-    // No caller-provided capability may elevate the installing task.
+    // A successful install establishes publisher-derived executable trust.
+    // Only a privileged task may create or publish system-wide packages.
+    // The built-in "administrator" user (UID 1000) is NOT automatically root.
+    // Do not give it writable /applications permissions or escalate it here.
+    let user = vfs.task_manager().get_user(task).await
+        .map_err(|e| error("cannot determine installing user", e))?;
+    if user != xila::users::UserIdentifier::ROOT {
+        return Err("package install requires a privileged root task".into());
+    }
     ensure_directory(vfs, task, INSTALLED_ROOT).await?;
     let key = if allow_untrusted {
         None
