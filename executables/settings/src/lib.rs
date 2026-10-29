@@ -20,37 +20,21 @@ use alloc::boxed::Box;
 pub use error::*;
 pub use settings::*;
 
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use alloc::vec::Vec;
 use core::num::NonZeroUsize;
 use xila::executable::{self, ExecutableTrait, Standard};
 use xila::task::TaskIdentifier;
-use xila::virtual_file_system::{File, VirtualFileSystem};
-
-pub fn get_shortcut() -> alloc::string::String {
-    application_metadata::shortcut("settings").unwrap()
-}
+use xila::virtual_file_system::VirtualFileSystem;
 
 pub struct SettingsExecutable;
 
 impl SettingsExecutable {
+    /// Kept for native callers; the Shell owns shortcut discovery.
     pub async fn new(
-        virtual_file_system: &VirtualFileSystem,
-        task: TaskIdentifier,
+        _virtual_file_system: &VirtualFileSystem,
+        _task: TaskIdentifier,
     ) -> core::result::Result<Self, String> {
-        let _ = virtual_file_system
-            .create_directory(task, &"/configuration/shared/applications/shortcuts")
-            .await;
-
-        File::write_to_path(
-            virtual_file_system,
-            task,
-            "/configuration/shared/applications/shortcuts/settings.json",
-            get_shortcut().as_bytes(),
-        )
-        .await
-        .map_err(|error| error.to_string())?;
-
         Ok(Self)
     }
 }

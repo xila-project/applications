@@ -4835,13 +4835,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "xila-application-shortcuts"
-version = "0.1.0"
-dependencies = [
- "embedded-i18n",
-]
-
-[[package]]
 name = "xila-audio"
 version = "0.1.0"
 source = "git+https://github.com/xila-project/core?rev=3735a377d543c08e402af1e398b5f36bbf481fc9#3735a377d543c08e402af1e398b5f36bbf481fc9"
@@ -5369,8 +5362,6 @@ dependencies = [
  "wat",
  "xila",
  "xila-abi-definitions",
- "xila-application-metadata",
- "xila-application-shortcuts",
  "xila-audio",
  "xila-command-line-shell",
  "xila-drivers-core",

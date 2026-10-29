@@ -1,4 +1,7 @@
-use alloc::{string::String, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 use miniserde::{Deserialize, Serialize};
 use xila::file_system::{AccessFlags, Path};
 use xila::graphics::Color;
@@ -36,7 +39,7 @@ impl Shortcut {
         buffer.clear();
 
         shortcut_file
-            .read_to_end(buffer, 256)
+            .read_to_end(buffer, 2048)
             .await
             .map_err(Error::FailedToReadShortcutFile)?;
 
@@ -70,6 +73,33 @@ impl Shortcut {
         miniserde::json::from_str(string).map_err(Error::FailedToDeserializeShortcut)
     }
 
+    /// Resolve bundle-relative executable/asset arguments against the
+    /// directory containing this shortcut. Never interpret a manifest here.
+    pub fn resolve_bundle_paths(&mut self, bundle: &Path) -> Result<()> {
+        fn resolve(value: &str, bundle: &Path) -> Result<String> {
+            let Some(relative) = value.strip_prefix("@bundle/") else {
+                return Ok(value.to_string());
+            };
+            if relative.is_empty()
+                || relative.contains('\\')
+                || relative
+                    .split('/')
+                    .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+            {
+                return Err(Error::FailedToGetShortcutFilePath);
+            }
+            bundle
+                .append(relative)
+                .map(|path| path.as_str().to_string())
+                .ok_or(Error::FailedToGetShortcutFilePath)
+        }
+        self.command = resolve(&self.command, bundle)?;
+        for arg in &mut self.arguments {
+            *arg = resolve(arg, bundle)?;
+        }
+        Ok(())
+    }
+
     pub fn get_icon_color(&self) -> Color {
         Color::new(self.icon_color[0], self.icon_color[1], self.icon_color[2])
     }
@@ -77,4 +107,52 @@ impl Shortcut {
     // pub fn is_terminal(&self) -> bool {
     //     self._Terminal
     // }
+}
+
+#[cfg(test)]
+mod shortcut_tests {
+    use super::*;
+
+    const SHORTCUT: &str = r#"{
+        "$schema": "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json",
+        "name": "Calculator",
+        "command": "/applications/executables/wasm",
+        "arguments": ["@bundle/executables/calculator.wasm", "--", "hello"],
+        "terminal": false,
+        "icon_string": "Ca",
+        "icon_color": [158, 158, 158]
+    }"#;
+
+    #[test]
+    fn resolves_bundle_relative_executable_without_manifest() {
+        let mut shortcut = Shortcut::from_str(SHORTCUT).unwrap();
+        shortcut
+            .resolve_bundle_paths(Path::from_str("/applications/bundles/xila.calculator"))
+            .unwrap();
+        assert_eq!(shortcut.command, "/applications/executables/wasm");
+        assert_eq!(
+            shortcut.arguments[0],
+            "/applications/bundles/xila.calculator/executables/calculator.wasm"
+        );
+        assert_eq!(shortcut.arguments[1], "--");
+        assert_eq!(shortcut.arguments[2], "hello");
+    }
+
+    #[test]
+    fn bundle_reference_cannot_escape_its_directory() {
+        for path in [
+            "@bundle/../escape",
+            "@bundle/foo/../../escape",
+            "@bundle/",
+            "@bundle//x",
+        ] {
+            let mut shortcut = Shortcut::from_str(SHORTCUT).unwrap();
+            shortcut.arguments[0] = path.into();
+            assert!(
+                shortcut
+                    .resolve_bundle_paths(Path::from_str("/applications/bundles/test"))
+                    .is_err()
+            );
+        }
+    }
 }

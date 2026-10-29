@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { flattenCatalog } from "./catalog.mjs";
@@ -9,6 +9,7 @@ const ROOT = fileURLToPath(new URL("../../", import.meta.url));
 const KEY = /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/;
 
 function findCatalogs(directory, results = []) {
+  if (!existsSync(directory)) return results;
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (!entry.isDirectory() || ["target", "node_modules", ".git"].includes(entry.name)) continue;
     const child = path.join(directory, entry.name);
@@ -60,7 +61,7 @@ test("rejects ambiguous keys which Tolgee could silently merge", () => {
 test("all Xila locale files are nested and round-trip without changing messages", () => {
   const catalogs = ["executables", "libraries"]
     .flatMap(directory => findCatalogs(path.join(ROOT, directory)));
-  assert.ok(catalogs.length >= 88, "expected at least 11 application namespaces with 8 locales each");
+  assert.ok(catalogs.length >= 80, "expected at least 10 application namespaces with 8 locales each");
   const unconverted = new Set();
   for (const file of catalogs) {
     const nested = JSON.parse(readFileSync(file, "utf8"));

@@ -6,22 +6,6 @@ mod interface;
 mod storage;
 
 #[cfg(target_arch = "wasm32")]
-#[unsafe(no_mangle)]
-pub extern "C" fn __install() {
-    let result = (|| -> std::io::Result<()> {
-        std::fs::create_dir_all("/configuration/shared/applications/shortcuts")?;
-        std::fs::write(
-            "/configuration/shared/applications/shortcuts/pixel_painter.json",
-            application_metadata::shortcut("pixel_painter").unwrap(),
-        )
-    })();
-    if let Err(error) = result {
-        eprintln!("Pixel Painter installation failed: {error}");
-        std::process::exit(1);
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
 fn main() {
     if let Err(error) = interface::run() {
         eprintln!("Pixel Painter graphics error: {error}");

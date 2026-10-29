@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json",
+  "title": "Xila graphical Shell shortcut v1",
+  "description": "Launcher presentation/launch descriptor. This is NOT a package manifest, signature, access-control policy or trusted executable authorization.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "command",
+    "arguments",
+    "terminal",
+    "icon_string",
+    "icon_color"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Absolute executable path; may start with @bundle/ for a bundle-local executable."
+    },
+    "arguments": {
+      "type": "array",
+      "maxItems": 24,
+      "items": {
+        "type": "string",
+        "maxLength": 256
+      },
+      "description": "Arguments; @bundle/ relative paths are expanded by the Shell for bundle shortcuts."
+    },
+    "terminal": {
+      "type": "boolean"
+    },
+    "icon_string": {
+      "type": "string",
+      "maxLength": 8
+    },
+    "icon_color": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+      },
+      "minItems": 3,
+      "maxItems": 3
+    }
+  }
+}

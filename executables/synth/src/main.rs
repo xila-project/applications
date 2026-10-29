@@ -1,8 +1,6 @@
 #[cfg(target_arch = "wasm32")]
 mod device;
 #[cfg(target_arch = "wasm32")]
-mod install;
-#[cfg(target_arch = "wasm32")]
 mod interface;
 
 #[cfg(target_arch = "wasm32")]
