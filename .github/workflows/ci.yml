@@ -15,6 +15,22 @@ env:
   MISE_ENV: ci
   CARGO_TERM_COLOR: always
 jobs:
+  lock-debug:
+    name: "Diagnostic / Resolve Cargo lock and TOML formatting"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: "Diagnostic | Cargo lock resolution"
+        run: |
+          cargo metadata --format-version 1 --no-deps > /tmp/xila-metadata.json
+          git diff -- Cargo.lock
+      - name: "Diagnostic | Canonical TOML formatter"
+        run: |
+          cargo --version
+          curl -fsSL https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-linux-x86_64.gz | gzip -dc > /tmp/taplo
+          chmod +x /tmp/taplo
+          /tmp/taplo format executables/package/Cargo.toml
+          git diff -- executables/package/Cargo.toml
   quality:
     name: "Quality / Rust"
     uses: xila-project/workspace/.github/workflows/quality.yml@e152177f341e45ceb6025848378f558d3aa090be
