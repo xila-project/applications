@@ -90,6 +90,30 @@ unsafe extern "C" fn delete_icon(event: *mut lvgl::lv_event_t) {
     }
 }
 
+#[cfg(test)]
+static CALLBACK_REGISTRATION_COUNT: core::sync::atomic::AtomicUsize =
+    core::sync::atomic::AtomicUsize::new(0);
+#[cfg(test)]
+static FAIL_CALLBACK_REGISTRATION_AT: core::sync::atomic::AtomicUsize =
+    core::sync::atomic::AtomicUsize::new(0);
+
+unsafe fn add_icon_callback(
+    icon: *mut lvgl::lv_obj_t,
+    callback: lvgl::lv_event_cb_t,
+    code: lvgl::lv_event_code_t,
+    data: *mut core::ffi::c_void,
+) -> *mut lvgl::lv_event_dsc_t {
+    #[cfg(test)]
+    {
+        use core::sync::atomic::Ordering;
+        let count = CALLBACK_REGISTRATION_COUNT.fetch_add(1, Ordering::SeqCst) + 1;
+        if count == FAIL_CALLBACK_REGISTRATION_AT.load(Ordering::SeqCst) {
+            return core::ptr::null_mut();
+        }
+    }
+    unsafe { lvgl::lv_obj_add_event_cb(icon, callback, code, data) }
+}
+
 pub unsafe fn create_icon(
     parent: *mut lvgl::lv_obj_t,
     spec: IconSpec,
@@ -126,18 +150,111 @@ pub unsafe fn create_icon(
         lvgl::lv_label_set_text(label, text.as_ptr());
         lvgl::lv_obj_set_align(label, lvgl::lv_align_t_LV_ALIGN_CENTER);
         let data = Box::into_raw(Box::new(spec)).cast();
-        lvgl::lv_obj_add_event_cb(
-            icon,
-            Some(draw_icon),
-            lvgl::lv_event_code_t_LV_EVENT_DRAW_MAIN,
-            data,
-        );
-        lvgl::lv_obj_add_event_cb(
+        // Install the owner first: once it succeeds, deleting the icon frees
+        // the descriptor even if installing the drawing callback fails.
+        if add_icon_callback(
             icon,
             Some(delete_icon),
             lvgl::lv_event_code_t_LV_EVENT_DELETE,
             data,
-        );
+        )
+        .is_null()
+        {
+            drop(Box::from_raw(data.cast::<IconSpec>()));
+            lvgl::lv_obj_delete(icon);
+            return Err(Error::FailedToCreateObject);
+        }
+        if add_icon_callback(
+            icon,
+            Some(draw_icon),
+            lvgl::lv_event_code_t_LV_EVENT_DRAW_MAIN,
+            data,
+        )
+        .is_null()
+        {
+            lvgl::lv_obj_delete(icon);
+            return Err(Error::FailedToCreateObject);
+        }
         Ok(icon)
+    }
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod allocation_tests {
+    use super::*;
+    use core::sync::atomic::Ordering;
+    use core::task::{Context, Poll};
+    use xila::file_system::{
+        ControlCommand, ControlCommandIdentifier, DirectBaseOperations, DirectCharacterDevice,
+        MountOperations, Size,
+    };
+    use xila::graphics::{GET_RESOLUTION, SET_DRAWING_AREA, WAS_RESIZED};
+    use xila::shared::AnyByLayout;
+    extern crate abi_definitions;
+    drivers_std::instantiate_global_allocator!();
+
+    struct Screen;
+    impl MountOperations for Screen {}
+    impl DirectCharacterDevice for Screen {}
+    impl DirectBaseOperations for Screen {
+        fn read(
+            &self,
+            _: &mut Context<'_>,
+            _: &mut [u8],
+            _: Size,
+        ) -> Poll<xila::file_system::Result<usize>> {
+            Poll::Ready(Err(xila::file_system::Error::UnsupportedOperation))
+        }
+        fn write(
+            &self,
+            _: &mut Context<'_>,
+            bytes: &[u8],
+            _: Size,
+        ) -> Poll<xila::file_system::Result<usize>> {
+            Poll::Ready(Ok(bytes.len()))
+        }
+        fn control(
+            &self,
+            _: &mut Context<'_>,
+            command: ControlCommandIdentifier,
+            _: &AnyByLayout,
+            output: &mut AnyByLayout,
+        ) -> Poll<xila::file_system::Result<()>> {
+            Poll::Ready(match command {
+                GET_RESOLUTION::IDENTIFIER => {
+                    GET_RESOLUTION::cast_output(output).map(|value| *value = Point::new(320, 240))
+                }
+                WAS_RESIZED::IDENTIFIER => {
+                    WAS_RESIZED::cast_output(output).map(|value| *value = false)
+                }
+                SET_DRAWING_AREA::IDENTIFIER => Ok(()),
+                _ => Err(xila::file_system::Error::UnsupportedOperation),
+            })
+        }
+    }
+
+    #[test]
+    fn failed_callback_registration_removes_the_partial_icon() {
+        let time = Box::leak(Box::new(
+            time::Manager::new(&drivers_std::devices::TimeDevice).unwrap(),
+        ));
+        let manager = task::block_on(xila::graphics::initialize_with_input_devices(
+            time,
+            &Screen,
+            &[],
+            1024,
+            false,
+        ));
+        let parent = manager.get_current_screen().unwrap();
+        let before = unsafe { lvgl::lv_obj_get_child_count(parent) };
+        for fail_at in [1, 2] {
+            CALLBACK_REGISTRATION_COUNT.store(0, Ordering::SeqCst);
+            FAIL_CALLBACK_REGISTRATION_AT.store(fail_at, Ordering::SeqCst);
+            let icon = IconSpec::automatic("test", "T", xila::graphics::Color::BLACK);
+            assert!(unsafe { create_icon(parent, icon, Point::new(40, 40)) }.is_err());
+            assert_eq!(unsafe { lvgl::lv_obj_get_child_count(parent) }, before);
+        }
+        FAIL_CALLBACK_REGISTRATION_AT.store(0, Ordering::SeqCst);
+        core::mem::forget(manager);
     }
 }
