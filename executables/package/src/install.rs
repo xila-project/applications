@@ -24,7 +24,7 @@ use xila_package_reader::StreamingVerifier;
 use xila_package_verification::PublicKey;
 
 const BLOCK_BYTES: usize = 512;
-pub const INSTALLED_ROOT: &str = "/applications/packages";
+pub const INSTALLED_ROOT: &str = "/applications/bundles";
 pub const DEFAULT_TRUSTED_KEY: &str = "/configuration/system/packages/trusted.pub";
 static NEXT_STAGING: AtomicUsize = AtomicUsize::new(1);
 
