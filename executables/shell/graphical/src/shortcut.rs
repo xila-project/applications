@@ -141,16 +141,42 @@ mod shortcut_tests {
     #[test]
     fn packaged_application_shortcuts_are_readable_and_bundle_relative() {
         for (identifier, executable, source) in [
-            ("xila.calculator", "calculator", include_str!("../../../calculator/shortcut.json")),
-            ("xila.clock", "clock", include_str!("../../../clock/shortcut.json")),
-            ("xila.weather", "weather", include_str!("../../../weather/shortcut.json")),
-            ("xila.pixel-painter", "pixel_painter", include_str!("../../../pixel_painter/shortcut.json")),
-            ("xila.text-editor", "text_editor", include_str!("../../../text_editor/shortcut.json")),
-            ("xila.synth", "synth", include_str!("../../../synth/shortcut.json")),
+            (
+                "xila.calculator",
+                "calculator",
+                include_str!("../../../calculator/shortcut.json"),
+            ),
+            (
+                "xila.clock",
+                "clock",
+                include_str!("../../../clock/shortcut.json"),
+            ),
+            (
+                "xila.weather",
+                "weather",
+                include_str!("../../../weather/shortcut.json"),
+            ),
+            (
+                "xila.pixel-painter",
+                "pixel_painter",
+                include_str!("../../../pixel_painter/shortcut.json"),
+            ),
+            (
+                "xila.text-editor",
+                "text_editor",
+                include_str!("../../../text_editor/shortcut.json"),
+            ),
+            (
+                "xila.synth",
+                "synth",
+                include_str!("../../../synth/shortcut.json"),
+            ),
         ] {
             let mut shortcut = Shortcut::from_str(source).unwrap();
             let path = alloc::format!("/applications/bundles/{identifier}");
-            shortcut.resolve_bundle_paths(Path::from_str(&path)).unwrap();
+            shortcut
+                .resolve_bundle_paths(Path::from_str(&path))
+                .unwrap();
             assert_eq!(shortcut.command, "/applications/executables/wasm");
             assert_eq!(
                 shortcut.arguments,
