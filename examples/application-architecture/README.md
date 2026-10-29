@@ -86,11 +86,16 @@ cargo run --locked --manifest-path examples/application-architecture/Cargo.toml 
 cargo check --locked --manifest-path examples/application-architecture/Cargo.toml --workspace --lib --target wasm32-wasip1
 ```
 
-The last command checks the core and both adapter libraries for WASI; it does
-not build a deployable GUI or prove runtime behavior. The same libraries can be
-checked for other supported targets, including targets without `std` if their
-Rust target is installed. The native CLI executable is only an example of a
-frontend, not a dependency of the core.
+The checks cover the shared framework, core and both adapter libraries for WASI
+and browser-style WebAssembly (`wasm32-unknown-unknown`). CI also checks the
+CLI executable for WASI and exercises both adapters against the same core on a
+native host. Platform adapters remain responsible for supplying input and
+presenting output: the example GUI does not create a window, and the example
+CLI is a standalone process rather than a Xila shell command. Clock provides a
+real Wasm graphical frontend using the same application update contract.
+Neither the framework nor the core depends on the target, an allocator, a
+particular executor, or a GUI or CLI runtime. Native graphical and CLI programs
+can use the same contracts with their existing Xila event and I/O adapters.
 
 ## Existing applications and migration cost
 
@@ -114,7 +119,7 @@ frontend, not a dependency of the core.
   handle its own stream and presentation. A standalone shell command does not
   need that extraction merely to conform.
 
-The example adds no production dependency, allocation, background task or runtime
+The shared library adds no external dependency, allocation, background task or runtime
 indirection. Its core is a single `u8`; each adapter uses static calls and
 returns a value. Real applications still pay for their chosen data, effects,
 rendering, code size and any core dependencies. Separate crates can increase

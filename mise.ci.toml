@@ -109,7 +109,12 @@ mise run localization:lint
 """
 
 [tasks."ci:application-architecture"]
-extends = "ci:rust-wasi"
+tools.rust = { version = "{{ vars.rust_version }}", profile = "minimal", components = [
+  "rustfmt",
+], targets = [
+  "wasm32-wasip1",
+  "wasm32-unknown-unknown",
+] }
 run = """
 set -eu
 cargo fmt --manifest-path examples/application-architecture/Cargo.toml --all -- --check
@@ -117,4 +122,6 @@ cargo test --locked -p xila-application -p xila-clock --lib
 cargo test --locked -p xila-application --test dispatch
 cargo test --locked --manifest-path examples/application-architecture/Cargo.toml --workspace
 cargo check --locked --manifest-path examples/application-architecture/Cargo.toml --workspace --lib --target wasm32-wasip1
+cargo check --locked --manifest-path examples/application-architecture/Cargo.toml -p example-counter-cli --bin example-counter-cli --target wasm32-wasip1
+cargo check --locked --manifest-path examples/application-architecture/Cargo.toml --workspace --lib --target wasm32-unknown-unknown
 """
