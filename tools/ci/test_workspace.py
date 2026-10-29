@@ -66,12 +66,14 @@ class ApplicationPolicy(unittest.TestCase):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
         release = (ROOT / '.github/workflows/release.yml').read_text()
         self.assertIn('publish-release: false', ci)
+        self.assertIn("sign-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}", ci)
+        self.assertIn("NETBIRD_SETUP_KEY: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NETBIRD_SETUP_KEY || '' }}", ci)
         self.assertNotIn('contents: write', ci)
         self.assertIn('publish-release: true', release)
         self.assertIn('tags: ["v*"]', release)
         self.assertIn('XILA_RELEASE_TAG', release)
         self.assertNotIn('pull_request:', release)
-        pin = 'a50520f1402d8374fb8c7f614fed91bd512d0ac6'
+        pin = '7a545fe25f386aa5a38bedc37b6a41b492214ef8'
         self.assertIn('@' + pin, ci)
         self.assertIn('@' + pin, release)
         self.assertIn('builder-ref: ' + pin, release)
