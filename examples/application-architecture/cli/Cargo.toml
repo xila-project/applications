@@ -1,0 +1,11 @@
+[package]
+name = "example-counter-cli"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+example-counter-core = { path = "../core" }
+xila-application = { path = "../../../libraries/application" }
+
+[dev-dependencies]
+example-counter-gui = { path = "../gui" }

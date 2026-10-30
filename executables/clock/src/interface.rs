@@ -1,4 +1,6 @@
-use clock::{Alarm, AlarmAlert, Settings, Stopwatch, Timer, storage::Store};
+use clock::{
+    Alarm, AlarmAlert, Settings, Stopwatch, StopwatchLogic, StopwatchMessage, Timer, storage::Store,
+};
 use embedded_i18n::translate;
 use std::{
     ffi::{CStr, CString},
@@ -7,6 +9,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use wasm::*;
+use xila_application::Application;
 
 #[derive(Clone, Copy)]
 enum Action {
@@ -436,16 +439,14 @@ impl Interface {
                     self.persist();
                 }
                 Action::StopwatchToggle => {
-                    if self.watch.is_running() {
-                        self.watch.pause(now);
-                    } else {
-                        self.watch.start(now);
-                    }
+                    let _ = StopwatchLogic.update(&mut self.watch, StopwatchMessage::Toggle(now));
                 }
                 Action::Lap => {
-                    self.watch.lap(now);
+                    let _ = StopwatchLogic.update(&mut self.watch, StopwatchMessage::Lap(now));
                 }
-                Action::StopwatchReset => self.watch.reset(),
+                Action::StopwatchReset => {
+                    let _ = StopwatchLogic.update(&mut self.watch, StopwatchMessage::Reset);
+                }
                 Action::TimerAdjust(delta) => {
                     self.timer_seconds =
                         (i64::from(self.timer_seconds) + i64::from(delta)).clamp(1, 86400) as u32

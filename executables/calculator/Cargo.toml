@@ -3,7 +3,11 @@ name = "xila-calculator"
 version = "0.1.0"
 edition = "2024"
 
+[features]
+cli = []
+
 [dependencies]
+xila-application = { path = "../../libraries/application" }
 embedded-i18n = { workspace = true }
 nanoexpr = { version = "0.2.1", default-features = false, features = ["exact"] }
 
@@ -35,3 +39,8 @@ path = "tests/test.rs"
 [[bin]]
 name = "calculator"
 path = "src/main.rs"
+
+[[bin]]
+name = "calculator-cli"
+path = "src/cli.rs"
+required-features = ["cli"]

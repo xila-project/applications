@@ -16,6 +16,8 @@ cargo test --config /tmp/xila-local.toml -p xila-command-line-shell --test integ
 
 Cargo records patched paths in `Cargo.lock`; regenerate the lockfile without the local config before committing. Use the same Core checkout for all patches, including transitive platform dependencies.
 
+For an optional approach to sharing application behavior between graphical and command-line frontends, see [Application cores and frontends](examples/application-architecture/README.md).
+
 Package manifests live in `packaging/`. The package-manager workflow produces `.xpk` archives and SHA-256 files from the WASI build; pull requests validate artifacts without publishing them. A version tag matching all application versions can publish release assets. These archives are unsigned development packages: their checksums establish content integrity, not publisher identity. ABI version 1 denotes the initial versioned application ABI; older unversioned runtimes do not declare that compatibility.
 
 CI uses separate mr-boxington target caches for host and WASI builds. On the first host Clippy run, mr-boxington reported 0 hits, 953 compilations without usable prior inputs or predictions, 26 bypasses and 0 seconds of estimated compiler work saved. This was a cold run; it does not establish warm-build reuse. Check subsequent job diagnostics and Cargo's build output before drawing cache conclusions.

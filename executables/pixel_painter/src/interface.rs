@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 use wasm::*;
+use xila_application::{Confirmation, Confirmations};
 
 struct Interface {
     window: *mut Object,
@@ -20,9 +21,7 @@ struct Interface {
     drawing: Drawing,
     color: u8,
     brush: u8,
-    revision: u64,
-    confirm_open: Option<u64>,
-    confirm_close: Option<u64>,
+    confirmations: Confirmations,
     // LVGL keeps maps alive on the host; the guest maps also live for the UI's lifetime.
     _palette_map: [*const i8; 9],
     _action_map: [*const i8; 9],
@@ -51,14 +50,14 @@ pub fn run() -> wasm::Result<()> {
                 break;
             }
             if code == EVENT_CLOSE_REQUESTED {
-                if !ui.drawing.is_dirty() || ui.confirm_close == Some(ui.revision) {
+                if !ui.drawing.is_dirty() || ui.confirmations.is_confirmed(Confirmation::Close) {
                     unsafe {
                         object_delete(u16::try_from(ui.window as usize).map_err(|_| -1)?)?;
                     }
                     return Ok(());
                 }
                 ui.status(translate!("warnings.unsaved_close_again"))?;
-                ui.confirm_close = Some(ui.revision);
+                ui.confirmations.confirm(Confirmation::Close);
             } else if target == ui.canvas {
                 if code == EventCode::Pressed as u32 || code == EventCode::Pressing as u32 {
                     if let Some((x, y)) = Viewport::new(0, 0, width, height).map(x, y) {
@@ -67,7 +66,7 @@ pub fn run() -> wasm::Result<()> {
                         } else {
                             ui.drawing.continue_stroke(x, y, ui.color, ui.brush);
                         }
-                        ui.revision = ui.revision.wrapping_add(1);
+                        ui.confirmations.changed();
                         repaint = true;
                     } else {
                         ui.drawing.end_stroke();
@@ -87,12 +86,12 @@ pub fn run() -> wasm::Result<()> {
                 match action {
                     0 => {
                         ui.drawing.undo();
-                        ui.revision = ui.revision.wrapping_add(1);
+                        ui.confirmations.changed();
                         repaint = true;
                     }
                     1 => {
                         ui.drawing.clear();
-                        ui.revision = ui.revision.wrapping_add(1);
+                        ui.confirmations.changed();
                         repaint = true;
                     }
                     2 | 3 => {
@@ -201,9 +200,7 @@ impl Interface {
                 drawing: Drawing::new(),
                 color: 1,
                 brush: 1,
-                revision: 0,
-                confirm_open: None,
-                confirm_close: None,
+                confirmations: Confirmations::default(),
                 _palette_map: palette_map,
                 _action_map: action_map,
             };
@@ -231,12 +228,15 @@ impl Interface {
     }
 
     fn file_action(&mut self, opening: bool) -> wasm::Result<bool> {
-        if opening && self.drawing.is_dirty() && self.confirm_open != Some(self.revision) {
-            self.confirm_open = Some(self.revision);
+        if opening
+            && self.drawing.is_dirty()
+            && !self.confirmations.is_confirmed(Confirmation::Open)
+        {
+            self.confirmations.confirm(Confirmation::Open);
             self.status(translate!("warnings.unsaved_open_again"))?;
             return Ok(false);
         }
-        self.confirm_open = None;
+        self.confirmations.clear(Confirmation::Open);
         // LVGL limits characters, not UTF-8 bytes: allow four bytes per character.
         let mut bytes = [0i8; 240 * 4 + 1];
         unsafe {
@@ -252,7 +252,7 @@ impl Interface {
         if opening {
             match storage::read(path) {
                 Ok(bytes) if self.drawing.replace_from_bytes(&bytes).is_ok() => {
-                    self.revision = self.revision.wrapping_add(1);
+                    self.confirmations.changed();
                     self.status(translate!("status.opened"))?;
                     return Ok(true);
                 }

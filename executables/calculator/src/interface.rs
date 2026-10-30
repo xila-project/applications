@@ -1,4 +1,3 @@
-use crate::engine::evaluate_expression;
 use embedded_i18n::translate;
 use std::{ptr::null_mut, thread::sleep};
 use wasm::{
@@ -8,6 +7,8 @@ use wasm::{
     object_set_height, object_set_width, percentage, size_content, window_create, window_pop_event,
     window_set_icon,
 };
+use xila_application::{DispatchError, Frontend, dispatch, render};
+use xila_calculator::model::{CalculatorLogic, CalculatorModel, Message, View};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[allow(dead_code)] // Indirectly constructed with from_u8
@@ -140,9 +141,7 @@ pub struct Interface {
     _display: *mut Object,
     display_label: *mut Object,
     button_matrix: *mut Object,
-    current_expression: String,
-    show_result: bool,
-    is_radian_mode: bool, // true for radians, false for degrees
+    model: CalculatorModel,
 }
 
 impl Interface {
@@ -158,9 +157,7 @@ impl Interface {
             _display: display,
             display_label,
             button_matrix,
-            current_expression: String::new(),
-            show_result: false,
-            is_radian_mode: true, // Default to radians
+            model: CalculatorModel::default(),
         })
     }
 
@@ -234,29 +231,14 @@ impl Interface {
         }
     }
 
-    fn update_display(&mut self) -> wasm::Result<()> {
-        unsafe {
-            let display_text = if self.show_result {
-                self.current_expression.clone()
-            } else if self.current_expression.is_empty() {
-                "0".to_string()
-            } else {
-                self.current_expression.clone()
-            };
-
-            // Add angle mode indicator
-            let mode_indicator = if self.is_radian_mode {
-                translate!("angle_mode.radians_indicator")
-            } else {
-                translate!("angle_mode.degrees_indicator")
-            };
-            let full_text = format!("{}{}", display_text, mode_indicator);
-
-            let text_with_null = format!("{}\0", full_text);
-            label_set_text(self.display_label, text_with_null.as_ptr() as *mut _)?;
-        }
-
-        Ok(())
+    fn update_display(&self) -> wasm::Result<()> {
+        render(
+            &CalculatorLogic,
+            &self.model,
+            &mut CalculatorFrontend {
+                label: self.display_label,
+            },
+        )
     }
 
     unsafe fn handle_button_matrix_event(&mut self) -> wasm::Result<()> {
@@ -272,138 +254,14 @@ impl Interface {
     }
 
     fn handle_button_press(&mut self, button: ButtonIdentifier) -> wasm::Result<()> {
-        match button {
-            ButtonIdentifier::Clear => {
-                self.current_expression.clear();
-                self.show_result = false;
-            }
-            ButtonIdentifier::Backspace => {
-                if !self.current_expression.is_empty() {
-                    self.current_expression.pop();
-                }
-                self.show_result = false;
-            }
-            ButtonIdentifier::DegRad => {
-                self.is_radian_mode = !self.is_radian_mode;
-                // Update the display to show current mode
-                self.update_display()?;
-                return Ok(()); // Don't call update_display again at the end
-            }
-            ButtonIdentifier::Equals => {
-                if !self.current_expression.is_empty() {
-                    match evaluate_expression(&self.current_expression, self.is_radian_mode) {
-                        Ok(result) => {
-                            self.current_expression = result.to_string();
-                            self.show_result = true;
-                        }
-                        Err(e) => {
-                            self.current_expression =
-                                format!(translate!("errors.calculation_with_details"), e);
-                            self.show_result = true;
-                        }
-                    }
-                }
-            }
-            // Basic trigonometric functions
-            ButtonIdentifier::Sin => self.push_str("sin("),
-            ButtonIdentifier::Cos => self.push_str("cos("),
-            ButtonIdentifier::Tan => self.push_str("tan("),
-
-            // Hyperbolic functions
-            ButtonIdentifier::Sinh => self.push_str("sinh("),
-            ButtonIdentifier::Cosh => self.push_str("cosh("),
-            ButtonIdentifier::Tanh => self.push_str("tanh("),
-
-            // Logarithmic functions
-            ButtonIdentifier::Ln => self.push_str("ln("),
-            ButtonIdentifier::Log10 => self.push_str("log("),
-
-            // Root and power functions
-            ButtonIdentifier::Sqrt => self.push_str("sqrt("),
-            ButtonIdentifier::Square => self.push_str("sqr("),
-            ButtonIdentifier::Cube => self.push_str("cube("),
-            ButtonIdentifier::TenPower => self.push_str("pow10("),
-
-            // Other functions
-            ButtonIdentifier::Factorial => self.push_char('!'),
-            ButtonIdentifier::Inverse => self.push_str("inv("),
-            ButtonIdentifier::Abs => self.push_str("abs("),
-            ButtonIdentifier::Random => {
-                // Generate random number immediately and insert it
-                use std::collections::hash_map::DefaultHasher;
-                use std::hash::{Hash, Hasher};
-
-                let mut hasher = DefaultHasher::new();
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_nanos()
-                    .hash(&mut hasher);
-                let hash = hasher.finish();
-                let random_value = (hash as f64) / (u64::MAX as f64);
-                self.push_str(&format!("{:.10}", random_value));
-                return Ok(()); // Don't call update_display again at the end
-            }
-
-            // Constants
-            ButtonIdentifier::Pi => self.push_str("pi"),
-            ButtonIdentifier::E => self.push_str("e"),
-
-            // Parentheses and operators
-            ButtonIdentifier::LeftParenthesis => self.push_str("("),
-            ButtonIdentifier::RightParenthesis => self.push_char(')'),
-            ButtonIdentifier::Decimal => self.push_str("."),
-
-            // Operator buttons that continue the expression
-            ButtonIdentifier::Power => self.push_operator('^'),
-            ButtonIdentifier::Divide => self.push_operator('/'),
-            ButtonIdentifier::Multiply => self.push_operator('*'),
-            ButtonIdentifier::Subtract => self.push_operator('-'),
-            ButtonIdentifier::Add => self.push_operator('+'),
-            ButtonIdentifier::Percent => self.push_operator('%'),
-            ButtonIdentifier::Mod => self.push_str(" mod "),
-
-            // Number buttons
-            ButtonIdentifier::Zero => self.push_char('0'),
-            ButtonIdentifier::One => self.push_char('1'),
-            ButtonIdentifier::Two => self.push_char('2'),
-            ButtonIdentifier::Three => self.push_char('3'),
-            ButtonIdentifier::Four => self.push_char('4'),
-            ButtonIdentifier::Five => self.push_char('5'),
-            ButtonIdentifier::Six => self.push_char('6'),
-            ButtonIdentifier::Seven => self.push_char('7'),
-            ButtonIdentifier::Eight => self.push_char('8'),
-            ButtonIdentifier::Nine => self.push_char('9'),
+        let mut frontend = CalculatorFrontend {
+            label: self.display_label,
+        };
+        match dispatch(&mut CalculatorLogic, &mut self.model, &mut frontend, button) {
+            Ok(_) => Ok(()),
+            Err(DispatchError::Frontend(error)) => Err(error),
+            Err(DispatchError::Application(never)) => match never {},
         }
-
-        // Update display after any button press except Clear, Backspace, DegRad, and Equals
-        self.update_display()?;
-
-        Ok(())
-    }
-
-    fn push_str(&mut self, text: &str) {
-        if self.show_result {
-            self.current_expression.clear();
-            self.show_result = false;
-        }
-        self.current_expression.push_str(text);
-    }
-
-    fn push_char(&mut self, ch: char) {
-        if self.show_result {
-            self.current_expression.clear();
-            self.show_result = false;
-        }
-        self.current_expression.push(ch);
-    }
-
-    fn push_operator(&mut self, op: char) {
-        // For operators, if showing result, keep it and append the operator
-        if self.show_result {
-            self.show_result = false;
-        }
-        self.current_expression.push(op);
     }
 
     pub unsafe fn run(&mut self) -> wasm::Result<()> {
@@ -437,5 +295,83 @@ impl Interface {
                 sleep(std::time::Duration::from_millis(10));
             }
         }
+    }
+}
+
+struct CalculatorFrontend {
+    label: *mut Object,
+}
+
+impl Frontend<CalculatorLogic> for CalculatorFrontend {
+    type Input = ButtonIdentifier;
+    type Error = wasm::Error;
+
+    fn translate(&mut self, button: ButtonIdentifier) -> wasm::Result<Option<Message>> {
+        use ButtonIdentifier as Button;
+        let message = match button {
+            Button::Clear => Message::Clear,
+            Button::Backspace => Message::Backspace,
+            Button::DegRad => Message::ToggleAngle,
+            Button::Equals => Message::Evaluate,
+            Button::Sin => Message::Append("sin("),
+            Button::Cos => Message::Append("cos("),
+            Button::Tan => Message::Append("tan("),
+            Button::Sinh => Message::Append("sinh("),
+            Button::Cosh => Message::Append("cosh("),
+            Button::Tanh => Message::Append("tanh("),
+            Button::Ln => Message::Append("ln("),
+            Button::Log10 => Message::Append("log("),
+            Button::Sqrt => Message::Append("sqrt("),
+            Button::Square => Message::Append("sqr("),
+            Button::Cube => Message::Append("cube("),
+            Button::TenPower => Message::Append("pow10("),
+            Button::Factorial => Message::Character('!'),
+            Button::Inverse => Message::Append("inv("),
+            Button::Abs => Message::Append("abs("),
+            Button::Random => {
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hasher = DefaultHasher::new();
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos()
+                    .hash(&mut hasher);
+                Message::Random(format!("{:.10}", hasher.finish() as f64 / u64::MAX as f64))
+            }
+            Button::Pi => Message::Append("pi"),
+            Button::E => Message::Append("e"),
+            Button::LeftParenthesis => Message::Append("("),
+            Button::RightParenthesis => Message::Character(')'),
+            Button::Decimal => Message::Append("."),
+            Button::Power => Message::Operator('^'),
+            Button::Divide => Message::Operator('/'),
+            Button::Multiply => Message::Operator('*'),
+            Button::Subtract => Message::Operator('-'),
+            Button::Add => Message::Operator('+'),
+            Button::Percent => Message::Operator('%'),
+            Button::Mod => Message::Append(" mod "),
+            Button::Zero => Message::Character('0'),
+            Button::One => Message::Character('1'),
+            Button::Two => Message::Character('2'),
+            Button::Three => Message::Character('3'),
+            Button::Four => Message::Character('4'),
+            Button::Five => Message::Character('5'),
+            Button::Six => Message::Character('6'),
+            Button::Seven => Message::Character('7'),
+            Button::Eight => Message::Character('8'),
+            Button::Nine => Message::Character('9'),
+        };
+        Ok(Some(message))
+    }
+
+    fn render(&mut self, view: View<'_>) -> wasm::Result<()> {
+        let indicator = if view.radians {
+            translate!("angle_mode.radians_indicator")
+        } else {
+            translate!("angle_mode.degrees_indicator")
+        };
+        let text = format!("{}{}\0", view.display, indicator);
+        unsafe { label_set_text(self.label, text.as_ptr() as *mut _) }
     }
 }

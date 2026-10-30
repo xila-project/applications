@@ -5,6 +5,7 @@ edition = "2024"
 description = "A page-based text editor for Xila WebAssembly."
 
 [dependencies]
+xila-application = { path = "../../libraries/application" }
 embedded-i18n = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

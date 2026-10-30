@@ -1,8 +1,5 @@
 embedded_i18n::track_locales!();
 
-#[cfg(any(target_arch = "wasm32", test))]
-mod engine;
-
 #[cfg(target_arch = "wasm32")]
 mod interface;
 
