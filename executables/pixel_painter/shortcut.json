@@ -3,7 +3,7 @@
   "name": "Pixel Painter",
   "command": "/applications/executables/wasm",
   "arguments": [
-    "@bundle/bin/pixel_painter.wasm"
+    "@bundle/executables/pixel_painter.wasm"
   ],
   "terminal": false,
   "icon_string": "Pi",

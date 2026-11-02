@@ -3,7 +3,7 @@
   "name": "Clock",
   "command": "/applications/executables/wasm",
   "arguments": [
-    "@bundle/bin/clock.wasm"
+    "@bundle/executables/clock.wasm"
   ],
   "terminal": false,
   "icon_string": "Cl",

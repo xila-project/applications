@@ -6,7 +6,7 @@
   "minimum_xila_abi": 1,
   "capabilities": [],
   "application": {
-    "entrypoint": "bin/pixel_painter.wasm",
+    "entrypoint": "executables/pixel_painter.wasm",
     "display_name": "Pixel Painter",
     "icon": "",
     "show_in_launcher": true

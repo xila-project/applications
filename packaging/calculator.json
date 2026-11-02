@@ -6,7 +6,7 @@
   "minimum_xila_abi": 1,
   "capabilities": [],
   "application": {
-    "entrypoint": "bin/calculator.wasm",
+    "entrypoint": "executables/calculator.wasm",
     "display_name": "Calculator",
     "icon": "",
     "show_in_launcher": true

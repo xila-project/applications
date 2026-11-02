@@ -24,7 +24,7 @@ for app in APPS:
     if metadata.get("capabilities") != []:
         raise SystemExit(f"review package capability request for {app}")
     app_metadata = metadata.get("application")
-    if not isinstance(app_metadata, dict) or app_metadata.get("entrypoint") != f"bin/{app}.wasm":
+    if not isinstance(app_metadata, dict) or app_metadata.get("entrypoint") != f"executables/{app}.wasm":
         raise SystemExit(f"invalid bundle entrypoint for {app}")
     if not isinstance(app_metadata.get("display_name"), str) or not app_metadata["display_name"]:
         raise SystemExit(f"missing display name for {app}")
@@ -45,7 +45,7 @@ for app in APPS:
         raise SystemExit(f"shortcut name disagrees with package display name for {app}")
     if shortcut.get("command") != "/applications/executables/wasm":
         raise SystemExit(f"shortcut must invoke Xila's Wasm runtime for {app}")
-    if shortcut.get("arguments") != [f"@bundle/bin/{app}.wasm"]:
+    if shortcut.get("arguments") != [f"@bundle/executables/{app}.wasm"]:
         raise SystemExit(f"shortcut must refer to its own bundle entrypoint for {app}")
     if type(shortcut.get("terminal")) is not bool:
         raise SystemExit(f"invalid terminal shortcut flag for {app}")

@@ -180,7 +180,7 @@ mod shortcut_tests {
             assert_eq!(shortcut.command, "/applications/executables/wasm");
             assert_eq!(
                 shortcut.arguments,
-                alloc::vec![alloc::format!("{path}/bin/{executable}.wasm")]
+                alloc::vec![alloc::format!("{path}/executables/{executable}.wasm")]
             );
         }
     }

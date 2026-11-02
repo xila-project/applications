@@ -3,7 +3,7 @@
   "name": "Weather",
   "command": "/applications/executables/wasm",
   "arguments": [
-    "@bundle/bin/weather.wasm"
+    "@bundle/executables/weather.wasm"
   ],
   "terminal": false,
   "icon_string": "We",
