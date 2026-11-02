@@ -5254,7 +5254,7 @@ dependencies = [
 [[package]]
 name = "xila-package-bundle"
 version = "0.2.0"
-source = "git+https://github.com/xila-project/package_manager?rev=38d5bb8d42618b42fa02e93de255f5da23846efb#38d5bb8d42618b42fa02e93de255f5da23846efb"
+source = "git+https://github.com/xila-project/package_manager?rev=277d017c2da182b7d72081e4ca1dd555425c35bf#277d017c2da182b7d72081e4ca1dd555425c35bf"
 dependencies = [
  "xila-package-manifest",
  "xila-package-verification",
@@ -5263,7 +5263,7 @@ dependencies = [
 [[package]]
 name = "xila-package-manifest"
 version = "0.2.0"
-source = "git+https://github.com/xila-project/package_manager?rev=38d5bb8d42618b42fa02e93de255f5da23846efb#38d5bb8d42618b42fa02e93de255f5da23846efb"
+source = "git+https://github.com/xila-project/package_manager?rev=277d017c2da182b7d72081e4ca1dd555425c35bf#277d017c2da182b7d72081e4ca1dd555425c35bf"
 dependencies = [
  "miniserde",
 ]
@@ -5271,7 +5271,7 @@ dependencies = [
 [[package]]
 name = "xila-package-reader"
 version = "0.2.0"
-source = "git+https://github.com/xila-project/package_manager?rev=38d5bb8d42618b42fa02e93de255f5da23846efb#38d5bb8d42618b42fa02e93de255f5da23846efb"
+source = "git+https://github.com/xila-project/package_manager?rev=277d017c2da182b7d72081e4ca1dd555425c35bf#277d017c2da182b7d72081e4ca1dd555425c35bf"
 dependencies = [
  "tar-no-std",
  "xila-package-bundle",
@@ -5282,7 +5282,7 @@ dependencies = [
 [[package]]
 name = "xila-package-verification"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/package_manager?rev=38d5bb8d42618b42fa02e93de255f5da23846efb#38d5bb8d42618b42fa02e93de255f5da23846efb"
+source = "git+https://github.com/xila-project/package_manager?rev=277d017c2da182b7d72081e4ca1dd555425c35bf#277d017c2da182b7d72081e4ca1dd555425c35bf"
 dependencies = [
  "ed25519-dalek",
  "sha2 0.11.1",

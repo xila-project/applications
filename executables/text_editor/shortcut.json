@@ -3,7 +3,7 @@
   "name": "Text Editor",
   "command": "/applications/executables/wasm",
   "arguments": [
-    "@bundle/bin/text_editor.wasm"
+    "@bundle/executables/text_editor.wasm"
   ],
   "terminal": false,
   "icon_string": "Te",

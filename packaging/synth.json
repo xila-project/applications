@@ -6,7 +6,7 @@
   "minimum_xila_abi": 1,
   "capabilities": [],
   "application": {
-    "entrypoint": "bin/synth.wasm",
+    "entrypoint": "executables/synth.wasm",
     "display_name": "Synth",
     "icon": "",
     "show_in_launcher": true

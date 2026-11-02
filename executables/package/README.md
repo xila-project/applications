@@ -38,7 +38,7 @@ is a first step toward the package lifecycle; there is no upgrade,
 uninstall, dependency solver, capability grant prompt, launcher shortcut
 registration or trust-store management yet. Application entrypoints are
 installed at e.g.
-`/applications/packages/xila.clock/bin/clock.wasm` and can be run through
+`/applications/bundles/xila.clock/executables/clock.wasm` and can be run through
 the existing Xila Wasm executable. `--allow-untrusted` must not be used
 for unattended deployment.
 

@@ -203,7 +203,7 @@ fn check_compatibility(manifest: &Manifest) -> Result<(), String> {
         .application
         .as_ref()
         .ok_or_else(|| "package is not an application".to_string())?;
-    if !app.entrypoint.starts_with("bin/")
+    if !xila_package_manifest::is_bundle_executable(&app.entrypoint)
         || !app.entrypoint.ends_with(".wasm")
         || !manifest
             .files
@@ -543,12 +543,12 @@ mod tests {
             minimum_xila_abi: 1,
             capabilities: alloc::vec![],
             files: alloc::vec![ManifestFile {
-                path: "bin/clock.wasm".into(),
+                path: "executables/clock.wasm".into(),
                 size: 4,
                 sha256: "0".repeat(64),
             }],
             application: Some(Application {
-                entrypoint: "bin/clock.wasm".into(),
+                entrypoint: "executables/clock.wasm".into(),
                 display_name: "Clock".into(),
                 icon: String::new(),
                 show_in_launcher: true,

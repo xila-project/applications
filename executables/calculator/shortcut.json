@@ -3,7 +3,7 @@
   "name": "Calculator",
   "command": "/applications/executables/wasm",
   "arguments": [
-    "@bundle/bin/calculator.wasm"
+    "@bundle/executables/calculator.wasm"
   ],
   "terminal": false,
   "icon_string": "Ca",

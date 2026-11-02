@@ -6,7 +6,7 @@
   "minimum_xila_abi": 1,
   "capabilities": [],
   "application": {
-    "entrypoint": "bin/text_editor.wasm",
+    "entrypoint": "executables/text_editor.wasm",
     "display_name": "Text Editor",
     "icon": "",
     "show_in_launcher": true

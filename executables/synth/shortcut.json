@@ -3,7 +3,7 @@
   "name": "Synth",
   "command": "/applications/executables/wasm",
   "arguments": [
-    "@bundle/bin/synth.wasm"
+    "@bundle/executables/synth.wasm"
   ],
   "terminal": false,
   "icon_string": "Sy",

@@ -6,7 +6,7 @@
   "minimum_xila_abi": 1,
   "capabilities": [],
   "application": {
-    "entrypoint": "bin/clock.wasm",
+    "entrypoint": "executables/clock.wasm",
     "display_name": "Clock",
     "icon": "",
     "show_in_launcher": true

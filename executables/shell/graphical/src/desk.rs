@@ -323,7 +323,8 @@ impl Desk {
             let bundles_path = xila::file_system::Path::from_str("/applications/bundles");
             if let Ok(bundles) = Directory::open(virtual_file_system, task, bundles_path).await {
                 for bundle in bundles {
-                    if bundle.kind != Kind::Directory {
+                    // Skip ".", "..", and installer staging such as ".incoming-1".
+                    if bundle.kind != Kind::Directory || bundle.name.starts_with('.') {
                         continue;
                     }
                     let Some(directory) = bundles_path.append(&bundle.name) else {
