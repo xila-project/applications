@@ -66,6 +66,8 @@ class ApplicationPolicy(unittest.TestCase):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
         release = (ROOT / '.github/workflows/release.yml').read_text()
         self.assertIn('publish-release: false', ci)
+        self.assertIn("sign-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}", ci)
+        self.assertIn("NETBIRD_SETUP_KEY: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NETBIRD_SETUP_KEY || '' }}", ci)
         self.assertNotIn('contents: write', ci)
         self.assertIn('publish-release: true', release)
         self.assertIn('tags: ["v*"]', release)
@@ -76,6 +78,9 @@ class ApplicationPolicy(unittest.TestCase):
         self.assertIn(f"builder-ref: {reference.group(1)}", ci)
         self.assertIn(f"package-wasm.yml@{reference.group(1)}", release)
         self.assertIn(f"builder-ref: {reference.group(1)}", release)
+        self.assertEqual(ci.count('id-token: write'), 1)
+        self.assertIn('id-token: write', release)
+        self.assertIn('NETBIRD_SETUP_KEY: ${{ secrets.NETBIRD_SETUP_KEY }}', release)
 
     def test_shared_quality_keeps_app_specific_checks(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()

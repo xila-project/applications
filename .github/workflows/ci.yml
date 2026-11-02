@@ -141,15 +141,19 @@ jobs:
         app: [calculator, clock, weather, pixel_painter, text_editor, synth]
     permissions:
       contents: read
-    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@0ae8fce5f6eaf41555ee99137c7688fd79fbcd7d
+      id-token: write
+    secrets:
+      NETBIRD_SETUP_KEY: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NETBIRD_SETUP_KEY || '' }}
+    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@c63eac6bae20cd94e1f91bcd0055214647aabde8
     with:
       wasm-artifact: wasi-applications
       wasm-path: ${{ matrix.app }}.wasm
       manifest-path: packaging/${{ matrix.app }}.json
       shortcut-path: executables/${{ matrix.app }}/shortcut.json
-      builder-ref: 0ae8fce5f6eaf41555ee99137c7688fd79fbcd7d
+      builder-ref: c63eac6bae20cd94e1f91bcd0055214647aabde8
       artifact-name: package-${{ matrix.app }}
       publish-release: false
+      sign-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
   required:
     if: always()
     needs: [quality, guest, host, abi, localization, package]
