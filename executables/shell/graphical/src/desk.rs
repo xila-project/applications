@@ -320,7 +320,7 @@ impl Desk {
             // Shell presentation is separate from signed package metadata:
             // read bundle-local shortcut.json files without parsing a package manifest.
             // A fresh scan on drawer opening makes new apps visible without reboot.
-            let bundles_path = xila::file_system::Path::from_str("/applications/bundles");
+            let bundles_path = xila::file_system::Path::APPLICATION_BUNDLES;
             if let Ok(bundles) = Directory::open(virtual_file_system, task, bundles_path).await {
                 for bundle in bundles {
                     // Skip ".", "..", and installer staging such as ".incoming-1".

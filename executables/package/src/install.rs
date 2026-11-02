@@ -24,6 +24,7 @@ use xila_package_reader::StreamingVerifier;
 use xila_package_verification::PublicKey;
 
 const BLOCK_BYTES: usize = 512;
+/// Same as `Path::APPLICATION_BUNDLES`; a `&str` because `Path::as_str` is not `const`.
 pub const INSTALLED_ROOT: &str = "/applications/bundles";
 pub const DEFAULT_TRUSTED_KEY: &str = "/configuration/system/packages/trusted.pub";
 static NEXT_STAGING: AtomicUsize = AtomicUsize::new(1);
@@ -530,6 +531,13 @@ pub async fn list(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<Vec<S
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn paths_follow_core_hierarchy() {
+        assert_eq!(INSTALLED_ROOT, Path::APPLICATION_BUNDLES.as_str());
+        let key_directory = DEFAULT_TRUSTED_KEY.rsplit_once('/').unwrap().0;
+        assert_eq!(key_directory, Path::PACKAGE_CONFIGURATION.as_str());
+    }
 
     #[test]
     fn rejects_unsupported_capabilities_and_external_executable() {
