@@ -64,25 +64,21 @@ class ApplicationPolicy(unittest.TestCase):
 
     def test_pr_packaging_never_publishes(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
-        release = (ROOT / '.github/workflows/release.yml').read_text()
+        self.assertFalse((ROOT / '.github/workflows/release.yml').exists())
         self.assertIn('publish-release: false', ci)
         self.assertIn("sign-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}", ci)
         self.assertNotIn('NETBIRD_SETUP_KEY:', ci)
-        self.assertIn('XILA_DEV_SIGNING_SEED_B64:', ci)
         self.assertIn('secrets.XILA_DEV_SIGNING_SEED_B64', ci)
-        self.assertNotIn('contents: write', ci)
-        self.assertIn('publish-release: true', release)
-        self.assertIn('tags: ["v*"]', release)
-        self.assertIn('XILA_RELEASE_TAG', release)
-        self.assertNotIn('pull_request:', release)
         reference = re.search(r'package-wasm.yml@([0-9a-f]{40})', ci)
         self.assertIsNotNone(reference, "packaging workflow must pin an immutable SHA")
         self.assertIn(f"builder-ref: {reference.group(1)}", ci)
-        self.assertIn(f"package-wasm.yml@{reference.group(1)}", release)
-        self.assertIn(f"builder-ref: {reference.group(1)}", release)
-        self.assertEqual(ci.count('id-token: write'), 1)
-        self.assertIn('id-token: write', release)
-        self.assertIn('NETBIRD_SETUP_KEY: ${{ secrets.NETBIRD_SETUP_KEY }}', release)
+        # Only the release jobs write, and only on pushes to main.
+        release = ci.split('\n  release:\n', 1)[1]
+        release_job, release_pr_job = release.split('\n  release-pr:\n', 1)
+        for body in (release_job, release_pr_job):
+            self.assertIn("if: github.event_name == 'push' && github.ref == 'refs/heads/main'", body)
+            self.assertIn('contents: write', body)
+        self.assertEqual(ci.count('contents: write'), 2)
 
     def test_shared_quality_keeps_app_specific_checks(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()

@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""Validate each editable v1 package manifest against its Rust application."""
+"""Validate each editable v1 package manifest against its Rust application.
+
+With --sync, first copy each application's Cargo.toml version into its
+packaging/<app>.json (used on release-plz version pull requests).
+"""
 import json
-import os
 from pathlib import Path
+import sys
 import tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -10,9 +14,17 @@ APPS = ("calculator", "clock", "weather", "pixel_painter", "text_editor", "synth
 SCHEMA = "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
 SHORTCUT_SCHEMA = "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json"
 
+SYNC = sys.argv[1:] == ["--sync"]
+if sys.argv[1:] and not SYNC:
+    raise SystemExit("usage: validate_manifests.py [--sync]")
+
 for app in APPS:
     cargo = tomllib.loads((ROOT / "executables" / app / "Cargo.toml").read_text())
-    metadata = json.loads((ROOT / "packaging" / f"{app}.json").read_text())
+    manifest_file = ROOT / "packaging" / f"{app}.json"
+    metadata = json.loads(manifest_file.read_text())
+    if SYNC and metadata.get("version") != cargo["package"]["version"]:
+        metadata["version"] = cargo["package"]["version"]
+        manifest_file.write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n")
     expected = (f"xila.{app.replace('_', '-')}", cargo["package"]["version"], "wasm32-wasip1", 1)
     actual = tuple(metadata.get(k) for k in ("name", "version", "target", "minimum_xila_abi"))
     if actual != expected:
@@ -59,6 +71,4 @@ for app in APPS:
         raise SystemExit(f"invalid shortcut RGB color for {app}")
     if shortcut_file.stat().st_size > 2048:
         raise SystemExit(f"shortcut exceeds graphical Shell read limit for {app}")
-    if os.environ.get("XILA_RELEASE_TAG") and os.environ["XILA_RELEASE_TAG"] != "v" + metadata["version"]:
-        raise SystemExit(f"release tag does not match {app} version")
 print("All six v1 package manifests and application-owned graphical Shell shortcuts match Cargo identities, versions, ABI and entrypoints.")

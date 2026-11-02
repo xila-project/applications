@@ -168,3 +168,103 @@ jobs:
           LOCALIZATION: ${{ needs.localization.result }}
           PACKAGE: ${{ needs.package.result }}
         run: test "$QUALITY" = success && test "$GUEST" = success && test "$HOST" = success && test "$ABI" = success && test "$LOCALIZATION" = success && test "$PACKAGE" = success
+  release:
+    name: "Release / Signed bundles"
+    needs: required
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    concurrency:
+      group: application-release
+      cancel-in-progress: false
+    steps:
+      - name: "Setup | Checkout sources"
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: "Setup | Rust toolchain"
+        uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
+        with:
+          cache-enabled: "false"
+      # Tags created here with GITHUB_TOKEN start no workflow, so the bundles
+      # built and signed earlier in this run are attached directly.
+      - name: "Publish | Tags and GitHub releases"
+        id: release-plz
+        uses: release-plz/action@v0.5
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Setup | Download signed bundles"
+        if: steps.release-plz.outputs.releases_created == 'true'
+        uses: actions/download-artifact@v7
+        with:
+          pattern: package-*
+          path: ${{ runner.temp }}/bundles
+      - name: "Publish | Attach signed bundles to releases"
+        if: steps.release-plz.outputs.releases_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASES: ${{ steps.release-plz.outputs.releases }}
+          BUNDLES: ${{ runner.temp }}/bundles
+        run: |
+          set -euo pipefail
+          jq -c '.[]' <<< "$RELEASES" | while read -r release; do
+            crate="$(jq -r .package_name <<< "$release")"
+            tag="$(jq -r .tag <<< "$release")"
+            version="$(jq -r .version <<< "$release")"
+            name="${crate#xila-}"
+            archive="$BUNDLES/package-${name//-/_}/xila.$name-$version-wasm32-wasip1.xpk"
+            for file in "$archive" "$archive.sha256" "$archive.pub"; do
+              test -f "$file" || { echo "::error::missing $file for $tag"; exit 1; }
+            done
+            gh release upload "$tag" "$archive" "$archive.sha256" "$archive.pub" --repo "$GITHUB_REPOSITORY"
+          done
+  release-pr:
+    name: "Release / Version pull request"
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: application-release-pr
+      cancel-in-progress: false
+    steps:
+      - name: "Setup | Checkout sources"
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: "Setup | Rust toolchain"
+        uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
+        with:
+          cache-enabled: "false"
+      - name: "Publish | Version pull request"
+        id: release-plz
+        uses: release-plz/action@v0.5
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # release-plz bumps Cargo.toml only; keep packaging/<app>.json in step.
+      - name: "Sync | Package manifest versions"
+        if: steps.release-plz.outputs.pr != '' && steps.release-plz.outputs.pr != '{}'
+        env:
+          PR: ${{ steps.release-plz.outputs.pr }}
+        run: |
+          set -euo pipefail
+          branch="$(jq -r .head_branch <<< "$PR")"
+          git fetch origin "$branch"
+          git switch -C "$branch" "origin/$branch"
+          python3 tools/validate_manifests.py --sync
+          if ! git diff --quiet -- packaging; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore(packaging): sync package manifest versions" -- packaging
+            git push origin "$branch"
+          fi
