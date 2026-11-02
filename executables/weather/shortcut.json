@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json",
+  "name": "Weather",
+  "command": "/applications/executables/wasm",
+  "arguments": [
+    "@bundle/bin/weather.wasm"
+  ],
+  "terminal": false,
+  "icon_string": "We",
+  "icon_color": [
+    56,
+    189,
+    175
+  ]
+}

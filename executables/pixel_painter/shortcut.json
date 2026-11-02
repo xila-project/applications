@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json",
+  "name": "Pixel Painter",
+  "command": "/applications/executables/wasm",
+  "arguments": [
+    "@bundle/bin/pixel_painter.wasm"
+  ],
+  "terminal": false,
+  "icon_string": "Pi",
+  "icon_color": [
+    209,
+    119,
+    230
+  ]
+}

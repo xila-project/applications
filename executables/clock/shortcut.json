@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json",
+  "name": "Clock",
+  "command": "/applications/executables/wasm",
+  "arguments": [
+    "@bundle/bin/clock.wasm"
+  ],
+  "terminal": false,
+  "icon_string": "Cl",
+  "icon_color": [
+    98,
+    160,
+    234
+  ]
+}

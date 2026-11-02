@@ -5,11 +5,11 @@
   "target": "wasm32-wasip1",
   "minimum_xila_abi": 1,
   "capabilities": [],
-  "files": [
-    {
-      "path": "bin/pixel_painter.wasm",
-      "size": 0,
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
-    }
-  ]
+  "application": {
+    "entrypoint": "bin/pixel_painter.wasm",
+    "display_name": "Pixel Painter",
+    "icon": "",
+    "show_in_launcher": true
+  },
+  "$schema": "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
 }

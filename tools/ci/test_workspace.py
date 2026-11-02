@@ -7,7 +7,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 GUESTS = ('calculator', 'clock', 'weather', 'pixel_painter', 'text_editor', 'synth')
 NATIVE = {'activity': 'xila-activity', 'debug': 'xila-debug-application', 'file_manager': 'xila-file-manager',
-          'settings': 'xila-settings', 'terminal': 'xila-terminal', 'shell/command_line': 'xila-command-line-shell',
+          'settings': 'xila-settings', 'terminal': 'xila-terminal', 'package': 'xila-package-application', 'shell/command_line': 'xila-command-line-shell',
           'shell/graphical': 'xila-graphical-shell'}
 
 
@@ -75,12 +75,11 @@ class ApplicationPolicy(unittest.TestCase):
         self.assertIn('tags: ["v*"]', release)
         self.assertIn('XILA_RELEASE_TAG', release)
         self.assertNotIn('pull_request:', release)
-        ci_pin = '411682ba9b4025ed975a18170ba614d3c2ee89b0'
-        release_pin = '1dc97659b37404d8d3e3300c52cbdc9b4cb78247'
-        self.assertIn('@' + ci_pin, ci)
-        self.assertIn('builder-ref: ' + ci_pin, ci)
-        self.assertIn('@' + release_pin, release)
-        self.assertIn('builder-ref: ' + release_pin, release)
+        reference = re.search(r'package-wasm.yml@([0-9a-f]{40})', ci)
+        self.assertIsNotNone(reference, "packaging workflow must pin an immutable SHA")
+        self.assertIn(f"builder-ref: {reference.group(1)}", ci)
+        self.assertIn(f"package-wasm.yml@{reference.group(1)}", release)
+        self.assertIn(f"builder-ref: {reference.group(1)}", release)
         self.assertEqual(ci.count('id-token: write'), 1)
         self.assertIn('id-token: write', release)
         self.assertIn('NETBIRD_SETUP_KEY: ${{ secrets.NETBIRD_SETUP_KEY }}', release)

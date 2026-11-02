@@ -5,11 +5,11 @@
   "target": "wasm32-wasip1",
   "minimum_xila_abi": 1,
   "capabilities": [],
-  "files": [
-    {
-      "path": "bin/calculator.wasm",
-      "size": 0,
-      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
-    }
-  ]
+  "application": {
+    "entrypoint": "bin/calculator.wasm",
+    "display_name": "Calculator",
+    "icon": "",
+    "show_in_launcher": true
+  },
+  "$schema": "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
 }
