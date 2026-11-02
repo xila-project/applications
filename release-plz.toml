@@ -1,0 +1,54 @@
+# Git-only releases: nothing is published to crates.io.
+# Each Wasm application is versioned independently from its Cargo.toml and
+# released as a signed bundle (.xpk) attached to its own GitHub release.
+[workspace]
+git_only = true
+publish = false
+release = false
+git_release_enable = false
+changelog_update = false
+# Release any version on main that has no tag yet (the first run releases 0.1.0).
+release_always = true
+
+[[package]]
+name = "xila-calculator"
+release = true
+git_release_enable = true
+git_tag_name = "xila.calculator-v{{ version }}"
+git_release_name = "xila.calculator v{{ version }}"
+
+[[package]]
+name = "xila-clock"
+release = true
+git_release_enable = true
+git_tag_name = "xila.clock-v{{ version }}"
+git_release_name = "xila.clock v{{ version }}"
+
+[[package]]
+name = "xila-weather"
+release = true
+git_release_enable = true
+git_tag_name = "xila.weather-v{{ version }}"
+git_release_name = "xila.weather v{{ version }}"
+
+[[package]]
+name = "xila-pixel-painter"
+release = true
+git_release_enable = true
+git_tag_name = "xila.pixel-painter-v{{ version }}"
+git_release_name = "xila.pixel-painter v{{ version }}"
+
+[[package]]
+name = "xila-text-editor"
+release = true
+git_release_enable = true
+git_tag_name = "xila.text-editor-v{{ version }}"
+git_release_name = "xila.text-editor v{{ version }}"
+
+[[package]]
+name = "xila-synth"
+release = true
+git_release_enable = true
+git_tag_name = "xila.synth-v{{ version }}"
+git_release_name = "xila.synth v{{ version }}"
+
