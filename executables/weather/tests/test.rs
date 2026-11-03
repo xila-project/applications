@@ -2,12 +2,11 @@
 #[xila::task::test(task_path = xila::task)]
 #[ignore = "This test is meant to be run interactively"]
 async fn main() {
-    drivers_std::memory::instantiate_global_allocator!();
+    testing::instantiate_global_allocator!();
 
     extern crate alloc;
 
     use alloc::vec;
-    use drivers_std::loader::load_to_virtual_file_system;
     use wasm::WasmExecutable;
     use xila::executable;
     use xila::executable::{build_crate, mount_executables};
@@ -20,8 +19,7 @@ async fn main() {
     let task = task_instance.get_current_task_identifier().await;
 
     let binary_path = build_crate(&"weather").unwrap();
-    load_to_virtual_file_system(
-        task_instance,
+    testing::load_file(
         virtual_file_system,
         binary_path,
         "/applications/executables/weather.wasm",

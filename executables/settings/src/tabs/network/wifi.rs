@@ -376,13 +376,13 @@ pub(crate) mod tests {
     ) {
         use alloc::boxed::Box;
         use core::time::Duration;
-        use drivers_native::wifi::*;
+        use testing::wifi::*;
         let task = context.task_manager.get_current_task_identifier().await;
         let manager = Box::leak(Box::new(xila::network::initialize(
             context.task_manager,
             context.virtual_file_system,
             context.time_manager,
-            &drivers_shared::devices::RandomDevice,
+            &testing::RandomDevice,
         )));
         let mut fixture = MockWifiConfiguration::demo();
         fixture.scan_latency = Duration::from_millis(10);

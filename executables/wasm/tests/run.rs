@@ -1,6 +1,6 @@
 #![cfg(feature = "host")]
 extern crate abi_definitions;
-drivers_std::memory::instantiate_global_allocator!();
+testing::instantiate_global_allocator!();
 
 use xila::{
     executable::{self, Standard},

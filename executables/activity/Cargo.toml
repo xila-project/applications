@@ -8,9 +8,9 @@ xila = { workspace = true, features = ["graphics"] }
 embassy-futures = { workspace = true }
 
 [dev-dependencies]
+testing = { workspace = true }
 xila = { workspace = true, features = ["graphics_rendering_xrgb8888"] }
 critical-section = { workspace = true, features = ["std"] }
-drivers_std = { workspace = true }
 
 [lib]
 name = "activity"

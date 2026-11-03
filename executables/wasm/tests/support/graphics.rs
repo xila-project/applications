@@ -57,7 +57,7 @@ impl DirectBaseOperations for HeadlessDevice {
 
 pub async fn manager() -> &'static graphics::Manager {
     let time = Box::leak(Box::new(
-        xila::time::Manager::new(&drivers_std::devices::TimeDevice).unwrap(),
+        xila::time::Manager::new(&testing::TimeDevice).unwrap(),
     ));
     Box::leak(Box::new(
         graphics::initialize(

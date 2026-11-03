@@ -11,7 +11,7 @@ mod model;
 mod workload;
 
 #[cfg(all(test, target_os = "linux"))]
-drivers_std::memory::instantiate_global_allocator!();
+testing::instantiate_global_allocator!();
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::{num::NonZeroUsize, time::Duration};

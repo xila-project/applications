@@ -32,7 +32,7 @@ pub async fn resolve(
 mod tests {
     use super::resolve;
     use crate::Error;
-    drivers_std::memory::instantiate_global_allocator!();
+    testing::instantiate_global_allocator!();
 
     use xila::{
         file_system::{AccessFlags, CreateFlags, Flags, Path},

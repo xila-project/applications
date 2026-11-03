@@ -327,13 +327,13 @@ mod tests {
 
     #[xila::task::test(task_path = xila::task)]
     async fn fd_control_forwards_opaque_command_and_payloads() {
-        drivers_std::memory::instantiate_global_allocator!();
+        testing::instantiate_global_allocator!();
 
-        xila::log::initialize(&drivers_std::log::Logger).unwrap();
+        xila::log::initialize(&testing::Logger).unwrap();
         let task_manager = xila::task::test_manager();
         let users_manager = Box::leak(Box::new(xila::users::Manager::new()));
         let time_manager = Box::leak(Box::new(
-            xila::time::Manager::new(&drivers_std::devices::TimeDevice).unwrap(),
+            xila::time::Manager::new(&testing::TimeDevice).unwrap(),
         ));
         let memory_device = xila::file_system::MemoryDevice::<512>::new_static(1024 * 512);
         let filesystem = xila::little_fs::FileSystem::new_format(memory_device, 256).unwrap();
