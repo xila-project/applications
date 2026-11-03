@@ -1,6 +1,6 @@
 #![cfg(all(feature = "host", feature = "graphics"))]
 extern crate abi_definitions;
-drivers_std::memory::instantiate_global_allocator!();
+testing::instantiate_global_allocator!();
 #[path = "support/graphics.rs"]
 mod support;
 
@@ -78,7 +78,7 @@ async fn deleted_maps_are_reclaimed_without_reusing_handles() {
                 Function::ButtonmatrixSetMap,
                 &[matrix, 400],
             );
-            let with_map = __DRIVERS_STD_MEMORY_ALLOCATOR.get_used();
+            let with_map = __XILA_TESTING_MEMORY_MANAGER.get_used();
             if mode == "external" {
                 let _lock = manager.synchronous_lock();
                 unsafe { lvgl::lv_obj_delete(lvgl::lv_obj_get_child(root_pointer, 0)) };
@@ -92,7 +92,7 @@ async fn deleted_maps_are_reclaimed_without_reusing_handles() {
             }
             // Next dispatch reaps external deletions before allocating again.
             call(&mut state, &mut memory, Function::Percentage, &[100]);
-            let reclaimed = with_map.saturating_sub(__DRIVERS_STD_MEMORY_ALLOCATOR.get_used());
+            let reclaimed = with_map.saturating_sub(__XILA_TESTING_MEMORY_MANAGER.get_used());
             // Measure deletion against the same registry capacity: handles are
             // never reused, so tombstones can legitimately outgrow one map.
             // Eight 1000-byte strings, their NULs, and the empty sentinel must

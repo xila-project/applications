@@ -7,7 +7,7 @@
 #[path = "support/applications.rs"]
 mod applications;
 extern crate abi_definitions;
-drivers_std::memory::instantiate_global_allocator!();
+testing::instantiate_global_allocator!();
 #[path = "support/localization.rs"]
 mod localization;
 #[path = "support/graphics.rs"]
@@ -77,14 +77,9 @@ async fn real_painter_guest_draws_saves_opens_and_preserves_work_on_errors() {
     .await
     .unwrap();
     let binary = applications::build("xila-pixel-painter").unwrap();
-    drivers_std::loader::load_to_virtual_file_system(
-        context.task_manager,
-        vfs,
-        binary,
-        "/applications/executables/pixel_painter",
-    )
-    .await
-    .unwrap();
+    testing::load_file(vfs, binary, "/applications/executables/pixel_painter")
+        .await
+        .unwrap();
     xila::executable::mount_executables!(
         context,
         vfs,

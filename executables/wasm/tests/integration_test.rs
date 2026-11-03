@@ -3,13 +3,12 @@
 #[xila::task::test(task_path = xila::task)]
 #[ignore = "The guest's stdin test requires interactive input"]
 async fn main() {
-    drivers_std::memory::instantiate_global_allocator!();
+    testing::instantiate_global_allocator!();
 
     extern crate alloc;
     extern crate abi_definitions;
 
     use command_line_shell::ShellExecutable;
-    use drivers_std::loader::load_to_virtual_file_system;
     use wasm::WasmExecutable;
     use xila::executable::{build_crate, mount_executables};
     use xila::file_system::Path;
@@ -22,14 +21,9 @@ async fn main() {
     let task = context.task_manager.get_current_task_identifier().await;
 
     let binary_path = build_crate("xila-wasm-wasm-test").unwrap();
-    load_to_virtual_file_system(
-        context.task_manager,
-        virtual_file_system,
-        binary_path,
-        "/test_wasm.wasm",
-    )
-    .await
-    .unwrap();
+    testing::load_file(virtual_file_system, binary_path, "/test_wasm.wasm")
+        .await
+        .unwrap();
 
     mount_executables!(
         context,

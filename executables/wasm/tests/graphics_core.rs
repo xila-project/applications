@@ -1,6 +1,6 @@
 #![cfg(all(feature = "host", feature = "graphics"))]
 extern crate abi_definitions;
-drivers_std::memory::instantiate_global_allocator!();
+testing::instantiate_global_allocator!();
 #[path = "support/graphics.rs"]
 mod support;
 

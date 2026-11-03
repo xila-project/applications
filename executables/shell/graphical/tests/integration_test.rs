@@ -4,7 +4,7 @@ extern crate alloc;
 #[ignore]
 #[xila::task::test(task_path = xila::task)]
 async fn main() {
-    drivers_std::memory::instantiate_global_allocator!();
+    testing::instantiate_global_allocator!();
 
     extern crate abi_definitions;
 

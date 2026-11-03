@@ -7,7 +7,7 @@
 #[path = "support/applications.rs"]
 mod applications;
 extern crate abi_definitions;
-drivers_std::memory::instantiate_global_allocator!();
+testing::instantiate_global_allocator!();
 #[path = "support/graphics.rs"]
 mod support;
 
@@ -70,8 +70,7 @@ async fn real_synth_guest_recovers_from_silent_mode_plays_releases_and_closes() 
     standard.context = context;
     let task = context.task_manager.get_current_task_identifier().await;
     let binary = applications::build("xila-synth").unwrap();
-    drivers_std::loader::load_to_virtual_file_system(
-        context.task_manager,
+    testing::load_file(
         context.virtual_file_system,
         binary,
         "/applications/executables/synth",
