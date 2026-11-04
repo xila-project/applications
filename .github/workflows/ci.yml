@@ -17,7 +17,9 @@ env:
 jobs:
   quality:
     name: "Quality / Rust"
-    uses: xila-project/workspace/.github/workflows/quality.yml@e152177f341e45ceb6025848378f558d3aa090be
+    uses: xila-project/workspace/.github/workflows/quality.yml@0adf14f42ce3bb004b2fe6e7e66be813abda9666
+    with:
+      extra-task: ci:quality-extra
   guest:
     name: "Build / WASI guests"
     runs-on: ubuntu-latest
