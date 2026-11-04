@@ -10,9 +10,10 @@ xila = { workspace = true }
 abi_declarations = { workspace = true }
 getargs = { version = "0.5", default-features = false }
 getargs-derive = { workspace = true }
-xila-package-reader = { git = "https://github.com/xila-project/package_manager", rev = "277d017c2da182b7d72081e4ca1dd555425c35bf" }
-xila-package-manifest = { git = "https://github.com/xila-project/package_manager", rev = "277d017c2da182b7d72081e4ca1dd555425c35bf" }
-xila-package-verification = { git = "https://github.com/xila-project/package_manager", rev = "277d017c2da182b7d72081e4ca1dd555425c35bf", default-features = false, features = [
+xila-package-reader = { git = "https://github.com/xila-project/package_manager", rev = "6776ca069300fbf0b4f0090ced78a3071d2da066" }
+xila-package-manifest = { git = "https://github.com/xila-project/package_manager", rev = "6776ca069300fbf0b4f0090ced78a3071d2da066" }
+xila-package-manager = { git = "https://github.com/xila-project/package_manager", rev = "6776ca069300fbf0b4f0090ced78a3071d2da066" }
+xila-package-verification = { git = "https://github.com/xila-project/package_manager", rev = "6776ca069300fbf0b4f0090ced78a3071d2da066", default-features = false, features = [
   "sha256",
   "ed25519",
 ] }

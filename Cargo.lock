@@ -2425,6 +2425,7 @@ dependencies = [
  "tar-no-std",
  "xila",
  "xila-abi-declarations",
+ "xila-package-manager",
  "xila-package-manifest",
  "xila-package-reader",
  "xila-package-verification",
@@ -2432,8 +2433,17 @@ dependencies = [
 
 [[package]]
 name = "xila-package-bundle"
-version = "0.2.0"
-source = "git+https://github.com/xila-project/package_manager?rev=277d017c2da182b7d72081e4ca1dd555425c35bf#277d017c2da182b7d72081e4ca1dd555425c35bf"
+version = "0.3.0"
+source = "git+https://github.com/xila-project/package_manager?rev=6776ca069300fbf0b4f0090ced78a3071d2da066#6776ca069300fbf0b4f0090ced78a3071d2da066"
+dependencies = [
+ "xila-package-manifest",
+ "xila-package-verification",
+]
+
+[[package]]
+name = "xila-package-manager"
+version = "0.3.0"
+source = "git+https://github.com/xila-project/package_manager?rev=6776ca069300fbf0b4f0090ced78a3071d2da066#6776ca069300fbf0b4f0090ced78a3071d2da066"
 dependencies = [
  "xila-package-manifest",
  "xila-package-verification",
@@ -2441,16 +2451,16 @@ dependencies = [
 
 [[package]]
 name = "xila-package-manifest"
-version = "0.2.0"
-source = "git+https://github.com/xila-project/package_manager?rev=277d017c2da182b7d72081e4ca1dd555425c35bf#277d017c2da182b7d72081e4ca1dd555425c35bf"
+version = "0.3.0"
+source = "git+https://github.com/xila-project/package_manager?rev=6776ca069300fbf0b4f0090ced78a3071d2da066#6776ca069300fbf0b4f0090ced78a3071d2da066"
 dependencies = [
  "miniserde",
 ]
 
 [[package]]
 name = "xila-package-reader"
-version = "0.2.0"
-source = "git+https://github.com/xila-project/package_manager?rev=277d017c2da182b7d72081e4ca1dd555425c35bf#277d017c2da182b7d72081e4ca1dd555425c35bf"
+version = "0.3.0"
+source = "git+https://github.com/xila-project/package_manager?rev=6776ca069300fbf0b4f0090ced78a3071d2da066#6776ca069300fbf0b4f0090ced78a3071d2da066"
 dependencies = [
  "tar-no-std",
  "xila-package-bundle",
@@ -2461,7 +2471,7 @@ dependencies = [
 [[package]]
 name = "xila-package-verification"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/package_manager?rev=277d017c2da182b7d72081e4ca1dd555425c35bf#277d017c2da182b7d72081e4ca1dd555425c35bf"
+source = "git+https://github.com/xila-project/package_manager?rev=6776ca069300fbf0b4f0090ced78a3071d2da066#6776ca069300fbf0b4f0090ced78a3071d2da066"
 dependencies = [
  "ed25519-dalek",
  "sha2",
