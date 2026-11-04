@@ -19,9 +19,11 @@ use xila::{
     task::TaskIdentifier,
     virtual_file_system::{Directory, File, VirtualFileSystem},
 };
-use xila_package_manifest::{MANIFEST_PATH, Manifest, SIGNATURE_PATH, validate_path};
+use xila_package_manifest::{
+    MANIFEST_PATH, Manifest, RegistryEntry, SIGNATURE_PATH, validate_path,
+};
 use xila_package_reader::StreamingVerifier;
-use xila_package_verification::PublicKey;
+use xila_package_verification::{PublicKey, Sha256Verifier};
 
 const BLOCK_BYTES: usize = 512;
 /// Same as `Path::APPLICATION_BUNDLES`; a `&str` because `Path::as_str` is not `const`.
@@ -431,22 +433,13 @@ async fn new_staging(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<St
     Err("could not allocate a staging directory".into())
 }
 
-/// Install once, never overwrite an existing installation. Reject unknown
-/// publishers by default. --allow-untrusted bypasses ONLY publisher identity.
-pub async fn install(
+/// Only a privileged task may create or publish system-wide packages.
+/// The built-in "administrator" user (UID 1000) is NOT automatically root.
+/// Do not give it writable /applications permissions or escalate it here.
+pub async fn ensure_root(
     vfs: &'static VirtualFileSystem,
     task: TaskIdentifier,
-    archive: &str,
-    key_path: Option<&str>,
-    allow_untrusted: bool,
-) -> Result<String, String> {
-    if allow_untrusted && key_path.is_some() {
-        return Err("cannot combine --public-key with --allow-untrusted".into());
-    }
-    // A successful install establishes publisher-derived executable trust.
-    // Only a privileged task may create or publish system-wide packages.
-    // The built-in "administrator" user (UID 1000) is NOT automatically root.
-    // Do not give it writable /applications permissions or escalate it here.
+) -> Result<(), String> {
     let user = vfs
         .task_manager()
         .get_user(task)
@@ -455,16 +448,74 @@ pub async fn install(
     if user != xila::users::UserIdentifier::ROOT {
         return Err("package install requires a privileged root task".into());
     }
-    ensure_directory(vfs, task, INSTALLED_ROOT).await?;
-    let key = if allow_untrusted {
-        None
-    } else {
-        Some(read_public_key(vfs, task, key_path.unwrap_or(DEFAULT_TRUSTED_KEY)).await?)
-    };
+    ensure_directory(vfs, task, INSTALLED_ROOT).await
+}
 
+/// A fresh path for a downloaded archive, hidden from `list` like staging.
+pub fn new_download_path() -> String {
+    let id = NEXT_STAGING.fetch_add(1, Ordering::Relaxed);
+    format!("{INSTALLED_ROOT}/.download-{id:x}.xpk")
+}
+
+/// Lowercase hexadecimal SHA-256 of a file.
+pub async fn archive_sha256(
+    vfs: &'static VirtualFileSystem,
+    task: TaskIdentifier,
+    archive: &str,
+) -> Result<String, String> {
+    let mut file = File::open(vfs, task, Path::from_str(archive), AccessFlags::Read.into())
+        .await
+        .map_err(|e| error("cannot open package archive", e))?;
+    let operation = async {
+        let mut hasher = Sha256Verifier::new();
+        let mut buffer = [0u8; BLOCK_BYTES];
+        loop {
+            let count = file
+                .read(&mut buffer)
+                .await
+                .map_err(|e| error("package read failed", e))?;
+            if count == 0 {
+                break;
+            }
+            hasher
+                .update(&buffer[..count])
+                .map_err(|_| "archive too large".to_string())?;
+        }
+        let digest = hasher
+            .finalize()
+            .map_err(|_| "hashing failed".to_string())?;
+        Ok::<_, String>(digest.iter().map(|b| format!("{b:02x}")).collect())
+    }
+    .await;
+    let close = file
+        .close(vfs)
+        .await
+        .map_err(|e| error("archive close failed", e));
+    match (operation, close) {
+        (Err(e), _) => Err(e),
+        (Ok(_), Err(e)) => Err(e),
+        (Ok(digest), Ok(())) => Ok(digest),
+    }
+}
+
+/// Install a verified archive once; never overwrite an existing installation.
+/// With `expected`, every field the registry entry copied from the signed
+/// manifest must match before anything is published.
+pub async fn install_verified(
+    vfs: &'static VirtualFileSystem,
+    task: TaskIdentifier,
+    archive: &str,
+    key: Option<&PublicKey>,
+    expected: Option<&RegistryEntry>,
+) -> Result<(String, String), String> {
     let staging = new_staging(vfs, task).await?;
     let operation = async {
-        let manifest = extract(vfs, task, archive, &staging, key.as_ref()).await?;
+        let manifest = extract(vfs, task, archive, &staging, key).await?;
+        if let Some(entry) = expected {
+            entry
+                .check_manifest(&manifest)
+                .map_err(|_| "package differs from its registry entry".to_string())?;
+        }
         let dest = format!("{INSTALLED_ROOT}/{}", manifest.name);
         // Never silently replace already-installed code. Root-authorized
         // concurrent installs require a higher-level exclusive transaction.
@@ -482,7 +533,7 @@ pub async fn install(
         vfs.rename(task, &Path::from_str(&staging), &Path::from_str(&dest))
             .await
             .map_err(|e| error("cannot publish verified package", e))?;
-        Ok(manifest.name)
+        Ok((manifest.name, manifest.version))
     }
     .await;
 
@@ -496,6 +547,27 @@ pub async fn install(
             }
         }
     }
+}
+
+/// Install a local archive. Reject unknown publishers by default.
+/// --allow-untrusted bypasses ONLY publisher identity.
+pub async fn install(
+    vfs: &'static VirtualFileSystem,
+    task: TaskIdentifier,
+    archive: &str,
+    key_path: Option<&str>,
+    allow_untrusted: bool,
+) -> Result<(String, String), String> {
+    if allow_untrusted && key_path.is_some() {
+        return Err("cannot combine --public-key with --allow-untrusted".into());
+    }
+    ensure_root(vfs, task).await?;
+    let key = if allow_untrusted {
+        None
+    } else {
+        Some(read_public_key(vfs, task, key_path.unwrap_or(DEFAULT_TRUSTED_KEY)).await?)
+    };
+    install_verified(vfs, task, archive, key.as_ref(), None).await
 }
 
 pub async fn list(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<Vec<String>, String> {
@@ -561,6 +633,7 @@ mod tests {
                 icon: String::new(),
                 show_in_launcher: true,
             }),
+            metadata: None,
         };
         assert!(check_compatibility(&manifest).is_ok());
         manifest.capabilities.push("network".into());
