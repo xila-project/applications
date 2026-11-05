@@ -19,8 +19,9 @@ use xila::{
 
 const HTTPS_CLIENT: &str = "/devices/network/https_client";
 const MAX_REDIRECTS: usize = 5;
-/// The device publishes the response head in one buffer of this size.
-const HEAD_BUFFER: usize = 2048;
+/// Largest response head the device publishes (Platforms `RESPONSE_BUFFER_SIZE`);
+/// GitHub release redirects need about 5.5 KB.
+const HEAD_BUFFER: usize = 8192;
 const CHUNK: usize = 2048;
 
 /// Receives the response body in chunks.
