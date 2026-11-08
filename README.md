@@ -1,4 +1,13 @@
-# Xila Applications
+<h1>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset=".github/brand/header-dark.svg">
+  <img src=".github/brand/header-light.svg" alt="Xila Applications — Native applications and WebAssembly guests." width="1280">
+</picture>
+</h1>
+
+[Documentation](https://www.xila.dev/docs/) ·
+[Try Xila](https://platforms.xila.dev/) ·
+[Community](https://matrix.to/#/#xila:anneraud.fr)
 
 Official Xila applications live in this workspace. The guest binaries are calculator, clock, pixel painter, text editor, synth and weather; the other crates are native applications linked into a platform runtime. `xila-wasm` provides the host runtime and guest API in this workspace; Platforms selects its host feature when assembling runtimes. Core and the Platforms test harness are pinned to Git revisions in `Cargo.toml`.
 
@@ -53,3 +62,13 @@ by graphical Shell tests. No signature is checked again at launch.
 ## Native package manager
 
 The `executables/package` crate implements the **native Xila CLI-only** command `package install` / `package list` (registered in the native Platforms example), with bounded-memory TAR + SHA-256 verification at **installation**, not at launch. It trusts `/configuration/system/packages/trusted.pub` by default, accepts an explicitly supplied `--public-key`, and has an explicit `--allow-untrusted` override for unknown/unsigned publishers. Even with that override, invalid TARs or SHA-256 mismatches always fail. See [package CLI documentation](executables/package/README.md). CLI installation does not yet create launcher shortcuts, manage updates or download packages.
+
+<!-- xila:footer:start -->
+
+---
+
+Part of **[Xila](https://www.xila.dev/)** ·
+[Repositories](https://github.com/xila-project) ·
+[Community](https://matrix.to/#/#xila:anneraud.fr)
+
+<!-- xila:footer:end -->
