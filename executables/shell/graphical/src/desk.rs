@@ -2,7 +2,7 @@ use core::{ffi::c_void, mem::forget};
 
 use crate::{
     error::{Error, Result},
-    icon::create_icon,
+    icon::{create_icon, create_show_applications_button},
     shortcut::{SHORTCUT_PATH, Shortcut},
 };
 use alloc::{
@@ -12,7 +12,7 @@ use alloc::{
     vec,
     vec::Vec,
 };
-use xila::graphics::{self, Color, EventKind, Logo, OwnedWindow, Point, lvgl};
+use xila::graphics::{self, Color, EventKind, Logo, LogoStyle, OwnedWindow, Point, lvgl};
 use xila::log::{self, error, warning};
 use xila::virtual_file_system::Directory;
 use xila::{executable, graphics::theme};
@@ -67,6 +67,7 @@ unsafe extern "C" fn event_handler(event: *mut lvgl::lv_event_t) {
 impl Desk {
     const DOCK_ICON_SIZE: Point = Point::new(40, 40);
     const DRAWER_ICON_SIZE: Point = Point::new(48, 48);
+    const MAIN_BUTTON_SIZE: Point = Point::new(32, 32);
 
     pub const HOME_EVENT: EventKind = EventKind::Custom1;
 
@@ -104,8 +105,11 @@ impl Desk {
 
             // - Create the logo
             unsafe {
-                // Create the logo in the background of the window
-                let logo = Logo::new(window.as_mut(), 4, Color::BLACK)?;
+                // Outline the logo in the background of the window, in the
+                // palette's input color like the outline controls.
+                let logo =
+                    Logo::new_with_style(window.as_mut(), 4, Color::BLACK, LogoStyle::Outline)?;
+                logo.follow_palette_color(theme::PaletteColor::Input);
                 let logo_inner_object = logo.get_inner_object();
                 forget(logo); // Prevent the logo from being dropped
 
@@ -114,24 +118,6 @@ impl Desk {
                     logo_inner_object,
                     lvgl::lv_obj_flag_t_LV_OBJ_FLAG_OVERFLOW_VISIBLE,
                 );
-
-                for i in 0..4 {
-                    let part = lvgl::lv_obj_get_child(logo_inner_object, i);
-
-                    lvgl::lv_obj_set_style_bg_opa(part, lvgl::LV_OPA_0, lvgl::LV_STATE_DEFAULT);
-
-                    // The logo has borderless local styles; let the shared outline
-                    // variant draw this desktop-specific outline instead.
-                    lvgl::lv_obj_remove_local_style_prop(
-                        part,
-                        lvgl::_lv_style_id_t_LV_STYLE_BORDER_WIDTH as lvgl::lv_style_prop_t,
-                        lvgl::LV_STATE_DEFAULT,
-                    );
-                    lvgl::lv_theme_shadcn_set_variant(
-                        part,
-                        lvgl::lv_theme_shadcn_variant_t_LV_THEME_SHADCN_VARIANT_OUTLINE,
-                    );
-                }
             }
 
             // - Create a tile view
@@ -203,12 +189,8 @@ impl Desk {
             };
 
             // - Create the main button
-            let main_button = unsafe {
-                let logo = Logo::new(dock, 1, Color::WHITE)?;
-                let inner_object = logo.get_inner_object();
-                forget(logo); // Prevent the logo from being dropped
-                inner_object
-            };
+            let main_button =
+                unsafe { create_show_applications_button(dock, Self::MAIN_BUTTON_SIZE)? };
 
             let shortcuts = BTreeMap::new();
 
@@ -493,12 +475,6 @@ impl Desk {
             const STATE: lvgl::lv_state_t = lvgl::LV_STATE_PRESSED;
 
             lvgl::lv_obj_remove_state(self.main_button, STATE);
-
-            for i in 0..4 {
-                let part = lvgl::lv_obj_get_child(self.main_button, i);
-
-                lvgl::lv_obj_remove_state(part, STATE);
-            }
         }
     }
 
@@ -744,11 +720,6 @@ impl Desk {
                     || unsafe { lvgl::lv_obj_get_parent(event.target) == self.main_button }) =>
             unsafe {
                 lvgl::lv_obj_add_state(self.main_button, lvgl::LV_STATE_PRESSED);
-                for i in 0..4 {
-                    let part = lvgl::lv_obj_get_child(self.main_button, i);
-
-                    lvgl::lv_obj_add_state(part, lvgl::LV_STATE_PRESSED);
-                }
             },
             EventKind::Released
                 if (event.target == self.main_button
