@@ -16,44 +16,44 @@ rust-version = "1.90.0"
 repository = "https://github.com/xila-project/core"
 
 [workspace.dependencies]
-xila = { git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-xila_http = { git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673", default-features = false }
+xila = { git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+xila_http = { git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c", default-features = false }
 verification = { git = "https://github.com/xila-project/package_manager", rev = "f5e3f0b323a79a80d106ce2b88b77bfa8667d71b", default-features = false }
-audio = { package = "xila-audio", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
+audio = { package = "xila-audio", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
 nanoaudio = { git = "https://github.com/AlixANNERAUD/nanoaudio.git", rev = "596076c64827fd8bf9e8319addc2f215e0cde8be", default-features = false }
 nanoaudio-cpal = { git = "https://github.com/AlixANNERAUD/nanoaudio.git", rev = "596076c64827fd8bf9e8319addc2f215e0cde8be", default-features = false }
 nanoaudio-web = { git = "https://github.com/AlixANNERAUD/nanoaudio.git", rev = "596076c64827fd8bf9e8319addc2f215e0cde8be", default-features = false }
 nanoaudio-synth = { git = "https://github.com/AlixANNERAUD/nanoaudio.git", rev = "596076c64827fd8bf9e8319addc2f215e0cde8be", default-features = false }
-abi_declarations = { package = "xila-abi-declarations", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-abi_definitions = { package = "xila-abi-definitions", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-little_fs = { package = "xila-little-fs", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-virtual_file_system = { package = "xila-virtual-file-system", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-graphics = { package = "xila-graphics", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-time = { package = "xila-time", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-task = { package = "xila-task", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-users = { package = "xila-users", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-memory = { package = "xila-memory", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-executable = { package = "xila-executable", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-file_system = { package = "xila-file-system", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-authentication = { package = "xila-authentication", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-log = { package = "xila-log", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-shared = { package = "xila-shared", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-synchronization = { package = "xila-synchronization", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-network = { package = "xila-network", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-debug_protocol = { package = "xila-debug-protocol", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-peripherals = { package = "xila-peripherals", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
-bootsplash = { package = "xila-bootsplash", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
+abi_declarations = { package = "xila-abi-declarations", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+abi_definitions = { package = "xila-abi-definitions", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+little_fs = { package = "xila-little-fs", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+virtual_file_system = { package = "xila-virtual-file-system", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+graphics = { package = "xila-graphics", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+time = { package = "xila-time", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+task = { package = "xila-task", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+users = { package = "xila-users", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+memory = { package = "xila-memory", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+executable = { package = "xila-executable", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+file_system = { package = "xila-file-system", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+authentication = { package = "xila-authentication", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+log = { package = "xila-log", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+shared = { package = "xila-shared", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+synchronization = { package = "xila-synchronization", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+network = { package = "xila-network", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+debug_protocol = { package = "xila-debug-protocol", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+peripherals = { package = "xila-peripherals", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
+bootsplash = { package = "xila-bootsplash", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
 embedded-i18n = { version = "=0.2.0", default-features = false, features = [
   "backend-json",
 ] }
-testing = { package = "xila-testing", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673", features = [
+testing = { package = "xila-testing", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c", features = [
   "environment",
   "graphics",
 ] }
-device = { package = "xila-device", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
+device = { package = "xila-device", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
 
 # - Drivers
-drivers_core = { package = "xila-drivers-core", git = "https://github.com/xila-project/core", rev = "da1e76f8432fd94c02a4937a83058bf97f122673" }
+drivers_core = { package = "xila-drivers-core", git = "https://github.com/xila-project/core", rev = "e2f221a8a489b6b989a3926c6bbbd20bc152e06c" }
 
 # - Executables
 file_manager = { package = "xila-file-manager", path = "executables/file_manager" }

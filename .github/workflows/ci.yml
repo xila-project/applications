@@ -102,7 +102,7 @@ jobs:
         if: matrix.locale == 'ja'
         with:
           repository: xila-project/core
-          ref: da1e76f8432fd94c02a4937a83058bf97f122673
+          ref: e2f221a8a489b6b989a3926c6bbbd20bc152e06c
           path: .ci-core-fonts
           persist-credentials: false
       - name: "Setup | Rust toolchain and build cache"
