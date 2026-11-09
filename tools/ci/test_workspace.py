@@ -92,19 +92,24 @@ class ApplicationPolicy(unittest.TestCase):
             self.assertNotRegex(line, r'^      - (uses|run|env):')
         self.assertIn('name: "Gate | Verify mandatory checks"', ci)
 
-    def test_japanese_checkout_validation_uses_wasi_and_bypasses_mbx(self):
+    def test_japanese_uses_the_same_pinned_core_and_wasi_task_as_other_locales(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
-        step = ci.split('name: "Test | Japanese with companion Core"', 1)[1].split('  package:', 1)[0]
-        self.assertIn('XILA_MBX: "0"', step)
-        self.assertIn('CARGO_TARGET_DIR: ${{ runner.temp }}/xila-ja-target', step)
-        self.assertIn('cp -a .ci-core-ja "$RUNNER_TEMP/xila-core-ja"', step)
-        self.assertIn('cp -a .ci-platforms-ja "$RUNNER_TEMP/xila-platforms-ja"', step)
-        self.assertIn('mise run ci:localization-japanese', step)
-        task = manifest('mise.ci.toml')['tasks']['ci:localization-japanese']
-        self.assertEqual(task['extends'], 'ci:rust-wasi')
-        self.assertIn('--target wasm32-wasip1', task['run'])
-        self.assertNotIn('xila-application-shortcuts', task['run'])
-        self.assertIn('--core "$RUNNER_TEMP/xila-core-ja"', task['run'])
+        localization = ci.split('  localization:', 1)[1].split('  package:', 1)[0]
+        self.assertIn('zh-CN, ja]', localization)
+        self.assertIn('run: mise run ci:localization', localization)
+        self.assertNotIn('.ci-core-ja', localization)
+        self.assertNotIn('.ci-platforms-ja', localization)
+        self.assertNotIn('ci:localization-japanese', localization)
+        test_step = localization.split('name: "Test | Localization"', 1)[1]
+        self.assertNotIn('if: matrix.locale', test_step)
+        self.assertNotIn('local_overrides.py', localization)
+        core_revision = manifest('Cargo.toml')['workspace']['dependencies']['xila']['rev']
+        self.assertIn('ref: ' + core_revision, localization)
+        self.assertIn('XILA_JAPANESE_FONT_PATH:', test_step)
+        self.assertIn('run: mise run ci:font-japanese', localization)
+        task = manifest('mise.ci.toml')['tasks']['ci:localization']
+        self.assertIn('--locked --target wasm32-wasip1', task['run'])
+        self.assertNotIn('--config', task['run'])
 
     def test_ci_caches_are_separate_and_use_one_wrapper(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
