@@ -57,6 +57,10 @@ set -eu
 cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth
 """
 
+[tasks."ci:core-revision"]
+description = "Write the Core commit locked in Cargo.lock to the step output"
+run = 'python3 tools/ci/locked_revision.py core >> "$GITHUB_OUTPUT"'
+
 [tasks."ci:font-japanese"]
 description = "Install the verified Japanese font from the matching Core checkout"
 run = "bash .ci-core-fonts/tools/localization/fetch-japanese-font.sh"

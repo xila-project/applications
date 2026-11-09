@@ -97,19 +97,23 @@ jobs:
     steps:
       - name: "Setup | Checkout sources"
         uses: actions/checkout@v7
-      - name: "Setup | Checkout matching Core font tooling"
-        uses: actions/checkout@v7
-        if: matrix.locale == 'ja'
-        with:
-          repository: xila-project/core
-          ref: e2f221a8a489b6b989a3926c6bbbd20bc152e06c
-          path: .ci-core-fonts
-          persist-credentials: false
       - name: "Setup | Rust toolchain and build cache"
         uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
         with:
           cache-mode: objects
           cache-generation: v1-apps-localization
+      - name: "Setup | Resolve locked Core revision"
+        id: core
+        if: matrix.locale == 'ja'
+        run: mise run ci:core-revision
+      - name: "Setup | Checkout matching Core font tooling"
+        uses: actions/checkout@v7
+        if: matrix.locale == 'ja'
+        with:
+          repository: xila-project/core
+          ref: ${{ steps.core.outputs.revision }}
+          path: .ci-core-fonts
+          persist-credentials: false
       - name: "Setup | Clang and linker dependencies"
         run: mise run ci:packages-linker
       - name: "Setup | Japanese font"

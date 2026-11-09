@@ -4,6 +4,8 @@ import re
 import tomllib
 import unittest
 
+from locked_revision import locked_revision
+
 ROOT = Path(__file__).resolve().parents[2]
 GUESTS = ('calculator', 'clock', 'weather', 'pixel_painter', 'text_editor', 'synth')
 NATIVE = {'activity': 'xila-activity', 'debug': 'xila-debug-application', 'file_manager': 'xila-file-manager',
@@ -21,7 +23,8 @@ class ApplicationPolicy(unittest.TestCase):
         self.assertNotIn('LITTLEFS_CONFIG', (ROOT / '.cargo/config.toml').read_text())
         binding = manifest('Cargo.toml')['patch']['crates-io']['littlefs2-sys']
         self.assertEqual(binding['git'], 'https://github.com/xila-project/core')
-        self.assertRegex(binding['rev'], r'^[0-9a-f]{40}$')
+        self.assertEqual(binding.get('branch'), 'main')
+        self.assertNotIn('rev', binding)
 
     def test_wasm_executor_and_guest_api_belong_to_applications(self):
         workspace = manifest('Cargo.toml')['workspace']
@@ -49,11 +52,19 @@ class ApplicationPolicy(unittest.TestCase):
             self.assertTrue({'guest', 'graphics', 'memory_32'} <= set(wasm['features']))
             self.assertNotIn('host', wasm['features'])
 
-    def test_xila_git_sources_are_immutable_and_platforms_are_dev_only(self):
+    def test_xila_git_sources_track_main_and_platforms_are_dev_only(self):
+        # Cargo.lock holds the exact commit; every Xila repository must use the same
+        # `branch = "main"` reference so Cargo unifies them in downstream graphs.
         workspace = manifest('Cargo.toml')['workspace']['dependencies']
-        for key, item in workspace.items():
-            if isinstance(item, dict) and item.get('git', '').startswith('https://github.com/xila-project/'):
-                self.assertRegex(item['rev'], r'^[0-9a-f]{40}$', key)
+        manifests = [workspace] + [tomllib.loads(path.read_text()).get('dependencies', {})
+                                   for path in (ROOT / 'executables').rglob('Cargo.toml')]
+        for dependencies in manifests:
+            for key, item in dependencies.items():
+                if isinstance(item, dict) and item.get('git', '').startswith('https://github.com/xila-project/'):
+                    self.assertEqual(item.get('branch'), 'main', key)
+                    self.assertFalse({'rev', 'tag'} & item.keys(), key)
+        for repository in ('core', 'package_manager'):
+            self.assertRegex(locked_revision(repository), r'^[0-9a-f]{40}$')
         for cargo_path in (ROOT / 'executables').rglob('Cargo.toml'):
             cargo = tomllib.loads(cargo_path.read_text())
             production = [cargo.get('dependencies', {})]
@@ -103,8 +114,10 @@ class ApplicationPolicy(unittest.TestCase):
         test_step = localization.split('name: "Test | Localization"', 1)[1]
         self.assertNotIn('if: matrix.locale', test_step)
         self.assertNotIn('local_overrides.py', localization)
-        core_revision = manifest('Cargo.toml')['workspace']['dependencies']['xila']['rev']
-        self.assertIn('ref: ' + core_revision, localization)
+        self.assertIn('run: mise run ci:core-revision', localization)
+        self.assertIn('ref: ${{ steps.core.outputs.revision }}', localization)
+        self.assertLess(localization.index('name: "Setup | Resolve locked Core revision"'),
+                        localization.index('name: "Setup | Checkout matching Core font tooling"'))
         self.assertIn('XILA_JAPANESE_FONT_PATH:', test_step)
         self.assertIn('run: mise run ci:font-japanese', localization)
         self.assertLess(localization.index('name: "Setup | Rust toolchain and build cache"'),
