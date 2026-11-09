@@ -146,6 +146,8 @@ async fn picker_validates_modes_handles_memory_and_parent_lifetime() {
             // Escape is handled by the component, and remains distinguishable
             // from a still-pending picker with no result.
             let picker_object = lvgl::lv_obj_get_child(native, -1);
+            // LVGL reads key parameters as uint32_t; bindgen picks the enum type per target.
+            #[allow(clippy::unnecessary_cast)]
             let mut key = lvgl::lv_key_t_LV_KEY_ESC as u32;
             lvgl::lv_obj_send_event(
                 picker_object,
@@ -336,6 +338,8 @@ async fn picker_validates_modes_handles_memory_and_parent_lifetime() {
                     lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN
                 ));
                 assert_ne!(lvgl::lv_indev_get_group(keypad), original_group);
+                // LVGL reads key parameters as uint32_t; bindgen picks the enum type per target.
+                #[allow(clippy::unnecessary_cast)]
                 let mut key = lvgl::lv_key_t_LV_KEY_ESC as u32;
                 lvgl::lv_obj_send_event(
                     object,

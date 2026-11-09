@@ -18,7 +18,7 @@ async fn main() {
 
     let task = task_instance.get_current_task_identifier().await;
 
-    let binary_path = build_crate(&"weather").unwrap();
+    let binary_path = build_crate("weather").unwrap();
     testing::load_file(
         virtual_file_system,
         binary_path,
