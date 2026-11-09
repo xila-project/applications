@@ -107,6 +107,8 @@ class ApplicationPolicy(unittest.TestCase):
         self.assertIn('ref: ' + core_revision, localization)
         self.assertIn('XILA_JAPANESE_FONT_PATH:', test_step)
         self.assertIn('run: mise run ci:font-japanese', localization)
+        self.assertLess(localization.index('name: "Setup | Rust toolchain and build cache"'),
+                        localization.index('name: "Setup | Japanese font"'))
         task = manifest('mise.ci.toml')['tasks']['ci:localization']
         self.assertIn('--locked --target wasm32-wasip1', task['run'])
         self.assertNotIn('--config', task['run'])
