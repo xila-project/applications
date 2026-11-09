@@ -8,7 +8,7 @@
     "calculation_error": "Erro de cálculo",
     "calculation_overflow": "Estouro no cálculo",
     "division_by_zero": "Divisão por zero",
-    "calculation_with_details": "Erro: {}",
+    "calculation_with_details": "Erro: {arg0}",
     "expression_nested_too_deeply": "Expressão com aninhamento excessivo",
     "expression_too_long": "Expressão muito longa",
     "inexact_result": "Resultado impreciso",

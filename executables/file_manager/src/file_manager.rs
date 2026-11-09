@@ -16,7 +16,7 @@ use xila::{
         palette::{self, Hue},
     },
 };
-use xila::{graphics::OwnedWindow, internationalization::translate};
+use xila::{graphics::OwnedWindow, internationalization::t};
 
 pub struct FileManager {
     context: &'static xila::executable::ExecutableContext,
@@ -96,7 +96,7 @@ impl FileManager {
         graphics::lock!(self.graphics_manager, {
             while let Some(event) = self.window.pop_event() {
                 if let Err(e) = self.handle_event(event).await {
-                    log::error!(translate!("errors.event_handling_failed"), e);
+                    log::error!("{}", t!("errors.event_handling_failed", arg0 = e));
                 }
             }
         });
@@ -414,7 +414,7 @@ impl FileManager {
                     if let Ok(path_str) = text_cstr.to_str() {
                         // Try to create a path from the entered string
                         let new_path = PathOwned::new(path_str.to_string()).unwrap_or_else(|| {
-                            log::error!(translate!("errors.invalid_entered_path"), path_str);
+                            log::error!("{}", t!("errors.invalid_entered_path", arg0 = path_str));
                             self.current_path.clone()
                         });
 

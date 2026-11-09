@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+embedded-i18n = { workspace = true }
 xila = { workspace = true }
 getargs = { version = "0.5" }
 getargs-derive = { workspace = true }
@@ -21,3 +22,9 @@ path = "tests/integration_test.rs"
 
 [lib]
 name = "command_line_shell"
+
+[package.metadata.i18n]
+load-path = "locales"
+default-locale = "en"
+fallback = ["en"]
+strict = true

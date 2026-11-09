@@ -2,7 +2,7 @@
 extern crate alloc;
 #[cfg(test)]
 extern crate std;
-xila::internationalization::track_locales!();
+xila::internationalization::i18n!("locales");
 
 use alloc::{
     borrow::ToOwned,
@@ -186,7 +186,7 @@ impl Shell {
             }
             if oversized {
                 self.last_status = 2;
-                self.diagnostic(xila::internationalization::translate!(
+                self.diagnostic(xila::internationalization::t!(
                     "execution.errors.command_line_too_long"
                 ))
                 .await;
@@ -201,10 +201,8 @@ impl Shell {
                 }
                 Err(_) => {
                     self.last_status = 2;
-                    self.diagnostic(xila::internationalization::translate!(
-                        "errors.invalid_utf_8_input"
-                    ))
-                    .await;
+                    self.diagnostic(xila::internationalization::t!("errors.invalid_utf_8_input"))
+                        .await;
                 }
             }
             if end_of_input {
@@ -258,9 +256,8 @@ impl Shell {
                 .unwrap_or(0);
             if depth >= MAX_SHELL_DEPTH {
                 self.last_status = 2;
-                let error = xila::internationalization::translate!(
-                    "errors.maximum_nested_shell_depth_exceeded"
-                );
+                let error =
+                    xila::internationalization::t!("errors.maximum_nested_shell_depth_exceeded");
                 if arguments[0] == "-s" && arguments.len() == 2 {
                     self.script_diagnostic(&arguments[1], None, error).await;
                 } else {
@@ -276,9 +273,8 @@ impl Shell {
                 .is_err()
             {
                 self.last_status = 1;
-                let error = xila::internationalization::translate!(
-                    "errors.failed_to_set_shell_nesting_depth"
-                );
+                let error =
+                    xila::internationalization::t!("errors.failed_to_set_shell_nesting_depth");
                 if arguments[0] == "-s" && arguments.len() == 2 {
                     self.script_diagnostic(&arguments[1], None, error).await;
                 } else {
@@ -288,17 +284,15 @@ impl Shell {
                 depth_changed = true;
                 if arguments[0] == "-s" {
                     if arguments.len() != 2 {
-                        self.diagnostic(xila::internationalization::translate!(
-                            "help.run_script_usage"
-                        ))
-                        .await;
+                        self.diagnostic(xila::internationalization::t!("help.run_script_usage"))
+                            .await;
                         self.last_status = 2;
                     } else {
                         self.last_status = self.run_script(&arguments[1]).await;
                     }
                 } else if arguments[0] == "-c" {
                     if arguments.len() != 2 {
-                        self.diagnostic(xila::internationalization::translate!(
+                        self.diagnostic(xila::internationalization::t!(
                             "help.execute_command_usage"
                         ))
                         .await;
@@ -402,7 +396,7 @@ impl Shell {
                     self.script_diagnostic(
                         &path,
                         Some(line_number),
-                        xila::internationalization::translate!("errors.invalid_utf_8_input"),
+                        xila::internationalization::t!("errors.invalid_utf_8_input"),
                     )
                     .await;
                     break;

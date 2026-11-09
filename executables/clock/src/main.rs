@@ -1,4 +1,4 @@
-embedded_i18n::track_locales!();
+embedded_i18n::i18n!("locales");
 
 #[cfg(target_arch = "wasm32")]
 mod interface;
@@ -22,14 +22,18 @@ mod localization_tests {
 
     fn lap_label(count: usize) -> String {
         let mut output = String::new();
-        embedded_i18n::translate_plural_write!(&mut output, "stopwatch.laps.recorded", count)
-            .expect("writing to String cannot fail");
+        write!(
+            &mut output,
+            "{}",
+            embedded_i18n::t!("stopwatch.laps.recorded", count = count)
+        )
+        .expect("writing to String cannot fail");
         output
     }
 
     #[test]
     fn stopwatch_lap_plural_matches_selected_locale() {
-        let (one, other) = match embedded_i18n::get_locale() {
+        let (one, other) = match embedded_i18n::locale!() {
             "fr" => ("1 tour enregistré", "2 tours enregistrés"),
             "zh-CN" => ("已记录 1 次", "已记录 2 次"),
             "ja" => ("1 周を記録しました", "2 周を記録しました"),

@@ -42,22 +42,22 @@
     "cancel": "Cancel"
   },
   "errors": {
-    "authentication_failed": "Authentication failed: {}",
+    "authentication_failed": "Authentication failed: {arg0}",
     "could_not_apply_appearance": "Could not apply appearance.",
     "could_not_load_appearance_choose_settings_to_save_a_replacement": "Could not load appearance. Choose settings to save a replacement.",
     "failed_to_create_ui_element": "Failed to create UI element",
     "failed_to_create_object": "Failed to create object",
     "failed_to_get_child_object": "Failed to get child object",
-    "failed_to_get_current_task_identifier": "Failed to get current task identifier: {}",
-    "failed_to_open_standard_file": "Failed to open standard file: {}",
-    "failed_to_read_directory": "Failed to read directory: {}",
-    "failed_to_set_environment_variable": "Failed to set environment variable: {}",
-    "failed_to_set_task_user": "Failed to set task user: {}",
+    "failed_to_get_current_task_identifier": "Failed to get current task identifier: {arg0}",
+    "failed_to_open_standard_file": "Failed to open standard file: {arg0}",
+    "failed_to_read_directory": "Failed to read directory: {arg0}",
+    "failed_to_set_environment_variable": "Failed to set environment variable: {arg0}",
+    "failed_to_set_task_user": "Failed to set task user: {arg0}",
     "formatting_error": "Formatting error",
-    "graphics_error": "Graphics error : {}",
-    "invalid_utf_8_string": "Invalid UTF-8 string: {}",
-    "null_character_in_string": "Null character in string: {}",
-    "virtual_file_system_error": "Virtual file system error: {}"
+    "graphics_error": "Graphics error : {arg0}",
+    "invalid_utf_8_string": "Invalid UTF-8 string: {arg0}",
+    "null_character_in_string": "Null character in string: {arg0}",
+    "virtual_file_system_error": "Virtual file system error: {arg0}"
   },
   "about": {
     "fields": {

@@ -555,7 +555,7 @@ mod tests {
         for (arguments, expected) in [
             (
                 alloc::vec![],
-                xila::internationalization::translate!("help.built_in_commands_title"),
+                xila::internationalization::t!("help.built_in_commands_title"),
             ),
             (alloc::vec!["exit"], "Usage: exit"),
             (alloc::vec!["cat"], "Usage: cat"),
@@ -585,7 +585,7 @@ mod tests {
                 ));
             }
             assert!(context.output.contains(expected), "{}", context.output);
-            if expected == xila::internationalization::translate!("help.built_in_commands_title") {
+            if expected == xila::internationalization::t!("help.built_in_commands_title") {
                 for name in ["help", "exit", "ls", "wc", "tail", "grep"] {
                     assert!(context.output.lines().any(|line| line == name));
                 }
@@ -694,13 +694,9 @@ mod tests {
         )
         .await
         .unwrap();
-        assert!(
-            context
-                .output
-                .contains(xila::internationalization::translate!(
-                    "help.external_executable_description"
-                ))
-        );
+        assert!(context.output.contains(xila::internationalization::t!(
+            "help.external_executable_description"
+        )));
         for command in ["missing", "plain_file", "subdirectory"] {
             let mut options = getargs::Options::new([command].into_iter());
             assert!(matches!(

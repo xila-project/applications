@@ -4,15 +4,15 @@
     "sources": "Xilaの時刻、タスク一覧、アロケーター"
   },
   "metrics": {
-    "uptime": "稼働時間: {} 秒",
-    "tasks": "登録タスク: {}",
-    "memory_used": "使用メモリ: {} バイト",
-    "memory_capacity": "メモリ容量: {} バイト",
+    "uptime": "稼働時間: {arg0} 秒",
+    "tasks": "登録タスク: {arg0}",
+    "memory_used": "使用メモリ: {arg0} バイト",
+    "memory_capacity": "メモリ容量: {arg0} バイト",
     "capacity_unavailable": "メモリ容量: 利用不可",
     "unsupported": "CPU負荷 / 登録デバイス: 利用不可"
   },
   "actions": {
-    "interval": "更新間隔: {} ミリ秒（変更）",
+    "interval": "更新間隔: {arg0} ミリ秒（変更）",
     "start": "デモを開始 (4 KiB / 10 秒)",
     "stop": "デモを停止"
   },

@@ -7,7 +7,7 @@
   },
   "dns": {
     "errors": {
-      "unknown_host": "Cannot resolve {}: Unknown host"
+      "unknown_host": "Cannot resolve {arg0}: Unknown host"
     },
     "records": {
       "unit": {
@@ -16,40 +16,40 @@
       }
     },
     "status": {
-      "no_records_found": "No {} records found for domain '{}'"
+      "no_records_found": "No {arg0} records found for domain '{arg1}'"
     }
   },
   "errors": {
-    "argument_parsing_error": "Argument parsing error: {}",
-    "authentication_failed": "Authentication failed: {}",
-    "failed_to_create_directory": "Failed to create directory: {}",
-    "failed_to_create_socket": "Failed to create socket: {}",
-    "failed_to_create_symbolic_link": "Failed to create symbolic link: {}",
+    "argument_parsing_error": "Argument parsing error: {arg0}",
+    "authentication_failed": "Authentication failed: {arg0}",
+    "failed_to_create_directory": "Failed to create directory: {arg0}",
+    "failed_to_create_socket": "Failed to create socket: {arg0}",
+    "failed_to_create_symbolic_link": "Failed to create symbolic link: {arg0}",
     "failed_to_execute_command": "Failed to execute command",
     "failed_to_get_environment_variable": "Failed to get environment variable",
-    "failed_to_get_metadata": "Failed to get metadata: {}",
+    "failed_to_get_metadata": "Failed to get metadata: {arg0}",
     "failed_to_get_task_identifier": "Failed to get task identifier",
-    "failed_to_get_task_user": "Failed to get task user: {}",
+    "failed_to_get_task_user": "Failed to get task user: {arg0}",
     "failed_to_join_path": "Failed to join path",
     "failed_to_join_task": "Failed to join task",
-    "failed_to_open_directory": "Failed to open directory: {}",
-    "failed_to_open_file": "Failed to open file: {}",
-    "failed_to_read_directory_entry": "Failed to read directory entry: {}",
-    "failed_to_read_environment_variable": "Failed to read environment variable: {}",
-    "failed_to_read_file": "Failed to read file: {}",
-    "failed_to_read_symbolic_link": "Failed to read symbolic link: {}",
-    "failed_to_remove_directory": "Failed to remove directory: {}",
-    "failed_to_remove_environment_variable": "Failed to remove environment variable: {}",
-    "failed_to_rename_path": "Failed to rename path: {}",
-    "failed_to_resolve_domain": "Failed to resolve domain: {}",
-    "failed_to_resolve_domain_for_records": "Failed to resolve domain '{}' for {} records: {}",
-    "failed_to_set_current_directory": "Failed to set current directory: {}",
-    "failed_to_set_environment_variable": "Failed to set environment variable: {}",
-    "failed_to_set_permissions": "Failed to set permissions: {}",
+    "failed_to_open_directory": "Failed to open directory: {arg0}",
+    "failed_to_open_file": "Failed to open file: {arg0}",
+    "failed_to_read_directory_entry": "Failed to read directory entry: {arg0}",
+    "failed_to_read_environment_variable": "Failed to read environment variable: {arg0}",
+    "failed_to_read_file": "Failed to read file: {arg0}",
+    "failed_to_read_symbolic_link": "Failed to read symbolic link: {arg0}",
+    "failed_to_remove_directory": "Failed to remove directory: {arg0}",
+    "failed_to_remove_environment_variable": "Failed to remove environment variable: {arg0}",
+    "failed_to_rename_path": "Failed to rename path: {arg0}",
+    "failed_to_resolve_domain": "Failed to resolve domain: {arg0}",
+    "failed_to_resolve_domain_for_records": "Failed to resolve domain '{arg0}' for {arg1} records: {arg2}",
+    "failed_to_set_current_directory": "Failed to set current directory: {arg0}",
+    "failed_to_set_environment_variable": "Failed to set environment variable: {arg0}",
+    "failed_to_set_permissions": "Failed to set permissions: {arg0}",
     "failed_to_set_shell_nesting_depth": "Failed to set shell nesting depth",
-    "failed_to_set_task_user": "Failed to set task user: {}",
+    "failed_to_set_task_user": "Failed to set task user: {arg0}",
     "failed_to_tokenize_command_line": "Failed to tokenize command line",
-    "failed_to_write_file": "Failed to write file: {}",
+    "failed_to_write_file": "Failed to write file: {arg0}",
     "format_failed": "Format error",
     "invalid_argument": "Invalid argument",
     "invalid_number_of_arguments": "Invalid number of arguments",
@@ -60,12 +60,12 @@
     "maximum_nested_shell_depth_exceeded": "Maximum nested shell depth exceeded",
     "missing_file_name_after_redirect_in": "Missing file name after redirect in",
     "missing_file_name_after_redirect_out": "Missing file name after redirect out",
-    "missing_positional_argument": "Missing positional argument: {}",
+    "missing_positional_argument": "Missing positional argument: {arg0}",
     "option_does_not_require_a_value": "Option does not require a value",
     "option_requires_a_value": "Option requires a value",
-    "syntax_error_at_byte": "Syntax error at byte {}: {}",
+    "syntax_error_at_byte": "Syntax error at byte {arg0}: {arg1}",
     "too_many_background_jobs": "Too many background jobs",
-    "with_details": "Error: {}"
+    "with_details": "Error: {arg0}"
   },
   "execution": {
     "errors": {
@@ -98,7 +98,7 @@
   },
   "ping": {
     "errors": {
-      "request_timeout": "Request timeout for icmp_seq {}"
+      "request_timeout": "Request timeout for icmp_seq {arg0}"
     },
     "reply": {
       "byte_unit": {

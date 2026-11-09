@@ -3,7 +3,7 @@ use getargs::Options;
 use getargs_derive::GetArgs;
 use xila::{
     file_system::Path,
-    internationalization::translate,
+    internationalization::t,
     network::{self, DnsQueryKind},
 };
 
@@ -62,8 +62,7 @@ async fn resolve_record<C: CommandContext>(
     match network_manager.resolve(domain, kind, true, None).await {
         Ok(ip) => {
             let count = ip.len();
-            let record_label =
-                xila::internationalization::translate_plural!("dns.records.unit", count);
+            let record_label = xila::internationalization::t!("dns.records.unit", count = count);
             // DNS record types (A, AAAA, etc.) remain invariant CLI identifiers.
             context
                 .write_out_fmt(format_args!(
@@ -85,9 +84,12 @@ async fn resolve_record<C: CommandContext>(
                 .write_out_fmt(format_args!(
                     "{}\n",
                     format_args!(
-                        translate!("dns.status.no_records_found"),
-                        format_kind(kind),
-                        domain
+                        "{}",
+                        t!(
+                            "dns.status.no_records_found",
+                            arg0 = format_kind(kind),
+                            arg1 = domain
+                        )
                     )
                 ))
                 .await?;
@@ -97,10 +99,13 @@ async fn resolve_record<C: CommandContext>(
                 .write_out_fmt(format_args!(
                     "{}",
                     format_args!(
-                        translate!("errors.failed_to_resolve_domain_for_records"),
-                        domain,
-                        format_kind(kind),
-                        e
+                        "{}",
+                        t!(
+                            "errors.failed_to_resolve_domain_for_records",
+                            arg0 = domain,
+                            arg1 = format_kind(kind),
+                            arg2 = e
+                        )
                     )
                 ))
                 .await?;
@@ -157,11 +162,12 @@ where
 #[cfg(test)]
 mod tests {
     use super::format_kind;
+    use alloc::string::ToString;
     use xila::network::DnsQueryKind;
 
     #[test]
     fn dns_record_count_selects_singular_and_plural() {
-        let (one, other) = match xila::internationalization::get_locale() {
+        let (one, other) = match xila::internationalization::locale!() {
             "fr" => (
                 "enregistrement pour le domaine",
                 "enregistrements pour le domaine",
@@ -171,11 +177,11 @@ mod tests {
             _ => ("record for domain", "records for domain"),
         };
         assert_eq!(
-            xila::internationalization::translate_plural!("dns.records.unit", 1usize),
+            xila::internationalization::t!("dns.records.unit", count = 1usize).to_string(),
             one
         );
         assert_eq!(
-            xila::internationalization::translate_plural!("dns.records.unit", 2usize),
+            xila::internationalization::t!("dns.records.unit", count = 2usize).to_string(),
             other
         );
     }

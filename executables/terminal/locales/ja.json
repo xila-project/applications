@@ -4,11 +4,11 @@
   },
   "errors": {
     "failed_to_create_object": "オブジェクトを作成できませんでした",
-    "failed_to_execute": "実行に失敗しました: {}",
-    "failed_to_get_task_identifier": "タスク識別子を取得できませんでした: {}",
-    "failed_to_mount_device": "デバイスをマウントできませんでした: {}",
-    "graphics": "グラフィックス: {}",
+    "failed_to_execute": "実行に失敗しました: {arg0}",
+    "failed_to_get_task_identifier": "タスク識別子を取得できませんでした: {arg0}",
+    "failed_to_mount_device": "デバイスをマウントできませんでした: {arg0}",
+    "graphics": "グラフィックス: {arg0}",
     "resource_busy": "リソースが使用中です",
-    "utf_8": "UTF-8: {}"
+    "utf_8": "UTF-8: {arg0}"
   }
 }

@@ -94,7 +94,6 @@ jobs:
     env:
       XILA_MBX: "1"
       EMBEDDED_I18N_LOCALE: ${{ matrix.locale }}
-      EMBEDDED_I18N_STRICT: "1"
     steps:
       - name: "Setup | Checkout sources"
         uses: actions/checkout@v7

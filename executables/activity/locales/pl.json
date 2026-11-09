@@ -4,15 +4,15 @@
     "sources": "Zegar, rejestr zadań i alokator Xila"
   },
   "metrics": {
-    "uptime": "Czas działania: {} s",
-    "tasks": "Zadania w rejestrze: {}",
-    "memory_used": "Użycie alokatora (bajty): {}",
-    "memory_capacity": "Pojemność alokatora (bajty): {}",
+    "uptime": "Czas działania: {arg0} s",
+    "tasks": "Zadania w rejestrze: {arg0}",
+    "memory_used": "Użycie alokatora (bajty): {arg0}",
+    "memory_capacity": "Pojemność alokatora (bajty): {arg0}",
     "capacity_unavailable": "Pojemność alokatora: niedostępna",
     "unsupported": "Obciążenie CPU / zarejestrowane urządzenia: niedostępne"
   },
   "actions": {
-    "interval": "Odświeżanie: {} ms (zmień)",
+    "interval": "Odświeżanie: {arg0} ms (zmień)",
     "start": "Uruchom demo (4 KiB / 10 s)",
     "stop": "Zatrzymaj demo"
   },

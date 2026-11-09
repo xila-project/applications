@@ -7,7 +7,7 @@
   },
   "dns": {
     "errors": {
-      "unknown_host": "Não foi possível resolver {}: host desconhecido"
+      "unknown_host": "Não foi possível resolver {arg0}: host desconhecido"
     },
     "records": {
       "unit": {
@@ -16,40 +16,40 @@
       }
     },
     "status": {
-      "no_records_found": "Nenhum registro {} encontrado para o domínio '{}'"
+      "no_records_found": "Nenhum registro {arg0} encontrado para o domínio '{arg1}'"
     }
   },
   "errors": {
-    "argument_parsing_error": "Erro ao analisar argumentos: {}",
-    "authentication_failed": "Falha na autenticação: {}",
-    "failed_to_create_directory": "Não foi possível criar o diretório: {}",
-    "failed_to_create_socket": "Não foi possível criar o socket: {}",
-    "failed_to_create_symbolic_link": "Falha ao criar link simbólico: {}",
+    "argument_parsing_error": "Erro ao analisar argumentos: {arg0}",
+    "authentication_failed": "Falha na autenticação: {arg0}",
+    "failed_to_create_directory": "Não foi possível criar o diretório: {arg0}",
+    "failed_to_create_socket": "Não foi possível criar o socket: {arg0}",
+    "failed_to_create_symbolic_link": "Falha ao criar link simbólico: {arg0}",
     "failed_to_execute_command": "Não foi possível executar o comando",
     "failed_to_get_environment_variable": "Não foi possível obter a variável de ambiente",
-    "failed_to_get_metadata": "Não foi possível obter os metadados: {}",
+    "failed_to_get_metadata": "Não foi possível obter os metadados: {arg0}",
     "failed_to_get_task_identifier": "Não foi possível obter o identificador da tarefa",
-    "failed_to_get_task_user": "Não foi possível obter o usuário da tarefa: {}",
+    "failed_to_get_task_user": "Não foi possível obter o usuário da tarefa: {arg0}",
     "failed_to_join_path": "Não foi possível combinar os caminhos",
     "failed_to_join_task": "Não foi possível aguardar a tarefa",
-    "failed_to_open_directory": "Não foi possível abrir o diretório: {}",
-    "failed_to_open_file": "Não foi possível abrir o arquivo: {}",
-    "failed_to_read_directory_entry": "Não foi possível ler a entrada do diretório: {}",
-    "failed_to_read_environment_variable": "Não foi possível ler a variável de ambiente: {}",
-    "failed_to_read_file": "Não foi possível ler o arquivo: {}",
-    "failed_to_read_symbolic_link": "Falha ao ler link simbólico: {}",
-    "failed_to_remove_directory": "Não foi possível remover o diretório: {}",
-    "failed_to_remove_environment_variable": "Não foi possível remover a variável de ambiente: {}",
-    "failed_to_rename_path": "Não foi possível renomear o caminho: {}",
-    "failed_to_resolve_domain": "Não foi possível resolver o domínio: {}",
-    "failed_to_resolve_domain_for_records": "Não foi possível resolver o domínio '{}' para {} registros: {}",
-    "failed_to_set_current_directory": "Não foi possível definir o diretório atual: {}",
-    "failed_to_set_environment_variable": "Não foi possível definir a variável de ambiente: {}",
-    "failed_to_set_permissions": "Não foi possível definir as permissões: {}",
+    "failed_to_open_directory": "Não foi possível abrir o diretório: {arg0}",
+    "failed_to_open_file": "Não foi possível abrir o arquivo: {arg0}",
+    "failed_to_read_directory_entry": "Não foi possível ler a entrada do diretório: {arg0}",
+    "failed_to_read_environment_variable": "Não foi possível ler a variável de ambiente: {arg0}",
+    "failed_to_read_file": "Não foi possível ler o arquivo: {arg0}",
+    "failed_to_read_symbolic_link": "Falha ao ler link simbólico: {arg0}",
+    "failed_to_remove_directory": "Não foi possível remover o diretório: {arg0}",
+    "failed_to_remove_environment_variable": "Não foi possível remover a variável de ambiente: {arg0}",
+    "failed_to_rename_path": "Não foi possível renomear o caminho: {arg0}",
+    "failed_to_resolve_domain": "Não foi possível resolver o domínio: {arg0}",
+    "failed_to_resolve_domain_for_records": "Não foi possível resolver o domínio '{arg0}' para {arg1} registros: {arg2}",
+    "failed_to_set_current_directory": "Não foi possível definir o diretório atual: {arg0}",
+    "failed_to_set_environment_variable": "Não foi possível definir a variável de ambiente: {arg0}",
+    "failed_to_set_permissions": "Não foi possível definir as permissões: {arg0}",
     "failed_to_set_shell_nesting_depth": "Falha ao definir profundidade de aninhamento do shell",
-    "failed_to_set_task_user": "Não foi possível definir o usuário da tarefa: {}",
+    "failed_to_set_task_user": "Não foi possível definir o usuário da tarefa: {arg0}",
     "failed_to_tokenize_command_line": "Não foi possível separar a linha de comando em tokens",
-    "failed_to_write_file": "Não foi possível gravar o arquivo: {}",
+    "failed_to_write_file": "Não foi possível gravar o arquivo: {arg0}",
     "format_failed": "Erro de formatação",
     "invalid_argument": "Argumento inválido",
     "invalid_number_of_arguments": "Número inválido de argumentos",
@@ -60,12 +60,12 @@
     "maximum_nested_shell_depth_exceeded": "Profundidade máxima de aninhamento do shell excedida",
     "missing_file_name_after_redirect_in": "Nome do arquivo ausente após o redirecionamento de entrada",
     "missing_file_name_after_redirect_out": "Nome do arquivo ausente após o redirecionamento de saída",
-    "missing_positional_argument": "Argumento posicional ausente: {}",
+    "missing_positional_argument": "Argumento posicional ausente: {arg0}",
     "option_does_not_require_a_value": "A opção não requer valor",
     "option_requires_a_value": "A opção requer um valor",
-    "syntax_error_at_byte": "Erro de sintaxe no byte {}: {}",
+    "syntax_error_at_byte": "Erro de sintaxe no byte {arg0}: {arg1}",
     "too_many_background_jobs": "Tarefas em segundo plano demais",
-    "with_details": "Erro: {}"
+    "with_details": "Erro: {arg0}"
   },
   "execution": {
     "errors": {
@@ -98,7 +98,7 @@
   },
   "ping": {
     "errors": {
-      "request_timeout": "Tempo limite esgotado para icmp_seq {}"
+      "request_timeout": "Tempo limite esgotado para icmp_seq {arg0}"
     },
     "reply": {
       "byte_unit": {

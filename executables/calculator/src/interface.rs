@@ -1,5 +1,5 @@
 use crate::engine::evaluate_expression;
-use embedded_i18n::translate;
+use embedded_i18n::t;
 use std::{ptr::null_mut, thread::sleep};
 use wasm::{
     self, Color, EVENT_CLOSE_REQUESTED, EventCode, FlexFlow, Object, ObjectFlag,
@@ -68,10 +68,10 @@ pub enum ButtonIdentifier {
 
 const BUTTON_MAP: [*const i8; 48] = [
     // Row 1: Clear, Backspace, Angle mode, Parentheses, Division, Factorial, Abs
-    translate!(c"angle_mode.radians").as_ptr(), // Angle mode toggle
+    t!(c"angle_mode.radians").as_ptr(), // Angle mode toggle
     c"(".as_ptr(),
     c")".as_ptr(),
-    translate!(c"controls.clear").as_ptr(),
+    t!(c"controls.clear").as_ptr(),
     c"<".as_ptr(), // Backspace
     c"x!".as_ptr(),
     c"/".as_ptr(),
@@ -246,9 +246,9 @@ impl Interface {
 
             // Add angle mode indicator
             let mode_indicator = if self.is_radian_mode {
-                translate!("angle_mode.radians_indicator")
+                t!("angle_mode.radians_indicator")
             } else {
-                translate!("angle_mode.degrees_indicator")
+                t!("angle_mode.degrees_indicator")
             };
             let full_text = format!("{}{}", display_text, mode_indicator);
 
@@ -298,7 +298,7 @@ impl Interface {
                         }
                         Err(e) => {
                             self.current_expression =
-                                format!(translate!("errors.calculation_with_details"), e);
+                                format!("{}", t!("errors.calculation_with_details", arg0 = e));
                             self.show_result = true;
                         }
                     }

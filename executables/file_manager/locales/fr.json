@@ -1,6 +1,6 @@
 {
   "errors": {
-    "event_handling_failed": "Erreur lors du traitement de l'evenement du gestionnaire de fichiers : {:?}",
-    "invalid_entered_path": "Chemin invalide saisi : {}"
+    "event_handling_failed": "Erreur lors du traitement de l'evenement du gestionnaire de fichiers : {arg0:?}",
+    "invalid_entered_path": "Chemin invalide saisi : {arg0}"
   }
 }

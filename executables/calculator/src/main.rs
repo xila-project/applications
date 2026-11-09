@@ -1,4 +1,4 @@
-embedded_i18n::track_locales!();
+embedded_i18n::i18n!("locales");
 
 #[cfg(any(target_arch = "wasm32", test))]
 mod engine;
@@ -16,8 +16,5 @@ fn main() {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
-    println!(
-        "{}",
-        embedded_i18n::translate!("errors.requires_wasm_runtime")
-    );
+    println!("{}", embedded_i18n::t!("errors.requires_wasm_runtime"));
 }

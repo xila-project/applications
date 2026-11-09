@@ -1,7 +1,7 @@
 use crate::{Result, Shell, error::Error};
 use alloc::string::String;
 use core::fmt::Write;
-use xila::{authentication, internationalization::translate};
+use xila::{authentication, internationalization::t};
 
 impl Shell {
     // Unlike Standard::read_line, a login prompt must stop at EOF rather than
@@ -32,7 +32,8 @@ impl Shell {
     pub async fn authenticate(&mut self) -> Result<Option<String>> {
         write!(
             self.standard.out(),
-            translate!("authentication.prompts.username")
+            "{}",
+            t!("authentication.prompts.username")
         )?;
         let _ = self.standard.out().flush().await;
 
@@ -43,7 +44,8 @@ impl Shell {
 
         write!(
             self.standard.out(),
-            translate!("authentication.prompts.password")
+            "{}",
+            t!("authentication.prompts.password")
         )?;
         let _ = self.standard.out().flush().await;
 

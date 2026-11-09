@@ -8,7 +8,7 @@
     "calculation_error": "計算エラー",
     "calculation_overflow": "計算結果がオーバーフローしました",
     "division_by_zero": "ゼロで除算できません",
-    "calculation_with_details": "エラー: {}",
+    "calculation_with_details": "エラー: {arg0}",
     "expression_nested_too_deeply": "式の入れ子が深すぎます",
     "expression_too_long": "式が長すぎます",
     "inexact_result": "結果が正確ではありません",

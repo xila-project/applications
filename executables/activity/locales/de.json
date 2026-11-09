@@ -4,15 +4,15 @@
     "sources": "Xila-Uhr, Task-Register und Speicherallokator"
   },
   "metrics": {
-    "uptime": "Laufzeit: {} s",
-    "tasks": "Registrierte Tasks: {}",
-    "memory_used": "Belegter Allokatorspeicher: {} Bytes",
-    "memory_capacity": "Allokatorkapazität: {} Bytes",
+    "uptime": "Laufzeit: {arg0} s",
+    "tasks": "Registrierte Tasks: {arg0}",
+    "memory_used": "Belegter Allokatorspeicher: {arg0} Bytes",
+    "memory_capacity": "Allokatorkapazität: {arg0} Bytes",
     "capacity_unavailable": "Allokatorkapazität: nicht verfügbar",
     "unsupported": "CPU-Auslastung / registrierte Geräte: nicht verfügbar"
   },
   "actions": {
-    "interval": "Aktualisierung: {} ms (ändern)",
+    "interval": "Aktualisierung: {arg0} ms (ändern)",
     "start": "Demo starten (4 KiB / 10 s)",
     "stop": "Demo stoppen"
   },

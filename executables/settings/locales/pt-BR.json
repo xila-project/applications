@@ -42,22 +42,22 @@
     "cancel": "Cancelar"
   },
   "errors": {
-    "authentication_failed": "Falha na autenticação: {}",
+    "authentication_failed": "Falha na autenticação: {arg0}",
     "could_not_apply_appearance": "Não foi possível aplicar a aparência.",
     "could_not_load_appearance_choose_settings_to_save_a_replacement": "Não foi possível carregar a aparência. Escolha as opções e salve uma nova configuração.",
     "failed_to_create_ui_element": "Não foi possível criar o elemento da interface",
     "failed_to_create_object": "Não foi possível criar o objeto",
     "failed_to_get_child_object": "Não foi possível obter o objeto filho",
-    "failed_to_get_current_task_identifier": "Não foi possível obter o identificador da tarefa atual: {}",
-    "failed_to_open_standard_file": "Não foi possível abrir o arquivo padrão: {}",
-    "failed_to_read_directory": "Não foi possível ler o diretório: {}",
-    "failed_to_set_environment_variable": "Não foi possível definir a variável de ambiente: {}",
-    "failed_to_set_task_user": "Não foi possível definir o usuário da tarefa: {}",
+    "failed_to_get_current_task_identifier": "Não foi possível obter o identificador da tarefa atual: {arg0}",
+    "failed_to_open_standard_file": "Não foi possível abrir o arquivo padrão: {arg0}",
+    "failed_to_read_directory": "Não foi possível ler o diretório: {arg0}",
+    "failed_to_set_environment_variable": "Não foi possível definir a variável de ambiente: {arg0}",
+    "failed_to_set_task_user": "Não foi possível definir o usuário da tarefa: {arg0}",
     "formatting_error": "Erro de formatação",
-    "graphics_error": "Erro gráfico: {}",
-    "invalid_utf_8_string": "Texto UTF-8 inválido: {}",
-    "null_character_in_string": "Caractere nulo no texto: {}",
-    "virtual_file_system_error": "Erro no sistema de arquivos virtual: {}"
+    "graphics_error": "Erro gráfico: {arg0}",
+    "invalid_utf_8_string": "Texto UTF-8 inválido: {arg0}",
+    "null_character_in_string": "Caractere nulo no texto: {arg0}",
+    "virtual_file_system_error": "Erro no sistema de arquivos virtual: {arg0}"
   },
   "about": {
     "fields": {

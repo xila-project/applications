@@ -42,22 +42,22 @@
     "cancel": "キャンセル"
   },
   "errors": {
-    "authentication_failed": "認証に失敗しました: {}",
+    "authentication_failed": "認証に失敗しました: {arg0}",
     "could_not_apply_appearance": "外観を適用できませんでした。",
     "could_not_load_appearance_choose_settings_to_save_a_replacement": "外観を読み込めませんでした。設定を選択して保存してください。",
     "failed_to_create_ui_element": "UI 要素を作成できませんでした",
     "failed_to_create_object": "オブジェクトを作成できませんでした",
     "failed_to_get_child_object": "子オブジェクトを取得できませんでした",
-    "failed_to_get_current_task_identifier": "現在のタスク識別子を取得できませんでした: {}",
-    "failed_to_open_standard_file": "標準ファイルを開けませんでした: {}",
-    "failed_to_read_directory": "ディレクトリを読み取れませんでした: {}",
-    "failed_to_set_environment_variable": "環境変数を設定できませんでした: {}",
-    "failed_to_set_task_user": "タスクユーザーを設定できませんでした: {}",
+    "failed_to_get_current_task_identifier": "現在のタスク識別子を取得できませんでした: {arg0}",
+    "failed_to_open_standard_file": "標準ファイルを開けませんでした: {arg0}",
+    "failed_to_read_directory": "ディレクトリを読み取れませんでした: {arg0}",
+    "failed_to_set_environment_variable": "環境変数を設定できませんでした: {arg0}",
+    "failed_to_set_task_user": "タスクユーザーを設定できませんでした: {arg0}",
     "formatting_error": "書式エラー",
-    "graphics_error": "グラフィックスエラー: {}",
-    "invalid_utf_8_string": "無効な UTF-8 文字列: {}",
-    "null_character_in_string": "文字列にヌル文字があります: {}",
-    "virtual_file_system_error": "仮想ファイルシステムエラー: {}"
+    "graphics_error": "グラフィックスエラー: {arg0}",
+    "invalid_utf_8_string": "無効な UTF-8 文字列: {arg0}",
+    "null_character_in_string": "文字列にヌル文字があります: {arg0}",
+    "virtual_file_system_error": "仮想ファイルシステムエラー: {arg0}"
   },
   "about": {
     "fields": {

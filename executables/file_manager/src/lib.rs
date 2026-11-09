@@ -2,7 +2,7 @@
 
 extern crate alloc;
 
-xila::internationalization::track_locales!();
+xila::internationalization::i18n!("locales");
 
 mod error;
 mod file_manager;

@@ -4,11 +4,11 @@
   },
   "errors": {
     "failed_to_create_object": "Impossibile creare l'oggetto",
-    "failed_to_execute": "Esecuzione non riuscita: {}",
-    "failed_to_get_task_identifier": "Impossibile ottenere l'identificatore dell'attività: {}",
-    "failed_to_mount_device": "Impossibile montare il dispositivo: {}",
-    "graphics": "Grafica: {}",
+    "failed_to_execute": "Esecuzione non riuscita: {arg0}",
+    "failed_to_get_task_identifier": "Impossibile ottenere l'identificatore dell'attività: {arg0}",
+    "failed_to_mount_device": "Impossibile montare il dispositivo: {arg0}",
+    "graphics": "Grafica: {arg0}",
     "resource_busy": "Risorsa occupata",
-    "utf_8": "UTF-8: {}"
+    "utf_8": "UTF-8: {arg0}"
   }
 }

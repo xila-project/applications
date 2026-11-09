@@ -35,16 +35,13 @@ impl View {
             lvgl::lv_obj_set_layout(root, lvgl::lv_layout_t_LV_LAYOUT_FLEX);
             lvgl::lv_obj_set_flex_flow(root, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
             lvgl::lv_obj_set_style_pad_all(root, 16, lvgl::LV_STATE_DEFAULT);
-            label(root, xila::internationalization::translate!("app.title"))?;
-            label(root, xila::internationalization::translate!("app.sources"))?;
+            label(root, xila::internationalization::t!("app.title"))?;
+            label(root, xila::internationalization::t!("app.sources"))?;
             let uptime = label(root, "")?;
             let tasks = label(root, "")?;
             let memory = label(root, "")?;
             let capacity = label(root, "")?;
-            label(
-                root,
-                xila::internationalization::translate!("metrics.unsupported"),
-            )?;
+            label(root, xila::internationalization::t!("metrics.unsupported"))?;
             let (interval, interval_text) = button(root)?;
             let (toggle, toggle_text) = button(root)?;
             let status = label(root, "")?;
@@ -90,22 +87,22 @@ impl View {
             text(
                 self.uptime,
                 &format!(
-                    xila::internationalization::translate!("metrics.uptime"),
-                    uptime
+                    "{}",
+                    xila::internationalization::t!("metrics.uptime", arg0 = uptime)
                 ),
             );
             text(
                 self.tasks,
                 &format!(
-                    xila::internationalization::translate!("metrics.tasks"),
-                    tasks
+                    "{}",
+                    xila::internationalization::t!("metrics.tasks", arg0 = tasks)
                 ),
             );
             text(
                 self.memory,
                 &format!(
-                    xila::internationalization::translate!("metrics.memory_used"),
-                    memory.used
+                    "{}",
+                    xila::internationalization::t!("metrics.memory_used", arg0 = memory.used)
                 ),
             );
             text(
@@ -113,12 +110,11 @@ impl View {
                 &match memory.capacity {
                     Some(bytes) => {
                         format!(
-                            xila::internationalization::translate!("metrics.memory_capacity"),
-                            bytes
+                            "{}",
+                            xila::internationalization::t!("metrics.memory_capacity", arg0 = bytes)
                         )
                     }
-                    None => xila::internationalization::translate!("metrics.capacity_unavailable")
-                        .into(),
+                    None => xila::internationalization::t!("metrics.capacity_unavailable").into(),
                 },
             );
         }
@@ -130,26 +126,26 @@ impl View {
             text(
                 self.interval_text,
                 &format!(
-                    xila::internationalization::translate!("actions.interval"),
-                    interval
+                    "{}",
+                    xila::internationalization::t!("actions.interval", arg0 = interval)
                 ),
             );
             text(
                 self.toggle_text,
                 if running {
-                    xila::internationalization::translate!("actions.stop")
+                    xila::internationalization::t!("actions.stop")
                 } else {
-                    xila::internationalization::translate!("actions.start")
+                    xila::internationalization::t!("actions.start")
                 },
             );
             text(
                 self.status,
                 if failed {
-                    xila::internationalization::translate!("workload.failed")
+                    xila::internationalization::t!("workload.failed")
                 } else if running {
-                    xila::internationalization::translate!("workload.running")
+                    xila::internationalization::t!("workload.running")
                 } else {
-                    xila::internationalization::translate!("workload.idle")
+                    xila::internationalization::t!("workload.idle")
                 },
             );
         }

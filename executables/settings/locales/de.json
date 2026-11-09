@@ -42,22 +42,22 @@
     "cancel": "Abbrechen"
   },
   "errors": {
-    "authentication_failed": "Authentifizierung fehlgeschlagen: {}",
+    "authentication_failed": "Authentifizierung fehlgeschlagen: {arg0}",
     "could_not_apply_appearance": "Darstellung konnte nicht übernommen werden.",
     "could_not_load_appearance_choose_settings_to_save_a_replacement": "Darstellung konnte nicht geladen werden. Neue Einstellungen auswählen und speichern.",
     "failed_to_create_ui_element": "Oberflächenelement konnte nicht erstellt werden",
     "failed_to_create_object": "Objekt konnte nicht erstellt werden",
     "failed_to_get_child_object": "Untergeordnetes Objekt konnte nicht abgerufen werden",
-    "failed_to_get_current_task_identifier": "Kennung der aktuellen Aufgabe konnte nicht abgerufen werden: {}",
-    "failed_to_open_standard_file": "Standarddatei konnte nicht geöffnet werden: {}",
-    "failed_to_read_directory": "Verzeichnis konnte nicht gelesen werden: {}",
-    "failed_to_set_environment_variable": "Umgebungsvariable konnte nicht gesetzt werden: {}",
-    "failed_to_set_task_user": "Aufgabenbenutzer konnte nicht festgelegt werden: {}",
+    "failed_to_get_current_task_identifier": "Kennung der aktuellen Aufgabe konnte nicht abgerufen werden: {arg0}",
+    "failed_to_open_standard_file": "Standarddatei konnte nicht geöffnet werden: {arg0}",
+    "failed_to_read_directory": "Verzeichnis konnte nicht gelesen werden: {arg0}",
+    "failed_to_set_environment_variable": "Umgebungsvariable konnte nicht gesetzt werden: {arg0}",
+    "failed_to_set_task_user": "Aufgabenbenutzer konnte nicht festgelegt werden: {arg0}",
     "formatting_error": "Formatierungsfehler",
-    "graphics_error": "Grafikfehler: {}",
-    "invalid_utf_8_string": "Ungültige UTF-8-Zeichenfolge: {}",
-    "null_character_in_string": "Nullzeichen in Zeichenfolge: {}",
-    "virtual_file_system_error": "Fehler im virtuellen Dateisystem: {}"
+    "graphics_error": "Grafikfehler: {arg0}",
+    "invalid_utf_8_string": "Ungültige UTF-8-Zeichenfolge: {arg0}",
+    "null_character_in_string": "Nullzeichen in Zeichenfolge: {arg0}",
+    "virtual_file_system_error": "Fehler im virtuellen Dateisystem: {arg0}"
   },
   "about": {
     "fields": {

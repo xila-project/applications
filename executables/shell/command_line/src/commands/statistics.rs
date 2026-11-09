@@ -4,7 +4,7 @@ use getargs::Options;
 use getargs_derive::GetArgs;
 use xila::{
     file_system::Path,
-    internationalization::translate,
+    internationalization::t,
     shared::{BYTES_SUFFIX, Unit},
 };
 
@@ -96,27 +96,27 @@ fn format_statistics(
 {}: {}
 
 "#,
-        translate!("listing.columns.kind"),
+        t!("listing.columns.kind"),
         statistics.kind,
-        translate!("listing.columns.inode"),
+        t!("listing.columns.inode"),
         statistics.inode,
-        translate!("listing.columns.links"),
+        t!("listing.columns.links"),
         statistics.links,
-        translate!("listing.columns.size"),
+        t!("listing.columns.size"),
         size,
-        translate!("listing.columns.user"),
+        t!("listing.columns.user"),
         user,
-        translate!("listing.columns.group"),
+        t!("listing.columns.group"),
         group,
-        translate!("listing.columns.permissions"),
+        t!("listing.columns.permissions"),
         statistics.permissions,
-        translate!("listing.columns.accessed"),
+        t!("listing.columns.accessed"),
         statistics.access,
-        translate!("listing.columns.modified"),
+        t!("listing.columns.modified"),
         statistics.modification,
-        translate!("listing.columns.created"),
+        t!("listing.columns.created"),
         statistics.creation,
-        translate!("listing.columns.status"),
+        t!("listing.columns.status"),
         statistics.status,
     )
 }

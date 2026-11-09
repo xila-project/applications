@@ -42,22 +42,22 @@
     "cancel": "Annuler"
   },
   "errors": {
-    "authentication_failed": "Échec de l'authentification: {}",
+    "authentication_failed": "Échec de l'authentification: {arg0}",
     "could_not_apply_appearance": "Impossible d’appliquer l’apparence.",
     "could_not_load_appearance_choose_settings_to_save_a_replacement": "Impossible de charger l’apparence. Choisissez des réglages pour la remplacer.",
     "failed_to_create_ui_element": "Échec de la création de l'élément d'interface utilisateur",
     "failed_to_create_object": "Échec de la création de l'objet",
     "failed_to_get_child_object": "Échec de l'obtention de l'objet enfant",
-    "failed_to_get_current_task_identifier": "Échec de l'obtention de l'identifiant de la tâche en cours: {}",
-    "failed_to_open_standard_file": "Échec de l'ouverture du fichier standard: {}",
-    "failed_to_read_directory": "Échec de la lecture du répertoire: {}",
-    "failed_to_set_environment_variable": "Échec de la définition de la variable d'environnement: {}",
-    "failed_to_set_task_user": "Échec de la définition de l'utilisateur de la tâche: {}",
+    "failed_to_get_current_task_identifier": "Échec de l'obtention de l'identifiant de la tâche en cours: {arg0}",
+    "failed_to_open_standard_file": "Échec de l'ouverture du fichier standard: {arg0}",
+    "failed_to_read_directory": "Échec de la lecture du répertoire: {arg0}",
+    "failed_to_set_environment_variable": "Échec de la définition de la variable d'environnement: {arg0}",
+    "failed_to_set_task_user": "Échec de la définition de l'utilisateur de la tâche: {arg0}",
     "formatting_error": "Erreur de formatage",
-    "graphics_error": "Erreur graphique: {}",
-    "invalid_utf_8_string": "Chaîne UTF-8 invalide : {}",
-    "null_character_in_string": "Caractère nul dans la chaîne: {}",
-    "virtual_file_system_error": "Erreur du système de fichiers virtuel: {}"
+    "graphics_error": "Erreur graphique: {arg0}",
+    "invalid_utf_8_string": "Chaîne UTF-8 invalide : {arg0}",
+    "null_character_in_string": "Caractère nul dans la chaîne: {arg0}",
+    "virtual_file_system_error": "Erreur du système de fichiers virtuel: {arg0}"
   },
   "about": {
     "fields": {

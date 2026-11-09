@@ -1,6 +1,6 @@
 {
   "errors": {
-    "event_handling_failed": "Fehler bei der Verarbeitung eines Dateimanager-Ereignisses: {:?}",
-    "invalid_entered_path": "Ungültiger Pfad eingegeben: {}"
+    "event_handling_failed": "Fehler bei der Verarbeitung eines Dateimanager-Ereignisses: {arg0:?}",
+    "invalid_entered_path": "Ungültiger Pfad eingegeben: {arg0}"
   }
 }

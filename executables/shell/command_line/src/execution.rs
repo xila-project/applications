@@ -60,7 +60,7 @@ impl Shell {
                 self.background_jobs.retain(|job| !job.is_finished());
                 if self.background_jobs.len() == MAX_BACKGROUND_JOBS {
                     self.last_status = 1;
-                    self.diagnostic(xila::internationalization::translate!(
+                    self.diagnostic(xila::internationalization::t!(
                         "errors.too_many_background_jobs"
                     ))
                     .await;

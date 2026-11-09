@@ -4,11 +4,11 @@
   },
   "errors": {
     "failed_to_create_object": "Não foi possível criar o objeto",
-    "failed_to_execute": "Falha ao executar: {}",
-    "failed_to_get_task_identifier": "Não foi possível obter o identificador da tarefa: {}",
-    "failed_to_mount_device": "Não foi possível montar o dispositivo: {}",
-    "graphics": "Gráficos: {}",
+    "failed_to_execute": "Falha ao executar: {arg0}",
+    "failed_to_get_task_identifier": "Não foi possível obter o identificador da tarefa: {arg0}",
+    "failed_to_mount_device": "Não foi possível montar o dispositivo: {arg0}",
+    "graphics": "Gráficos: {arg0}",
     "resource_busy": "Recurso ocupado",
-    "utf_8": "UTF-8: {}"
+    "utf_8": "UTF-8: {arg0}"
   }
 }

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+embedded-i18n = { workspace = true }
 xila = { workspace = true, features = ["graphics"] }
 const_format = { version = "0.2", features = ["fmt"] }
 embedded-io = { workspace = true }
@@ -27,3 +28,9 @@ path = "tests/integration_test.rs"
 
 [lib]
 name = "settings"
+
+[package.metadata.i18n]
+load-path = "locales"
+default-locale = "en"
+fallback = ["en"]
+strict = true

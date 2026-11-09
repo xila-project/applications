@@ -5,7 +5,7 @@ extern crate alloc;
 #[cfg(test)]
 extern crate std;
 
-xila::internationalization::track_locales!();
+xila::internationalization::i18n!("locales");
 
 #[cfg(test)]
 mod appearance;

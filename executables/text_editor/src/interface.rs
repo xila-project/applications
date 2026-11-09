@@ -1,5 +1,5 @@
 use crate::storage::{self, PAGE_BYTES, Page, WorkingCopy};
-use embedded_i18n::translate;
+use embedded_i18n::t;
 use std::{
     ffi::{CStr, CString},
     path::Path,
@@ -56,7 +56,7 @@ pub fn run() -> wasm::Result<()> {
             if code == EVENT_CLOSE_REQUESTED {
                 if ui.working_unusable {
                     if ui.confirm_close != Some(ui.revision) {
-                        ui.status(translate!("errors.edit_failed_close_again"))?;
+                        ui.status(t!("errors.edit_failed_close_again"))?;
                         ui.confirm_close = Some(ui.revision);
                         continue;
                     }
@@ -69,7 +69,7 @@ pub fn run() -> wasm::Result<()> {
                     }
                     return Ok(());
                 }
-                ui.status(translate!("warnings.unsaved_close_again"))?;
+                ui.status(t!("warnings.unsaved_close_again"))?;
                 ui.confirm_close = Some(ui.revision);
             } else if ui.picker.is_some() {
                 continue;
@@ -128,13 +128,13 @@ impl Interface {
             object_set_width(actions, percentage(100)?)?;
             object_set_height(actions, 72)?;
             let action_map = [
-                translate!(c"navigation.previous_page").as_ptr(),
-                translate!(c"navigation.next_page").as_ptr(),
+                t!(c"navigation.previous_page").as_ptr(),
+                t!(c"navigation.next_page").as_ptr(),
                 c"\n".as_ptr(),
-                translate!(c"controls.new_file").as_ptr(),
-                translate!(c"controls.open_file").as_ptr(),
-                translate!(c"controls.save_file").as_ptr(),
-                translate!(c"controls.choose_folder").as_ptr(),
+                t!(c"controls.new_file").as_ptr(),
+                t!(c"controls.open_file").as_ptr(),
+                t!(c"controls.save_file").as_ptr(),
+                t!(c"controls.choose_folder").as_ptr(),
                 c"".as_ptr(),
             ];
             buttonmatrix_set_map(actions, action_map.as_ptr())?;
@@ -184,7 +184,7 @@ impl Interface {
                 retained_picker: None,
                 _action_map: action_map,
             };
-            ui.status(translate!("file_path.picker_instructions"))?;
+            ui.status(t!("file_path.picker_instructions"))?;
             ui.show_page()?;
             Ok(ui)
         }
@@ -226,7 +226,7 @@ impl Interface {
             return Ok(true);
         }
         let Some(text) = self.edited_text()? else {
-            self.status(translate!("errors.page_exceeds_byte_limit"))?;
+            self.status(t!("errors.page_exceeds_byte_limit"))?;
             return Ok(false);
         };
         if text != self.original_page {
@@ -239,7 +239,7 @@ impl Interface {
                 self.dirty = true;
                 self.revision = self.revision.wrapping_add(1);
                 self.working_unusable = true;
-                self.status(translate!("errors.edit_failed_reopen_source"))?;
+                self.status(t!("errors.edit_failed_reopen_source"))?;
                 return Ok(false);
             }
             self.dirty = true;
@@ -254,7 +254,7 @@ impl Interface {
             return Ok(());
         }
         let Some(working) = self.working.as_mut() else {
-            self.status(translate!("status.open_or_create_first"))?;
+            self.status(t!("status.open_or_create_first"))?;
             return Ok(());
         };
         if forward {
@@ -278,7 +278,7 @@ impl Interface {
         let path = match self.path() {
             Ok(path) => path,
             Err(_) => {
-                self.status(translate!("file_path.placeholder"))?;
+                self.status(t!("file_path.placeholder"))?;
                 return Ok(());
             }
         };
@@ -293,9 +293,9 @@ impl Interface {
                 self.working_unusable = false;
                 self.revision = self.revision.wrapping_add(1);
                 self.show_page()?;
-                self.status(translate!("file_path.new_file_default_name"))?;
+                self.status(t!("file_path.new_file_default_name"))?;
             }
-            Err(_) => self.status(translate!("errors.working_copy_creation_failed"))?,
+            Err(_) => self.status(t!("errors.working_copy_creation_failed"))?,
         }
         Ok(())
     }
@@ -310,13 +310,13 @@ impl Interface {
             }
         } else if mode == FilePickerMode::SaveFile {
             if self.working_unusable {
-                return self.status(translate!("errors.edit_failed_reopen_source"));
+                return self.status(t!("errors.edit_failed_reopen_source"));
             }
             if !self.commit_page()? {
                 return Ok(());
             }
             if self.working.is_none() {
-                return self.status(translate!("status.open_or_create_first"));
+                return self.status(t!("status.open_or_create_first"));
             }
         }
         let mut initial = self.path().unwrap_or_else(|_| "/".into());
@@ -362,7 +362,7 @@ impl Interface {
             let selected = if mode == FilePickerMode::Directory {
                 let Some(destination) = storage::new_path(selected) else {
                     self.picker = None;
-                    return self.status(translate!("errors.folder_path_too_long"));
+                    return self.status(t!("errors.folder_path_too_long"));
                 };
                 destination
             } else {
@@ -378,7 +378,7 @@ impl Interface {
             match mode {
                 FilePickerMode::OpenFile => self.open_document()?,
                 FilePickerMode::SaveFile => self.save_document()?,
-                FilePickerMode::Directory => self.status(translate!("status.folder_selected"))?,
+                FilePickerMode::Directory => self.status(t!("status.folder_selected"))?,
             }
         }
         Ok(())
@@ -389,7 +389,7 @@ impl Interface {
         let path = match self.path() {
             Ok(path) => path,
             Err(_) => {
-                self.status(translate!("file_path.placeholder"))?;
+                self.status(t!("file_path.placeholder"))?;
                 return Ok(());
             }
         };
@@ -403,16 +403,16 @@ impl Interface {
                 self.working_unusable = false;
                 self.revision = self.revision.wrapping_add(1);
                 self.show_page()?;
-                self.status(translate!("status.opened"))?;
+                self.status(t!("status.opened"))?;
             }
-            Err(_) => self.status(translate!("errors.open_failed"))?,
+            Err(_) => self.status(t!("errors.open_failed"))?,
         }
         Ok(())
     }
 
     fn save_document(&mut self) -> wasm::Result<()> {
         if self.working_unusable {
-            self.status(translate!("errors.edit_failed_reopen_source"))?;
+            self.status(t!("errors.edit_failed_reopen_source"))?;
             return Ok(());
         }
         if !self.commit_page()? {
@@ -421,20 +421,20 @@ impl Interface {
         let path = match self.path() {
             Ok(path) => path,
             Err(_) => {
-                self.status(translate!("file_path.placeholder"))?;
+                self.status(t!("file_path.placeholder"))?;
                 return Ok(());
             }
         };
         let save_result = match self.working.as_mut() {
             Some(working) => working.save_to(&path),
-            None => return self.status(translate!("status.open_or_create_first")),
+            None => return self.status(t!("status.open_or_create_first")),
         };
         if save_result.is_ok() {
             self.dirty = false;
             self.revision = self.revision.wrapping_add(1);
-            self.status(translate!("status.saved"))?;
+            self.status(t!("status.saved"))?;
         } else {
-            self.status(translate!("errors.save_failed_working_copy_preserved"))?;
+            self.status(t!("errors.save_failed_working_copy_preserved"))?;
         }
         Ok(())
     }
@@ -442,7 +442,7 @@ impl Interface {
     fn allow_discard(&mut self) -> wasm::Result<bool> {
         if self.dirty && self.confirm_open != Some(self.revision) {
             self.confirm_open = Some(self.revision);
-            self.status(translate!("warnings.unsaved_new_or_open_again"))?;
+            self.status(t!("warnings.unsaved_new_or_open_again"))?;
             return Ok(false);
         }
         self.confirm_open = None;
