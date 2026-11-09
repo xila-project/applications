@@ -42,22 +42,22 @@
     "cancel": "Annulla"
   },
   "errors": {
-    "authentication_failed": "Autenticazione non riuscita: {}",
+    "authentication_failed": "Autenticazione non riuscita: {arg0}",
     "could_not_apply_appearance": "Impossibile applicare l'aspetto.",
     "could_not_load_appearance_choose_settings_to_save_a_replacement": "Impossibile caricare l'aspetto. Scegli le impostazioni e salva una nuova configurazione.",
     "failed_to_create_ui_element": "Impossibile creare l'elemento dell'interfaccia",
     "failed_to_create_object": "Impossibile creare l'oggetto",
     "failed_to_get_child_object": "Impossibile ottenere l'oggetto figlio",
-    "failed_to_get_current_task_identifier": "Impossibile ottenere l'identificatore dell'attività corrente: {}",
-    "failed_to_open_standard_file": "Impossibile aprire il file standard: {}",
-    "failed_to_read_directory": "Impossibile leggere la directory: {}",
-    "failed_to_set_environment_variable": "Impossibile impostare la variabile d'ambiente: {}",
-    "failed_to_set_task_user": "Impossibile impostare l'utente dell'attività: {}",
+    "failed_to_get_current_task_identifier": "Impossibile ottenere l'identificatore dell'attività corrente: {arg0}",
+    "failed_to_open_standard_file": "Impossibile aprire il file standard: {arg0}",
+    "failed_to_read_directory": "Impossibile leggere la directory: {arg0}",
+    "failed_to_set_environment_variable": "Impossibile impostare la variabile d'ambiente: {arg0}",
+    "failed_to_set_task_user": "Impossibile impostare l'utente dell'attività: {arg0}",
     "formatting_error": "Errore di formattazione",
-    "graphics_error": "Errore grafico: {}",
-    "invalid_utf_8_string": "Stringa UTF-8 non valida: {}",
-    "null_character_in_string": "Carattere nullo nella stringa: {}",
-    "virtual_file_system_error": "Errore del file system virtuale: {}"
+    "graphics_error": "Errore grafico: {arg0}",
+    "invalid_utf_8_string": "Stringa UTF-8 non valida: {arg0}",
+    "null_character_in_string": "Carattere nullo nella stringa: {arg0}",
+    "virtual_file_system_error": "Errore del file system virtuale: {arg0}"
   },
   "about": {
     "fields": {

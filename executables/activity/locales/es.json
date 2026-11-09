@@ -4,15 +4,15 @@
     "sources": "Reloj, registro de tareas y asignador de Xila"
   },
   "metrics": {
-    "uptime": "Tiempo de actividad: {} s",
-    "tasks": "Tareas registradas: {}",
-    "memory_used": "Memoria usada por el asignador: {} bytes",
-    "memory_capacity": "Capacidad del asignador: {} bytes",
+    "uptime": "Tiempo de actividad: {arg0} s",
+    "tasks": "Tareas registradas: {arg0}",
+    "memory_used": "Memoria usada por el asignador: {arg0} bytes",
+    "memory_capacity": "Capacidad del asignador: {arg0} bytes",
     "capacity_unavailable": "Capacidad del asignador: no disponible",
     "unsupported": "Uso de CPU / dispositivos registrados: no disponible"
   },
   "actions": {
-    "interval": "Actualización: {} ms (cambiar)",
+    "interval": "Actualización: {arg0} ms (cambiar)",
     "start": "Iniciar demo (4 KiB / 10 s)",
     "stop": "Detener demo"
   },

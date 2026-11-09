@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+embedded-i18n = { workspace = true }
 xila = { workspace = true, features = ["graphics"] }
 embassy-futures = { workspace = true }
 
@@ -14,3 +15,9 @@ critical-section = { workspace = true, features = ["std"] }
 
 [lib]
 name = "activity"
+
+[package.metadata.i18n]
+load-path = "locales"
+default-locale = "en"
+fallback = ["en"]
+strict = true

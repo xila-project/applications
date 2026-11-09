@@ -7,7 +7,7 @@
   },
   "dns": {
     "errors": {
-      "unknown_host": "{} を解決できません: 不明なホスト"
+      "unknown_host": "{arg0} を解決できません: 不明なホスト"
     },
     "records": {
       "unit": {
@@ -16,40 +16,40 @@
       }
     },
     "status": {
-      "no_records_found": "ドメイン '{}' の {} レコードが見つかりませんでした"
+      "no_records_found": "ドメイン '{arg0}' の {arg1} レコードが見つかりませんでした"
     }
   },
   "errors": {
-    "argument_parsing_error": "引数の解析に失敗しました: {}",
-    "authentication_failed": "認証に失敗しました: {}",
-    "failed_to_create_directory": "ディレクトリの作成に失敗しました: {}",
-    "failed_to_create_socket": "ソケットの作成に失敗しました: {}",
-    "failed_to_create_symbolic_link": "シンボリックリンクの作成に失敗しました: {}",
+    "argument_parsing_error": "引数の解析に失敗しました: {arg0}",
+    "authentication_failed": "認証に失敗しました: {arg0}",
+    "failed_to_create_directory": "ディレクトリの作成に失敗しました: {arg0}",
+    "failed_to_create_socket": "ソケットの作成に失敗しました: {arg0}",
+    "failed_to_create_symbolic_link": "シンボリックリンクの作成に失敗しました: {arg0}",
     "failed_to_execute_command": "コマンドを実行できませんでした",
     "failed_to_get_environment_variable": "環境変数を取得できませんでした",
-    "failed_to_get_metadata": "メタデータの取得に失敗しました: {}",
+    "failed_to_get_metadata": "メタデータの取得に失敗しました: {arg0}",
     "failed_to_get_task_identifier": "タスク識別子を取得できませんでした",
-    "failed_to_get_task_user": "タスクユーザーの取得に失敗しました: {}",
+    "failed_to_get_task_user": "タスクユーザーの取得に失敗しました: {arg0}",
     "failed_to_join_path": "パスを結合できませんでした",
     "failed_to_join_task": "タスクの終了待機に失敗しました",
-    "failed_to_open_directory": "ディレクトリのオープンに失敗しました: {}",
-    "failed_to_open_file": "ファイルのオープンに失敗しました: {}",
-    "failed_to_read_directory_entry": "ディレクトリエントリの読み取りに失敗しました: {}",
-    "failed_to_read_environment_variable": "環境変数の読み取りに失敗しました: {}",
-    "failed_to_read_file": "ファイルの読み取りに失敗しました: {}",
-    "failed_to_read_symbolic_link": "シンボリックリンクの読み取りに失敗しました: {}",
-    "failed_to_remove_directory": "ディレクトリの削除に失敗しました: {}",
-    "failed_to_remove_environment_variable": "環境変数の削除に失敗しました: {}",
-    "failed_to_rename_path": "パスの名前変更に失敗しました: {}",
-    "failed_to_resolve_domain": "ドメインの名前解決に失敗しました: {}",
-    "failed_to_resolve_domain_for_records": "ドメイン '{}' の {} レコードを解決できませんでした: {}",
-    "failed_to_set_current_directory": "カレントディレクトリの設定に失敗しました: {}",
-    "failed_to_set_environment_variable": "環境変数の設定に失敗しました: {}",
-    "failed_to_set_permissions": "権限の設定に失敗しました: {}",
+    "failed_to_open_directory": "ディレクトリのオープンに失敗しました: {arg0}",
+    "failed_to_open_file": "ファイルのオープンに失敗しました: {arg0}",
+    "failed_to_read_directory_entry": "ディレクトリエントリの読み取りに失敗しました: {arg0}",
+    "failed_to_read_environment_variable": "環境変数の読み取りに失敗しました: {arg0}",
+    "failed_to_read_file": "ファイルの読み取りに失敗しました: {arg0}",
+    "failed_to_read_symbolic_link": "シンボリックリンクの読み取りに失敗しました: {arg0}",
+    "failed_to_remove_directory": "ディレクトリの削除に失敗しました: {arg0}",
+    "failed_to_remove_environment_variable": "環境変数の削除に失敗しました: {arg0}",
+    "failed_to_rename_path": "パスの名前変更に失敗しました: {arg0}",
+    "failed_to_resolve_domain": "ドメインの名前解決に失敗しました: {arg0}",
+    "failed_to_resolve_domain_for_records": "ドメイン '{arg0}' の {arg1} レコードを解決できませんでした: {arg2}",
+    "failed_to_set_current_directory": "カレントディレクトリの設定に失敗しました: {arg0}",
+    "failed_to_set_environment_variable": "環境変数の設定に失敗しました: {arg0}",
+    "failed_to_set_permissions": "権限の設定に失敗しました: {arg0}",
     "failed_to_set_shell_nesting_depth": "シェルのネスト深度の設定に失敗しました",
-    "failed_to_set_task_user": "タスクユーザーの設定に失敗しました: {}",
+    "failed_to_set_task_user": "タスクユーザーの設定に失敗しました: {arg0}",
     "failed_to_tokenize_command_line": "コマンドラインを分割できませんでした",
-    "failed_to_write_file": "ファイルの書き込みに失敗しました: {}",
+    "failed_to_write_file": "ファイルの書き込みに失敗しました: {arg0}",
     "format_failed": "書式エラー",
     "invalid_argument": "無効な引数",
     "invalid_number_of_arguments": "引数の数が正しくありません",
@@ -60,12 +60,12 @@
     "maximum_nested_shell_depth_exceeded": "シェルの最大ネスト深度を超えました",
     "missing_file_name_after_redirect_in": "入力リダイレクトの後にファイル名がありません",
     "missing_file_name_after_redirect_out": "出力リダイレクトの後にファイル名がありません",
-    "missing_positional_argument": "位置引数がありません: {}",
+    "missing_positional_argument": "位置引数がありません: {arg0}",
     "option_does_not_require_a_value": "このオプションに値は必要ありません",
     "option_requires_a_value": "このオプションには値が必要です",
-    "syntax_error_at_byte": "バイト {} の構文エラー: {}",
+    "syntax_error_at_byte": "バイト {arg0} の構文エラー: {arg1}",
     "too_many_background_jobs": "バックグラウンドジョブが多すぎます",
-    "with_details": "エラー: {}"
+    "with_details": "エラー: {arg0}"
   },
   "execution": {
     "errors": {
@@ -98,7 +98,7 @@
   },
   "ping": {
     "errors": {
-      "request_timeout": "icmp_seq {} の要求がタイムアウトしました"
+      "request_timeout": "icmp_seq {arg0} の要求がタイムアウトしました"
     },
     "reply": {
       "byte_unit": {

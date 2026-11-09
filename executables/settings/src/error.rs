@@ -5,8 +5,7 @@ use core::{
 };
 use embedded_io::WriteFmtError;
 use xila::{
-    authentication, file_system, graphics, internationalization::translate, task,
-    virtual_file_system,
+    authentication, file_system, graphics, internationalization::t, task, virtual_file_system,
 };
 
 pub type Result<T> = core::result::Result<T, Error>;
@@ -88,74 +87,82 @@ impl Display for Error {
     fn fmt(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             Error::Graphics(error) => {
-                write!(formatter, translate!("errors.graphics_error"), error)
+                write!(formatter, "{}", t!("errors.graphics_error", arg0 = error))
             }
             Error::VirtualFileSystem(error) => {
                 write!(
                     formatter,
-                    translate!("errors.virtual_file_system_error"),
-                    error
+                    "{}",
+                    t!("errors.virtual_file_system_error", arg0 = error)
                 )
             }
             Error::FailedToCreateObject => {
-                write!(formatter, translate!("errors.failed_to_create_object"))
+                write!(formatter, "{}", t!("errors.failed_to_create_object"))
             }
             Error::FailedToGetChild => {
-                write!(formatter, translate!("errors.failed_to_get_child_object"))
+                write!(formatter, "{}", t!("errors.failed_to_get_child_object"))
             }
             Error::FailedToSetEnvironmentVariable(error) => {
                 write!(
                     formatter,
-                    translate!("errors.failed_to_set_environment_variable"),
-                    error
+                    "{}",
+                    t!("errors.failed_to_set_environment_variable", arg0 = error)
                 )
             }
             Error::InvalidUtf8(error) => {
-                write!(formatter, translate!("errors.invalid_utf_8_string"), error)
+                write!(
+                    formatter,
+                    "{}",
+                    t!("errors.invalid_utf_8_string", arg0 = error)
+                )
             }
             Error::FailedToSetTaskUser(error) => {
                 write!(
                     formatter,
-                    translate!("errors.failed_to_set_task_user"),
-                    error
+                    "{}",
+                    t!("errors.failed_to_set_task_user", arg0 = error)
                 )
             }
             Error::FailedToGetCurrentTaskIdentifier(error) => {
                 write!(
                     formatter,
-                    translate!("errors.failed_to_get_current_task_identifier"),
-                    error
+                    "{}",
+                    t!("errors.failed_to_get_current_task_identifier", arg0 = error)
                 )
             }
             Error::FailedToReadDirectory(error) => {
                 write!(
                     formatter,
-                    translate!("errors.failed_to_read_directory"),
-                    error
+                    "{}",
+                    t!("errors.failed_to_read_directory", arg0 = error)
                 )
             }
             Error::FailedToOpenStandardFile(error) => {
                 write!(
                     formatter,
-                    translate!("errors.failed_to_open_standard_file"),
-                    error
+                    "{}",
+                    t!("errors.failed_to_open_standard_file", arg0 = error)
                 )
             }
             Error::NullCharacterInString(error) => {
                 write!(
                     formatter,
-                    translate!("errors.null_character_in_string"),
-                    error
+                    "{}",
+                    t!("errors.null_character_in_string", arg0 = error)
                 )
             }
             Error::FailedToCreateUiElement => {
-                write!(formatter, translate!("errors.failed_to_create_ui_element"))
+                write!(formatter, "{}", t!("errors.failed_to_create_ui_element"))
             }
             Error::Authentication(error) => {
-                write!(formatter, translate!("errors.authentication_failed"), error)
+                write!(
+                    formatter,
+                    "{}",
+                    t!("errors.authentication_failed", arg0 = error)
+                )
             }
             Error::FormattingError => {
-                write!(formatter, translate!("errors.formatting_error"))
+                write!(formatter, "{}", t!("errors.formatting_error"))
             }
         }
     }

@@ -1,23 +1,23 @@
 {
   "errors": {
-    "authentication_failed": "認証に失敗しました: {}",
-    "failed_to_add_shortcut": "ショートカットの追加に失敗しました: {}",
+    "authentication_failed": "認証に失敗しました: {arg0}",
+    "failed_to_add_shortcut": "ショートカットの追加に失敗しました: {arg0}",
     "failed_to_create_object": "オブジェクトの作成に失敗しました",
-    "failed_to_deserialize_shortcut": "ショートカットのデシリアライズに失敗しました: {}",
-    "failed_to_execute_shortcut": "ショートカットの実行に失敗しました: {}",
+    "failed_to_deserialize_shortcut": "ショートカットのデシリアライズに失敗しました: {arg0}",
+    "failed_to_execute_shortcut": "ショートカットの実行に失敗しました: {arg0}",
     "failed_to_get_child": "子オブジェクトの取得に失敗しました",
-    "failed_to_get_current_task_identifier": "現在のタスク識別子の取得に失敗しました: {}",
+    "failed_to_get_current_task_identifier": "現在のタスク識別子の取得に失敗しました: {arg0}",
     "failed_to_get_shortcut_file_path": "ショートカットファイルのパス取得に失敗しました",
-    "failed_to_open_directory": "ディレクトリのオープンに失敗しました: {}",
-    "failed_to_open_standard_file": "標準ファイルのオープンに失敗しました: {}",
-    "failed_to_read_shortcut_directory": "ショートカットディレクトリの読み取りに失敗しました: {}",
-    "failed_to_read_shortcut_file": "ショートカットファイルの読み取りに失敗しました: {}",
-    "failed_to_set_environment_variable": "環境変数の設定に失敗しました: {}",
-    "failed_to_set_task_user": "タスクユーザーの設定に失敗しました: {}",
-    "graphics_error": "グラフィックスエラー: {}",
-    "invalid_utf_8": "無効な UTF-8: {}",
+    "failed_to_open_directory": "ディレクトリのオープンに失敗しました: {arg0}",
+    "failed_to_open_standard_file": "標準ファイルのオープンに失敗しました: {arg0}",
+    "failed_to_read_shortcut_directory": "ショートカットディレクトリの読み取りに失敗しました: {arg0}",
+    "failed_to_read_shortcut_file": "ショートカットファイルの読み取りに失敗しました: {arg0}",
+    "failed_to_set_environment_variable": "環境変数の設定に失敗しました: {arg0}",
+    "failed_to_set_task_user": "タスクユーザーの設定に失敗しました: {arg0}",
+    "graphics_error": "グラフィックスエラー: {arg0}",
+    "invalid_utf_8": "無効な UTF-8: {arg0}",
     "missing_arguments": "引数が不足しています",
-    "null_character_in_string": "文字列にヌル文字があります: {}"
+    "null_character_in_string": "文字列にヌル文字があります: {arg0}"
   },
   "login": {
     "actions": {

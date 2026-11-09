@@ -40,22 +40,22 @@
     "none": "无"
   },
   "errors": {
-    "authentication_failed": "身份验证失败：{}",
+    "authentication_failed": "身份验证失败：{arg0}",
     "could_not_apply_appearance": "无法应用外观。",
     "could_not_load_appearance_choose_settings_to_save_a_replacement": "无法加载外观。请选择设置并保存以替换原配置。",
     "failed_to_create_object": "创建对象失败",
     "failed_to_create_ui_element": "创建界面元素失败",
     "failed_to_get_child_object": "获取子对象失败",
-    "failed_to_get_current_task_identifier": "获取当前任务标识符失败：{}",
-    "failed_to_open_standard_file": "打开标准文件失败：{}",
-    "failed_to_read_directory": "读取目录失败：{}",
-    "failed_to_set_environment_variable": "设置环境变量失败：{}",
-    "failed_to_set_task_user": "设置任务用户失败：{}",
+    "failed_to_get_current_task_identifier": "获取当前任务标识符失败：{arg0}",
+    "failed_to_open_standard_file": "打开标准文件失败：{arg0}",
+    "failed_to_read_directory": "读取目录失败：{arg0}",
+    "failed_to_set_environment_variable": "设置环境变量失败：{arg0}",
+    "failed_to_set_task_user": "设置任务用户失败：{arg0}",
     "formatting_error": "格式化错误",
-    "graphics_error": "图形错误：{}",
-    "invalid_utf_8_string": "无效的 UTF-8 字符串：{}",
-    "null_character_in_string": "字符串包含空字符：{}",
-    "virtual_file_system_error": "虚拟文件系统错误：{}"
+    "graphics_error": "图形错误：{arg0}",
+    "invalid_utf_8_string": "无效的 UTF-8 字符串：{arg0}",
+    "null_character_in_string": "字符串包含空字符：{arg0}",
+    "virtual_file_system_error": "虚拟文件系统错误：{arg0}"
   },
   "general": {
     "fields": {

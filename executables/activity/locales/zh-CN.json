@@ -4,15 +4,15 @@
     "sources": "Xila 时钟、任务注册表和内存分配器"
   },
   "metrics": {
-    "uptime": "运行时间：{} 秒",
-    "tasks": "已注册任务：{}",
-    "memory_used": "分配器已用内存：{} 字节",
-    "memory_capacity": "分配器容量：{} 字节",
+    "uptime": "运行时间：{arg0} 秒",
+    "tasks": "已注册任务：{arg0}",
+    "memory_used": "分配器已用内存：{arg0} 字节",
+    "memory_capacity": "分配器容量：{arg0} 字节",
     "capacity_unavailable": "分配器容量：不可用",
     "unsupported": "CPU 负载 / 已注册设备：不可用"
   },
   "actions": {
-    "interval": "刷新间隔：{} 毫秒（更改）",
+    "interval": "刷新间隔：{arg0} 毫秒（更改）",
     "start": "启动演示（4 KiB / 10 秒）",
     "stop": "停止演示"
   },

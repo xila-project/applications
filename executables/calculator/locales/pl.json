@@ -8,7 +8,7 @@
     "calculation_error": "Błąd obliczeń",
     "calculation_overflow": "Przepełnienie podczas obliczeń",
     "division_by_zero": "Dzielenie przez zero",
-    "calculation_with_details": "Błąd: {}",
+    "calculation_with_details": "Błąd: {arg0}",
     "expression_nested_too_deeply": "Zbyt głęboko zagnieżdżone wyrażenie",
     "expression_too_long": "Zbyt długie wyrażenie",
     "inexact_result": "Niedokładny wynik",

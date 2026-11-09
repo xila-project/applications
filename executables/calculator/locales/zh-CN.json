@@ -10,7 +10,7 @@
   "errors": {
     "calculation_error": "计算错误",
     "calculation_overflow": "计算溢出",
-    "calculation_with_details": "错误：{}",
+    "calculation_with_details": "错误：{arg0}",
     "division_by_zero": "除数不能为零",
     "expression_nested_too_deeply": "表达式嵌套过深",
     "expression_too_long": "表达式过长",

@@ -7,7 +7,7 @@
   },
   "dns": {
     "errors": {
-      "unknown_host": "Impossibile risolvere {}: host sconosciuto"
+      "unknown_host": "Impossibile risolvere {arg0}: host sconosciuto"
     },
     "records": {
       "unit": {
@@ -16,40 +16,40 @@
       }
     },
     "status": {
-      "no_records_found": "Nessun record {} trovato per il dominio '{}'"
+      "no_records_found": "Nessun record {arg0} trovato per il dominio '{arg1}'"
     }
   },
   "errors": {
-    "argument_parsing_error": "Errore nell'analisi degli argomenti: {}",
-    "authentication_failed": "Autenticazione non riuscita: {}",
-    "failed_to_create_directory": "Impossibile creare la directory: {}",
-    "failed_to_create_socket": "Impossibile creare il socket: {}",
-    "failed_to_create_symbolic_link": "Impossibile creare il collegamento simbolico: {}",
+    "argument_parsing_error": "Errore nell'analisi degli argomenti: {arg0}",
+    "authentication_failed": "Autenticazione non riuscita: {arg0}",
+    "failed_to_create_directory": "Impossibile creare la directory: {arg0}",
+    "failed_to_create_socket": "Impossibile creare il socket: {arg0}",
+    "failed_to_create_symbolic_link": "Impossibile creare il collegamento simbolico: {arg0}",
     "failed_to_execute_command": "Impossibile eseguire il comando",
     "failed_to_get_environment_variable": "Impossibile ottenere la variabile d'ambiente",
-    "failed_to_get_metadata": "Impossibile ottenere i metadati: {}",
+    "failed_to_get_metadata": "Impossibile ottenere i metadati: {arg0}",
     "failed_to_get_task_identifier": "Impossibile ottenere l'identificatore dell'attività",
-    "failed_to_get_task_user": "Impossibile ottenere l'utente dell'attività: {}",
+    "failed_to_get_task_user": "Impossibile ottenere l'utente dell'attività: {arg0}",
     "failed_to_join_path": "Impossibile unire i percorsi",
     "failed_to_join_task": "Impossibile attendere l'attività",
-    "failed_to_open_directory": "Impossibile aprire la directory: {}",
-    "failed_to_open_file": "Impossibile aprire il file: {}",
-    "failed_to_read_directory_entry": "Impossibile leggere la voce della directory: {}",
-    "failed_to_read_environment_variable": "Impossibile leggere la variabile d'ambiente: {}",
-    "failed_to_read_file": "Impossibile leggere il file: {}",
-    "failed_to_read_symbolic_link": "Impossibile leggere il collegamento simbolico: {}",
-    "failed_to_remove_directory": "Impossibile rimuovere la directory: {}",
-    "failed_to_remove_environment_variable": "Impossibile rimuovere la variabile d'ambiente: {}",
-    "failed_to_rename_path": "Impossibile rinominare il percorso: {}",
-    "failed_to_resolve_domain": "Impossibile risolvere il dominio: {}",
-    "failed_to_resolve_domain_for_records": "Impossibile risolvere il dominio '{}' per {} record: {}",
-    "failed_to_set_current_directory": "Impossibile impostare la directory corrente: {}",
-    "failed_to_set_environment_variable": "Impossibile impostare la variabile d'ambiente: {}",
-    "failed_to_set_permissions": "Impossibile impostare i permessi: {}",
+    "failed_to_open_directory": "Impossibile aprire la directory: {arg0}",
+    "failed_to_open_file": "Impossibile aprire il file: {arg0}",
+    "failed_to_read_directory_entry": "Impossibile leggere la voce della directory: {arg0}",
+    "failed_to_read_environment_variable": "Impossibile leggere la variabile d'ambiente: {arg0}",
+    "failed_to_read_file": "Impossibile leggere il file: {arg0}",
+    "failed_to_read_symbolic_link": "Impossibile leggere il collegamento simbolico: {arg0}",
+    "failed_to_remove_directory": "Impossibile rimuovere la directory: {arg0}",
+    "failed_to_remove_environment_variable": "Impossibile rimuovere la variabile d'ambiente: {arg0}",
+    "failed_to_rename_path": "Impossibile rinominare il percorso: {arg0}",
+    "failed_to_resolve_domain": "Impossibile risolvere il dominio: {arg0}",
+    "failed_to_resolve_domain_for_records": "Impossibile risolvere il dominio '{arg0}' per {arg1} record: {arg2}",
+    "failed_to_set_current_directory": "Impossibile impostare la directory corrente: {arg0}",
+    "failed_to_set_environment_variable": "Impossibile impostare la variabile d'ambiente: {arg0}",
+    "failed_to_set_permissions": "Impossibile impostare i permessi: {arg0}",
     "failed_to_set_shell_nesting_depth": "Impossibile impostare il livello di annidamento della shell",
-    "failed_to_set_task_user": "Impossibile impostare l'utente dell'attività: {}",
+    "failed_to_set_task_user": "Impossibile impostare l'utente dell'attività: {arg0}",
     "failed_to_tokenize_command_line": "Impossibile suddividere la riga di comando in token",
-    "failed_to_write_file": "Impossibile scrivere il file: {}",
+    "failed_to_write_file": "Impossibile scrivere il file: {arg0}",
     "format_failed": "Errore di formato",
     "invalid_argument": "Argomento non valido",
     "invalid_number_of_arguments": "Numero di argomenti non valido",
@@ -60,12 +60,12 @@
     "maximum_nested_shell_depth_exceeded": "Livello massimo di annidamento della shell superato",
     "missing_file_name_after_redirect_in": "Nome file mancante dopo il reindirizzamento di input",
     "missing_file_name_after_redirect_out": "Nome file mancante dopo il reindirizzamento di output",
-    "missing_positional_argument": "Argomento posizionale mancante: {}",
+    "missing_positional_argument": "Argomento posizionale mancante: {arg0}",
     "option_does_not_require_a_value": "L'opzione non richiede un valore",
     "option_requires_a_value": "L'opzione richiede un valore",
-    "syntax_error_at_byte": "Errore di sintassi al byte {}: {}",
+    "syntax_error_at_byte": "Errore di sintassi al byte {arg0}: {arg1}",
     "too_many_background_jobs": "Troppe attività in background",
-    "with_details": "Errore: {}"
+    "with_details": "Errore: {arg0}"
   },
   "execution": {
     "errors": {
@@ -98,7 +98,7 @@
   },
   "ping": {
     "errors": {
-      "request_timeout": "Timeout per icmp_seq {}"
+      "request_timeout": "Timeout per icmp_seq {arg0}"
     },
     "reply": {
       "byte_unit": {

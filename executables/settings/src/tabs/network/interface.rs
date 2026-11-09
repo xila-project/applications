@@ -5,7 +5,7 @@ use core::fmt::Write;
 use core::ptr::null_mut;
 use xila::{
     graphics::{EventKind, lvgl},
-    internationalization::translate,
+    internationalization::t,
     log,
     network::{
         GET_DNS_SERVER, GET_DNS_SERVER_COUNT, GET_HARDWARE_ADDRESS, GET_IP_ADDRESS,
@@ -76,7 +76,7 @@ impl InterfacePanel {
                     hardware_address[5]
                 )
                 .ok();
-                lvgl::lv_list_add_text(list, translate!(c"network.fields.mac_address").as_ptr());
+                lvgl::lv_list_add_text(list, t!(c"network.fields.mac_address").as_ptr());
 
                 lvgl::lv_list_add_button(list, null_mut(), format_buffer.as_ptr() as _);
             }
@@ -86,7 +86,7 @@ impl InterfacePanel {
                     .as_synchronous_file_mut()
                     .control(GET_IP_ADDRESS_COUNT, &())?;
 
-                lvgl::lv_list_add_text(list, translate!(c"network.fields.address").as_ptr());
+                lvgl::lv_list_add_text(list, t!(c"network.fields.address").as_ptr());
 
                 for index in 0..ip_count {
                     let ip = file
@@ -104,7 +104,7 @@ impl InterfacePanel {
                     .as_synchronous_file_mut()
                     .control(GET_ROUTE_COUNT, &())?;
 
-                lvgl::lv_list_add_text(list, translate!(c"network.fields.routes").as_ptr());
+                lvgl::lv_list_add_text(list, t!(c"network.fields.routes").as_ptr());
 
                 for index in 0..route_count {
                     let route = file.as_synchronous_file_mut().control(GET_ROUTE, &index)?;
@@ -119,7 +119,7 @@ impl InterfacePanel {
                     .as_synchronous_file_mut()
                     .control(GET_DNS_SERVER_COUNT, &())?;
 
-                lvgl::lv_list_add_text(list, translate!(c"network.fields.dns_servers").as_ptr());
+                lvgl::lv_list_add_text(list, t!(c"network.fields.dns_servers").as_ptr());
 
                 for index in 0..dns_count {
                     let dns = file
@@ -158,7 +158,7 @@ impl InterfacePanel {
 
             // Label: Configuration Mode
             let mode_label = lvgl::lv_label_create(container);
-            let mode_text = translate!(c"network.fields.configuration_mode");
+            let mode_text = t!(c"network.fields.configuration_mode");
             lvgl::lv_label_set_text(mode_label, mode_text.as_ptr() as *const _);
 
             // Radio group for configuration modew
@@ -168,24 +168,24 @@ impl InterfacePanel {
 
             // Radio: None
             let radio_none = lvgl::lv_radiobox_create(radio_group);
-            let none_text = translate!(c"common.none");
+            let none_text = t!(c"common.none");
             lvgl::lv_checkbox_set_text(radio_none, none_text.as_ptr() as *const _);
 
             // Radio: DHCP
             let radio_dhcp = lvgl::lv_radiobox_create(radio_group);
-            let dhcp_text = translate!(c"network.modes.dhcp");
+            let dhcp_text = t!(c"network.modes.dhcp");
             lvgl::lv_checkbox_set_text(radio_dhcp, dhcp_text.as_ptr() as *const _);
 
             // Radio: Static
             let radio_static = lvgl::lv_radiobox_create(radio_group);
-            let static_text = translate!(c"network.modes.static");
+            let static_text = t!(c"network.modes.static");
             lvgl::lv_checkbox_set_text(radio_static, static_text.as_ptr() as *const _);
 
             // Container for static configuration (hidden by default)
 
             // IP Address + CIDR input
             let address_label = lvgl::lv_label_create(container);
-            let address_text = translate!(c"network.fields.address");
+            let address_text = t!(c"network.fields.address");
             lvgl::lv_label_set_text(address_label, address_text.as_ptr() as *const _);
 
             let address_input = lvgl::lv_textarea_create(container);
@@ -202,7 +202,7 @@ impl InterfacePanel {
 
             // Gateway input
             let gateway_label = lvgl::lv_label_create(container);
-            let gateway_text = translate!(c"network.fields.gateway");
+            let gateway_text = t!(c"network.fields.gateway");
             lvgl::lv_label_set_text(gateway_label, gateway_text.as_ptr() as *const _);
 
             let gateway_input = lvgl::lv_textarea_create(container);
@@ -216,7 +216,7 @@ impl InterfacePanel {
 
             // DNS inputs
             let dns_label = lvgl::lv_label_create(container);
-            let dns_text = translate!(c"network.fields.dns_servers");
+            let dns_text = t!(c"network.fields.dns_servers");
             lvgl::lv_label_set_text(dns_label, dns_text.as_ptr() as *const _);
 
             let mut dns_inputs = [null_mut(); 3];
@@ -320,7 +320,7 @@ impl InterfacePanel {
             // Cancel button
             let cancel_button = lvgl::lv_button_create(button_container);
             let cancel_label = lvgl::lv_label_create(cancel_button);
-            let cancel_text = translate!(c"actions.cancel");
+            let cancel_text = t!(c"actions.cancel");
             lvgl::lv_label_set_text(cancel_label, cancel_text.as_ptr() as *const _);
 
             cancel_button
@@ -337,7 +337,7 @@ impl InterfacePanel {
         let apply_button = unsafe {
             let apply_button = lvgl::lv_button_create(button_container);
             let apply_label = lvgl::lv_label_create(apply_button);
-            let apply_text = translate!(c"actions.apply");
+            let apply_text = t!(c"actions.apply");
             lvgl::lv_label_set_text(apply_label, apply_text.as_ptr() as *const _);
             apply_button
         };
@@ -355,10 +355,8 @@ impl InterfacePanel {
 
         // Create general tab
         let general_tab = unsafe {
-            let tab = lvgl::lv_tabview_add_tab(
-                config_tabview,
-                translate!(c"tabs.general").as_ptr() as *const _,
-            );
+            let tab =
+                lvgl::lv_tabview_add_tab(config_tabview, t!(c"tabs.general").as_ptr() as *const _);
             if tab.is_null() {
                 return Err(Error::FailedToCreateObject);
             }

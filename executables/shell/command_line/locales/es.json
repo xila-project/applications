@@ -7,7 +7,7 @@
   },
   "dns": {
     "errors": {
-      "unknown_host": "No se puede resolver {}: host desconocido"
+      "unknown_host": "No se puede resolver {arg0}: host desconocido"
     },
     "records": {
       "unit": {
@@ -16,40 +16,40 @@
       }
     },
     "status": {
-      "no_records_found": "No se encontraron registros {} para el dominio '{}'"
+      "no_records_found": "No se encontraron registros {arg0} para el dominio '{arg1}'"
     }
   },
   "errors": {
-    "argument_parsing_error": "Error al analizar los argumentos: {}",
-    "authentication_failed": "Error de autenticación: {}",
-    "failed_to_create_directory": "No se pudo crear el directorio: {}",
-    "failed_to_create_socket": "No se pudo crear el socket: {}",
-    "failed_to_create_symbolic_link": "Error al crear el enlace simbólico: {}",
+    "argument_parsing_error": "Error al analizar los argumentos: {arg0}",
+    "authentication_failed": "Error de autenticación: {arg0}",
+    "failed_to_create_directory": "No se pudo crear el directorio: {arg0}",
+    "failed_to_create_socket": "No se pudo crear el socket: {arg0}",
+    "failed_to_create_symbolic_link": "Error al crear el enlace simbólico: {arg0}",
     "failed_to_execute_command": "No se pudo ejecutar el comando",
     "failed_to_get_environment_variable": "No se pudo obtener la variable de entorno",
-    "failed_to_get_metadata": "No se pudieron obtener los metadatos: {}",
+    "failed_to_get_metadata": "No se pudieron obtener los metadatos: {arg0}",
     "failed_to_get_task_identifier": "No se pudo obtener el identificador de tarea",
-    "failed_to_get_task_user": "No se pudo obtener el usuario de la tarea: {}",
+    "failed_to_get_task_user": "No se pudo obtener el usuario de la tarea: {arg0}",
     "failed_to_join_path": "No se pudo combinar la ruta",
     "failed_to_join_task": "No se pudo esperar a la tarea",
-    "failed_to_open_directory": "No se pudo abrir el directorio: {}",
-    "failed_to_open_file": "No se pudo abrir el archivo: {}",
-    "failed_to_read_directory_entry": "No se pudo leer la entrada del directorio: {}",
-    "failed_to_read_environment_variable": "No se pudo leer la variable de entorno: {}",
-    "failed_to_read_file": "No se pudo leer el archivo: {}",
-    "failed_to_read_symbolic_link": "Error al leer el enlace simbólico: {}",
-    "failed_to_remove_directory": "No se pudo eliminar el directorio: {}",
-    "failed_to_remove_environment_variable": "No se pudo eliminar la variable de entorno: {}",
-    "failed_to_rename_path": "No se pudo cambiar el nombre de la ruta: {}",
-    "failed_to_resolve_domain": "No se pudo resolver el dominio: {}",
-    "failed_to_resolve_domain_for_records": "No se pudo resolver el dominio '{}' para registros {}: {}",
-    "failed_to_set_current_directory": "No se pudo establecer el directorio actual: {}",
-    "failed_to_set_environment_variable": "No se pudo establecer la variable de entorno: {}",
-    "failed_to_set_permissions": "No se pudieron establecer los permisos: {}",
+    "failed_to_open_directory": "No se pudo abrir el directorio: {arg0}",
+    "failed_to_open_file": "No se pudo abrir el archivo: {arg0}",
+    "failed_to_read_directory_entry": "No se pudo leer la entrada del directorio: {arg0}",
+    "failed_to_read_environment_variable": "No se pudo leer la variable de entorno: {arg0}",
+    "failed_to_read_file": "No se pudo leer el archivo: {arg0}",
+    "failed_to_read_symbolic_link": "Error al leer el enlace simbólico: {arg0}",
+    "failed_to_remove_directory": "No se pudo eliminar el directorio: {arg0}",
+    "failed_to_remove_environment_variable": "No se pudo eliminar la variable de entorno: {arg0}",
+    "failed_to_rename_path": "No se pudo cambiar el nombre de la ruta: {arg0}",
+    "failed_to_resolve_domain": "No se pudo resolver el dominio: {arg0}",
+    "failed_to_resolve_domain_for_records": "No se pudo resolver el dominio '{arg0}' para registros {arg1}: {arg2}",
+    "failed_to_set_current_directory": "No se pudo establecer el directorio actual: {arg0}",
+    "failed_to_set_environment_variable": "No se pudo establecer la variable de entorno: {arg0}",
+    "failed_to_set_permissions": "No se pudieron establecer los permisos: {arg0}",
     "failed_to_set_shell_nesting_depth": "No se pudo establecer la profundidad de anidamiento del shell",
-    "failed_to_set_task_user": "No se pudo establecer el usuario de la tarea: {}",
+    "failed_to_set_task_user": "No se pudo establecer el usuario de la tarea: {arg0}",
     "failed_to_tokenize_command_line": "No se pudo dividir la línea de comandos en tokens",
-    "failed_to_write_file": "No se pudo escribir el archivo: {}",
+    "failed_to_write_file": "No se pudo escribir el archivo: {arg0}",
     "format_failed": "Error de formato",
     "invalid_argument": "Argumento no válido",
     "invalid_number_of_arguments": "Número de argumentos no válido",
@@ -60,12 +60,12 @@
     "maximum_nested_shell_depth_exceeded": "Se excedió la profundidad máxima de anidamiento del shell",
     "missing_file_name_after_redirect_in": "Falta el nombre de archivo después de la redirección de entrada",
     "missing_file_name_after_redirect_out": "Falta el nombre de archivo después de la redirección de salida",
-    "missing_positional_argument": "Falta el argumento posicional: {}",
+    "missing_positional_argument": "Falta el argumento posicional: {arg0}",
     "option_does_not_require_a_value": "La opción no requiere un valor",
     "option_requires_a_value": "La opción requiere un valor",
-    "syntax_error_at_byte": "Error de sintaxis en el byte {}: {}",
+    "syntax_error_at_byte": "Error de sintaxis en el byte {arg0}: {arg1}",
     "too_many_background_jobs": "Demasiadas tareas en segundo plano",
-    "with_details": "Error: {}"
+    "with_details": "Error: {arg0}"
   },
   "execution": {
     "errors": {
@@ -82,9 +82,9 @@
     "run_script_usage": "Uso: shell -s RUTA"
   },
   "legacy": {
-    "dns_records_line": "Registros {} para el dominio '{}':",
-    "ping_reply_line": "{} bytes de {}: icmp_seq={} tiempo={:.2} ms",
-    "ping_request_line": "PING {} ({}): {} bytes de datos"
+    "dns_records_line": "Registros {arg0} para el dominio '{arg1}':",
+    "ping_reply_line": "{arg0} bytes de {arg1}: icmp_seq={arg2} tiempo={arg3:.2} ms",
+    "ping_request_line": "PING {arg0} ({arg1}): {arg2} bytes de datos"
   },
   "listing": {
     "columns": {
@@ -103,7 +103,7 @@
   },
   "ping": {
     "errors": {
-      "request_timeout": "Tiempo de espera agotado para icmp_seq {}"
+      "request_timeout": "Tiempo de espera agotado para icmp_seq {arg0}"
     },
     "reply": {
       "byte_unit": {

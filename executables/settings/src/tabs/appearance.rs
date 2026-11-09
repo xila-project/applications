@@ -5,7 +5,7 @@ use xila::graphics::appearance::Appearance;
 use xila::{
     executable::ExecutableContext,
     graphics::{self, Event, EventKind, lvgl},
-    internationalization::translate,
+    internationalization::t,
 };
 
 pub struct AppearanceTab {
@@ -40,7 +40,7 @@ impl AppearanceTab {
         unsafe {
             let tab = check(lvgl::lv_tabview_add_tab(
                 parent,
-                translate!(c"tabs.appearance").as_ptr(),
+                t!(c"tabs.appearance").as_ptr(),
             ))?;
             lvgl::lv_obj_set_flex_flow(tab, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
             lvgl::lv_obj_set_style_pad_all(tab, 16, 0);
@@ -57,25 +57,25 @@ impl AppearanceTab {
                 lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
             );
             graphics::theme::set_surface(row, graphics::theme::Surface::Card);
-            let label = create_label(row, translate!(c"appearance.fields.dark_mode"))?;
+            let label = create_label(row, t!(c"appearance.fields.dark_mode"))?;
             lvgl::lv_obj_set_flex_grow(label, 1);
             self.dark_mode = check(lvgl::lv_switch_create(row))?;
 
             // LVGL copies this options string; no per-preset objects are needed.
             let options = CString::new(alloc::format!(
                 "{}\n{}\n{}\n{}\n{}\n{}",
-                translate!("appearance.colors.zinc_auto"),
-                translate!("appearance.colors.blue"),
-                translate!("appearance.colors.green"),
-                translate!("appearance.colors.orange"),
-                translate!("appearance.colors.rose"),
-                translate!("appearance.colors.violet")
+                t!("appearance.colors.zinc_auto"),
+                t!("appearance.colors.blue"),
+                t!("appearance.colors.green"),
+                t!("appearance.colors.orange"),
+                t!("appearance.colors.rose"),
+                t!("appearance.colors.violet")
             ))?;
-            create_label(tab, translate!(c"appearance.fields.primary_color"))?;
+            create_label(tab, t!(c"appearance.fields.primary_color"))?;
             self.primary = check(lvgl::lv_dropdown_create(tab))?;
             lvgl::lv_dropdown_set_options(self.primary, options.as_ptr());
             lvgl::lv_obj_set_width(self.primary, lvgl::lv_pct(100));
-            create_label(tab, translate!(c"appearance.fields.secondary_color"))?;
+            create_label(tab, t!(c"appearance.fields.secondary_color"))?;
             self.secondary = check(lvgl::lv_dropdown_create(tab))?;
             lvgl::lv_dropdown_set_options(self.secondary, options.as_ptr());
             lvgl::lv_obj_set_width(self.secondary, lvgl::lv_pct(100));
@@ -88,9 +88,7 @@ impl AppearanceTab {
             );
             if self.load_failed {
                 self.set_status(
-                    translate!(
-                        c"errors.could_not_load_appearance_choose_settings_to_save_a_replacement"
-                    ),
+                    t!(c"errors.could_not_load_appearance_choose_settings_to_save_a_replacement"),
                     true,
                 );
             }
@@ -116,7 +114,7 @@ impl AppearanceTab {
             xila::log::warning!("Could not apply appearance: {}", error);
             unsafe {
                 self.sync_controls();
-                self.set_status(translate!(c"errors.could_not_apply_appearance"), true);
+                self.set_status(t!(c"errors.could_not_apply_appearance"), true);
             }
             return true;
         }
@@ -131,12 +129,12 @@ impl AppearanceTab {
             .await
         {
             Ok(()) => unsafe {
-                self.set_status(translate!(c"appearance.status.saved"), false);
+                self.set_status(t!(c"appearance.status.saved"), false);
             },
             Err(error) => {
                 xila::log::warning!("Could not save appearance preferences: {}", error);
                 unsafe {
-                    self.set_status(translate!(c"appearance.status.applied_not_saved"), true);
+                    self.set_status(t!(c"appearance.status.applied_not_saved"), true);
                 }
             }
         }

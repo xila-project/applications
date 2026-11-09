@@ -42,22 +42,22 @@
     "cancel": "Anuluj"
   },
   "errors": {
-    "authentication_failed": "Uwierzytelnianie nie powiodło się: {}",
+    "authentication_failed": "Uwierzytelnianie nie powiodło się: {arg0}",
     "could_not_apply_appearance": "Nie udało się zastosować wyglądu.",
     "could_not_load_appearance_choose_settings_to_save_a_replacement": "Nie udało się wczytać wyglądu. Wybierz ustawienia i zapisz nową konfigurację.",
     "failed_to_create_ui_element": "Nie udało się utworzyć elementu interfejsu",
     "failed_to_create_object": "Nie udało się utworzyć obiektu",
     "failed_to_get_child_object": "Nie udało się pobrać obiektu podrzędnego",
-    "failed_to_get_current_task_identifier": "Nie udało się pobrać identyfikatora bieżącego zadania: {}",
-    "failed_to_open_standard_file": "Nie udało się otworzyć pliku standardowego: {}",
-    "failed_to_read_directory": "Nie udało się odczytać katalogu: {}",
-    "failed_to_set_environment_variable": "Nie udało się ustawić zmiennej środowiskowej: {}",
-    "failed_to_set_task_user": "Nie udało się ustawić użytkownika zadania: {}",
+    "failed_to_get_current_task_identifier": "Nie udało się pobrać identyfikatora bieżącego zadania: {arg0}",
+    "failed_to_open_standard_file": "Nie udało się otworzyć pliku standardowego: {arg0}",
+    "failed_to_read_directory": "Nie udało się odczytać katalogu: {arg0}",
+    "failed_to_set_environment_variable": "Nie udało się ustawić zmiennej środowiskowej: {arg0}",
+    "failed_to_set_task_user": "Nie udało się ustawić użytkownika zadania: {arg0}",
     "formatting_error": "Błąd formatowania",
-    "graphics_error": "Błąd grafiki: {}",
-    "invalid_utf_8_string": "Nieprawidłowy ciąg UTF-8: {}",
-    "null_character_in_string": "Znak zerowy w ciągu: {}",
-    "virtual_file_system_error": "Błąd wirtualnego systemu plików: {}"
+    "graphics_error": "Błąd grafiki: {arg0}",
+    "invalid_utf_8_string": "Nieprawidłowy ciąg UTF-8: {arg0}",
+    "null_character_in_string": "Znak zerowy w ciągu: {arg0}",
+    "virtual_file_system_error": "Błąd wirtualnego systemu plików: {arg0}"
   },
   "about": {
     "fields": {

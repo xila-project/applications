@@ -7,7 +7,7 @@
   },
   "dns": {
     "errors": {
-      "unknown_host": "Nie można rozwiązać {}: nieznany host"
+      "unknown_host": "Nie można rozwiązać {arg0}: nieznany host"
     },
     "records": {
       "unit": {
@@ -18,40 +18,40 @@
       }
     },
     "status": {
-      "no_records_found": "Nie znaleziono rekordów {} dla domeny '{}'"
+      "no_records_found": "Nie znaleziono rekordów {arg0} dla domeny '{arg1}'"
     }
   },
   "errors": {
-    "argument_parsing_error": "Błąd parsowania argumentów: {}",
-    "authentication_failed": "Uwierzytelnianie nie powiodło się: {}",
-    "failed_to_create_directory": "Nie udało się utworzyć katalogu: {}",
-    "failed_to_create_socket": "Nie udało się utworzyć gniazda: {}",
-    "failed_to_create_symbolic_link": "Nie udało się utworzyć dowiązania symbolicznego: {}",
+    "argument_parsing_error": "Błąd parsowania argumentów: {arg0}",
+    "authentication_failed": "Uwierzytelnianie nie powiodło się: {arg0}",
+    "failed_to_create_directory": "Nie udało się utworzyć katalogu: {arg0}",
+    "failed_to_create_socket": "Nie udało się utworzyć gniazda: {arg0}",
+    "failed_to_create_symbolic_link": "Nie udało się utworzyć dowiązania symbolicznego: {arg0}",
     "failed_to_execute_command": "Nie udało się wykonać polecenia",
     "failed_to_get_environment_variable": "Nie udało się pobrać zmiennej środowiskowej",
-    "failed_to_get_metadata": "Nie udało się pobrać metadanych: {}",
+    "failed_to_get_metadata": "Nie udało się pobrać metadanych: {arg0}",
     "failed_to_get_task_identifier": "Nie udało się pobrać identyfikatora zadania",
-    "failed_to_get_task_user": "Nie udało się pobrać użytkownika zadania: {}",
+    "failed_to_get_task_user": "Nie udało się pobrać użytkownika zadania: {arg0}",
     "failed_to_join_path": "Nie udało się połączyć ścieżek",
     "failed_to_join_task": "Nie udało się dołączyć do zadania",
-    "failed_to_open_directory": "Nie udało się otworzyć katalogu: {}",
-    "failed_to_open_file": "Nie udało się otworzyć pliku: {}",
-    "failed_to_read_directory_entry": "Nie udało się odczytać wpisu katalogu: {}",
-    "failed_to_read_environment_variable": "Nie udało się odczytać zmiennej środowiskowej: {}",
-    "failed_to_read_file": "Nie udało się odczytać pliku: {}",
-    "failed_to_read_symbolic_link": "Nie udało się odczytać dowiązania symbolicznego: {}",
-    "failed_to_remove_directory": "Nie udało się usunąć katalogu: {}",
-    "failed_to_remove_environment_variable": "Nie udało się usunąć zmiennej środowiskowej: {}",
-    "failed_to_rename_path": "Nie udało się zmienić nazwy ścieżki: {}",
-    "failed_to_resolve_domain": "Nie udało się rozwiązać domeny: {}",
-    "failed_to_resolve_domain_for_records": "Nie udało się rozwiązać domeny '{}' dla {} rekordów: {}",
-    "failed_to_set_current_directory": "Nie udało się ustawić bieżącego katalogu: {}",
-    "failed_to_set_environment_variable": "Nie udało się ustawić zmiennej środowiskowej: {}",
-    "failed_to_set_permissions": "Nie udało się ustawić uprawnień: {}",
+    "failed_to_open_directory": "Nie udało się otworzyć katalogu: {arg0}",
+    "failed_to_open_file": "Nie udało się otworzyć pliku: {arg0}",
+    "failed_to_read_directory_entry": "Nie udało się odczytać wpisu katalogu: {arg0}",
+    "failed_to_read_environment_variable": "Nie udało się odczytać zmiennej środowiskowej: {arg0}",
+    "failed_to_read_file": "Nie udało się odczytać pliku: {arg0}",
+    "failed_to_read_symbolic_link": "Nie udało się odczytać dowiązania symbolicznego: {arg0}",
+    "failed_to_remove_directory": "Nie udało się usunąć katalogu: {arg0}",
+    "failed_to_remove_environment_variable": "Nie udało się usunąć zmiennej środowiskowej: {arg0}",
+    "failed_to_rename_path": "Nie udało się zmienić nazwy ścieżki: {arg0}",
+    "failed_to_resolve_domain": "Nie udało się rozwiązać domeny: {arg0}",
+    "failed_to_resolve_domain_for_records": "Nie udało się rozwiązać domeny '{arg0}' dla {arg1} rekordów: {arg2}",
+    "failed_to_set_current_directory": "Nie udało się ustawić bieżącego katalogu: {arg0}",
+    "failed_to_set_environment_variable": "Nie udało się ustawić zmiennej środowiskowej: {arg0}",
+    "failed_to_set_permissions": "Nie udało się ustawić uprawnień: {arg0}",
     "failed_to_set_shell_nesting_depth": "Nie udało się ustawić głębokości zagnieżdżenia powłoki",
-    "failed_to_set_task_user": "Nie udało się ustawić użytkownika zadania: {}",
+    "failed_to_set_task_user": "Nie udało się ustawić użytkownika zadania: {arg0}",
     "failed_to_tokenize_command_line": "Nie udało się podzielić wiersza polecenia na tokeny",
-    "failed_to_write_file": "Nie udało się zapisać pliku: {}",
+    "failed_to_write_file": "Nie udało się zapisać pliku: {arg0}",
     "format_failed": "Błąd formatu",
     "invalid_argument": "Nieprawidłowy argument",
     "invalid_number_of_arguments": "Nieprawidłowa liczba argumentów",
@@ -62,12 +62,12 @@
     "maximum_nested_shell_depth_exceeded": "Przekroczono maksymalną głębokość zagnieżdżenia powłoki",
     "missing_file_name_after_redirect_in": "Brak nazwy pliku po przekierowaniu wejścia",
     "missing_file_name_after_redirect_out": "Brak nazwy pliku po przekierowaniu wyjścia",
-    "missing_positional_argument": "Brak argumentu pozycyjnego: {}",
+    "missing_positional_argument": "Brak argumentu pozycyjnego: {arg0}",
     "option_does_not_require_a_value": "Opcja nie wymaga wartości",
     "option_requires_a_value": "Opcja wymaga wartości",
-    "syntax_error_at_byte": "Błąd składni przy bajcie {}: {}",
+    "syntax_error_at_byte": "Błąd składni przy bajcie {arg0}: {arg1}",
     "too_many_background_jobs": "Za dużo zadań w tle",
-    "with_details": "Błąd: {}"
+    "with_details": "Błąd: {arg0}"
   },
   "execution": {
     "errors": {
@@ -100,7 +100,7 @@
   },
   "ping": {
     "errors": {
-      "request_timeout": "Przekroczono limit czasu dla icmp_seq {}"
+      "request_timeout": "Przekroczono limit czasu dla icmp_seq {arg0}"
     },
     "reply": {
       "byte_unit": {

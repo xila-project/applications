@@ -15,8 +15,10 @@ use xila::{internationalization, network};
 fn write_clock_text(output: &mut String, current_time: Option<i64>) {
     output.clear();
     if let Some(seconds) = current_time {
-        let _ =
-            internationalization::write_unix_timestamp(output, seconds.rem_euclid(86_400), "%H:%M");
+        let _ = internationalization::DateTimeFormatter::new(
+            internationalization::date_time_locale(internationalization::locale!()),
+        )
+        .write(output, seconds.rem_euclid(86_400), "%H:%M");
     } else {
         output.push_str("--:--");
     }

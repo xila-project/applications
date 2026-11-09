@@ -1,6 +1,6 @@
 {
   "errors": {
-    "event_handling_failed": "ファイルマネージャーのイベント処理に失敗しました: {:?}",
-    "invalid_entered_path": "入力されたパスが無効です: {}"
+    "event_handling_failed": "ファイルマネージャーのイベント処理に失敗しました: {arg0:?}",
+    "invalid_entered_path": "入力されたパスが無効です: {arg0}"
   }
 }

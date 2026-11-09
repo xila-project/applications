@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+embedded-i18n = { workspace = true }
 xila = { workspace = true, features = ["graphics"] }
 miniserde = { workspace = true }
 getargs = { version = "0.5" }
@@ -23,3 +24,9 @@ path = "tests/integration_test.rs"
 
 [lib]
 name = "graphical_shell"
+
+[package.metadata.i18n]
+load-path = "locales"
+default-locale = "en"
+fallback = ["en"]
+strict = true

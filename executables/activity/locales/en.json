@@ -4,15 +4,15 @@
     "sources": "Xila time, task registry and allocator"
   },
   "metrics": {
-    "uptime": "Uptime: {} s",
-    "tasks": "Registered tasks: {}",
-    "memory_used": "Allocator used: {} bytes",
-    "memory_capacity": "Allocator capacity: {} bytes",
+    "uptime": "Uptime: {arg0} s",
+    "tasks": "Registered tasks: {arg0}",
+    "memory_used": "Allocator used: {arg0} bytes",
+    "memory_capacity": "Allocator capacity: {arg0} bytes",
     "capacity_unavailable": "Allocator capacity: unavailable",
     "unsupported": "CPU load / registered devices: unavailable"
   },
   "actions": {
-    "interval": "Refresh: {} ms (change)",
+    "interval": "Refresh: {arg0} ms (change)",
     "start": "Start demo (4 KiB / 10 s)",
     "stop": "Stop demo"
   },

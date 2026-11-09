@@ -2,7 +2,7 @@ use alloc::string::ToString;
 pub(crate) use core::ffi::CStr;
 use xila::authentication;
 use xila::graphics::{self, EventKind, OwnedWindow, lvgl};
-use xila::internationalization::translate;
+use xila::internationalization::t;
 use xila::users::UserIdentifier;
 
 use crate::error::{Error, Result};
@@ -42,7 +42,7 @@ impl Login {
 
                 lvgl::lv_textarea_set_placeholder_text(
                     user_name_text_area,
-                    translate!(c"login.fields.username").as_ptr(),
+                    t!(c"login.fields.username").as_ptr(),
                 );
                 lvgl::lv_textarea_set_one_line(user_name_text_area, true);
 
@@ -55,7 +55,7 @@ impl Login {
 
                 lvgl::lv_textarea_set_placeholder_text(
                     password_text_area,
-                    translate!(c"login.fields.password").as_ptr(),
+                    t!(c"login.fields.password").as_ptr(),
                 );
                 lvgl::lv_textarea_set_one_line(password_text_area, true);
                 lvgl::lv_textarea_set_password_mode(password_text_area, true);
@@ -78,7 +78,7 @@ impl Login {
 
                 let label = lvgl::lv_label_create(button);
 
-                lvgl::lv_label_set_text(label, translate!(c"login.actions.submit").as_ptr());
+                lvgl::lv_label_set_text(label, t!(c"login.actions.submit").as_ptr());
 
                 button
             };

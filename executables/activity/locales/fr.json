@@ -4,15 +4,15 @@
     "sources": "Horloge, registre des tâches et allocateur de Xila"
   },
   "metrics": {
-    "uptime": "Durée de fonctionnement : {} s",
-    "tasks": "Tâches enregistrées : {}",
-    "memory_used": "Mémoire utilisée par l’allocateur : {} octets",
-    "memory_capacity": "Capacité de l’allocateur : {} octets",
+    "uptime": "Durée de fonctionnement : {arg0} s",
+    "tasks": "Tâches enregistrées : {arg0}",
+    "memory_used": "Mémoire utilisée par l’allocateur : {arg0} octets",
+    "memory_capacity": "Capacité de l’allocateur : {arg0} octets",
     "capacity_unavailable": "Capacité de l’allocateur : indisponible",
     "unsupported": "Charge CPU / périphériques enregistrés : indisponibles"
   },
   "actions": {
-    "interval": "Actualisation : {} ms (modifier)",
+    "interval": "Actualisation : {arg0} ms (modifier)",
     "start": "Démarrer la démo (4 KiB / 10 s)",
     "stop": "Arrêter la démo"
   },

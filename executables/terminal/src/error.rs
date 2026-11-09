@@ -1,7 +1,7 @@
 use core::num::NonZeroUsize;
 use core::str::Utf8Error;
 use core::{fmt::Display, num::NonZeroU8};
-use xila::{executable, graphics, internationalization::translate, task, virtual_file_system};
+use xila::{executable, graphics, internationalization::t, task, virtual_file_system};
 
 pub type Result<T> = core::result::Result<T, Error>;
 
@@ -57,33 +57,37 @@ impl Display for Error {
     fn fmt(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             Self::Graphics(error) => {
-                write!(formatter, translate!("errors.graphics"), error)
+                write!(formatter, "{}", t!("errors.graphics", arg0 = error))
             }
             Self::FailedToCreateObject => {
-                write!(formatter, translate!("errors.failed_to_create_object"))
+                write!(formatter, "{}", t!("errors.failed_to_create_object"))
             }
             Self::Utf8(error) => {
-                write!(formatter, translate!("errors.utf_8"), error)
+                write!(formatter, "{}", t!("errors.utf_8", arg0 = error))
             }
             Self::FailedToMountDevice(error) => {
                 write!(
                     formatter,
-                    translate!("errors.failed_to_mount_device"),
-                    error
+                    "{}",
+                    t!("errors.failed_to_mount_device", arg0 = error)
                 )
             }
             Self::FailedToGetTaskIdentifier(error) => {
                 write!(
                     formatter,
-                    translate!("errors.failed_to_get_task_identifier"),
-                    error
+                    "{}",
+                    t!("errors.failed_to_get_task_identifier", arg0 = error)
                 )
             }
             Self::FailedToExecute(error) => {
-                write!(formatter, translate!("errors.failed_to_execute"), error)
+                write!(
+                    formatter,
+                    "{}",
+                    t!("errors.failed_to_execute", arg0 = error)
+                )
             }
             Self::RessourceBusy => {
-                write!(formatter, translate!("errors.resource_busy"))
+                write!(formatter, "{}", t!("errors.resource_busy"))
             }
         }
     }

@@ -84,4 +84,4 @@ non-Linux platform claim is made by this smoke test.
 UI and launcher catalogs cover English, French, Spanish, German, Brazilian
 Portuguese, Italian, Polish and Simplified Chinese. They use nested JSON with
 stable semantic keys and preserve numeric placeholders. CI validates each
-primary locale with `EMBEDDED_I18N_STRICT=1`.
+primary locale through `[package.metadata.i18n].strict = true`.

@@ -1,23 +1,23 @@
 {
   "errors": {
-    "authentication_failed": "Autenticazione non riuscita: {}",
-    "failed_to_add_shortcut": "Impossibile aggiungere il collegamento: {}",
+    "authentication_failed": "Autenticazione non riuscita: {arg0}",
+    "failed_to_add_shortcut": "Impossibile aggiungere il collegamento: {arg0}",
     "failed_to_create_object": "Impossibile creare l'oggetto",
-    "failed_to_deserialize_shortcut": "Impossibile deserializzare il collegamento: {}",
-    "failed_to_execute_shortcut": "Impossibile eseguire il collegamento: {}",
+    "failed_to_deserialize_shortcut": "Impossibile deserializzare il collegamento: {arg0}",
+    "failed_to_execute_shortcut": "Impossibile eseguire il collegamento: {arg0}",
     "failed_to_get_child": "Impossibile ottenere l'elemento figlio",
-    "failed_to_get_current_task_identifier": "Impossibile ottenere l'identificatore dell'attività corrente: {}",
+    "failed_to_get_current_task_identifier": "Impossibile ottenere l'identificatore dell'attività corrente: {arg0}",
     "failed_to_get_shortcut_file_path": "Impossibile ottenere il percorso del collegamento",
-    "failed_to_open_directory": "Impossibile aprire la directory: {}",
-    "failed_to_open_standard_file": "Impossibile aprire il file standard: {}",
-    "failed_to_read_shortcut_directory": "Impossibile leggere la directory dei collegamenti: {}",
-    "failed_to_read_shortcut_file": "Impossibile leggere il collegamento: {}",
-    "failed_to_set_environment_variable": "Impossibile impostare la variabile d'ambiente: {}",
-    "failed_to_set_task_user": "Impossibile impostare l'utente dell'attività: {}",
-    "graphics_error": "Errore grafico: {}",
-    "invalid_utf_8": "UTF-8 non valido: {}",
+    "failed_to_open_directory": "Impossibile aprire la directory: {arg0}",
+    "failed_to_open_standard_file": "Impossibile aprire il file standard: {arg0}",
+    "failed_to_read_shortcut_directory": "Impossibile leggere la directory dei collegamenti: {arg0}",
+    "failed_to_read_shortcut_file": "Impossibile leggere il collegamento: {arg0}",
+    "failed_to_set_environment_variable": "Impossibile impostare la variabile d'ambiente: {arg0}",
+    "failed_to_set_task_user": "Impossibile impostare l'utente dell'attività: {arg0}",
+    "graphics_error": "Errore grafico: {arg0}",
+    "invalid_utf_8": "UTF-8 non valido: {arg0}",
     "missing_arguments": "Argomenti mancanti",
-    "null_character_in_string": "Carattere nullo nella stringa: {}"
+    "null_character_in_string": "Carattere nullo nella stringa: {arg0}"
   },
   "login": {
     "actions": {

@@ -4,15 +4,15 @@
     "sources": "Relógio, registro de tarefas e alocador do Xila"
   },
   "metrics": {
-    "uptime": "Tempo de atividade: {} s",
-    "tasks": "Tarefas registradas: {}",
-    "memory_used": "Memória usada pelo alocador: {} bytes",
-    "memory_capacity": "Capacidade do alocador: {} bytes",
+    "uptime": "Tempo de atividade: {arg0} s",
+    "tasks": "Tarefas registradas: {arg0}",
+    "memory_used": "Memória usada pelo alocador: {arg0} bytes",
+    "memory_capacity": "Capacidade do alocador: {arg0} bytes",
     "capacity_unavailable": "Capacidade do alocador: indisponível",
     "unsupported": "Uso de CPU / dispositivos registrados: indisponível"
   },
   "actions": {
-    "interval": "Atualização: {} ms (alterar)",
+    "interval": "Atualização: {arg0} ms (alterar)",
     "start": "Iniciar demonstração (4 KiB / 10 s)",
     "stop": "Parar demonstração"
   },

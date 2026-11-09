@@ -434,9 +434,11 @@ async fn grep_streams_matching_lines_and_reports_status_and_line_errors() {
         shell.execute_line("grep x /grep-long-line").await.unwrap(),
         1
     );
-    assert!(contents(&shell, "/shell-errors").await.contains(
-        xila::internationalization::translate!("errors.line_too_long")
-    ));
+    assert!(
+        contents(&shell, "/shell-errors")
+            .await
+            .contains(xila::internationalization::t!("errors.line_too_long"))
+    );
 }
 
 struct ReadOne;

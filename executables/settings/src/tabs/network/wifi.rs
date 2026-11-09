@@ -5,7 +5,7 @@ use core::{ffi::CStr, fmt::Write, ptr::null_mut};
 use xila::{
     file_system::ControlCommand,
     graphics::{Event, EventKind, lvgl},
-    internationalization::translate,
+    internationalization::t,
     network::*,
     virtual_file_system::File,
 };
@@ -47,27 +47,24 @@ impl WifiPanel {
             message: None,
         };
         unsafe {
-            let tab = check(lvgl::lv_tabview_add_tab(
-                parent,
-                translate!(c"wifi.title").as_ptr(),
-            ))?;
+            let tab = check(lvgl::lv_tabview_add_tab(parent, t!(c"wifi.title").as_ptr()))?;
             lvgl::lv_obj_set_flex_flow(tab, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
             lvgl::lv_obj_set_style_pad_row(tab, 10, 0);
             let row = check(lvgl::lv_obj_create(tab))?;
             lvgl::lv_obj_set_size(row, lvgl::lv_pct(100), lvgl::LV_SIZE_CONTENT);
             lvgl::lv_obj_set_flex_flow(row, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW);
-            let caption = label(row, translate!(c"wifi.radio"))?;
+            let caption = label(row, t!(c"wifi.radio"))?;
             lvgl::lv_obj_set_width(caption, lvgl::LV_SIZE_CONTENT);
             lvgl::lv_obj_set_flex_grow(caption, 1);
             panel.radio = check(lvgl::lv_switch_create(row))?;
-            panel.scan = button(row, translate!(c"wifi.scan"))?;
-            panel.status = label(tab, translate!(c"wifi.disconnected"))?;
+            panel.scan = button(row, t!(c"wifi.scan"))?;
+            panel.status = label(tab, t!(c"wifi.disconnected"))?;
             panel.details = label(tab, c"")?;
-            label(tab, translate!(c"wifi.networks"))?;
+            label(tab, t!(c"wifi.networks"))?;
             panel.networks = check(lvgl::lv_dropdown_create(tab))?;
             lvgl::lv_obj_set_width(panel.networks, lvgl::lv_pct(100));
-            lvgl::lv_dropdown_set_options(panel.networks, translate!(c"wifi.no_networks").as_ptr());
-            label(tab, translate!(c"password.fields.password"))?;
+            lvgl::lv_dropdown_set_options(panel.networks, t!(c"wifi.no_networks").as_ptr());
+            label(tab, t!(c"password.fields.password"))?;
             panel.password = check(lvgl::lv_textarea_create(tab))?;
             lvgl::lv_textarea_set_one_line(panel.password, true);
             lvgl::lv_textarea_set_password_mode(panel.password, true);
@@ -77,8 +74,8 @@ impl WifiPanel {
             let actions = check(lvgl::lv_obj_create(tab))?;
             lvgl::lv_obj_set_size(actions, lvgl::lv_pct(100), lvgl::LV_SIZE_CONTENT);
             lvgl::lv_obj_set_flex_flow(actions, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW);
-            panel.connect = button(actions, translate!(c"wifi.connect"))?;
-            panel.disconnect = button(actions, translate!(c"wifi.disconnect"))?;
+            panel.connect = button(actions, t!(c"wifi.connect"))?;
+            panel.disconnect = button(actions, t!(c"wifi.disconnect"))?;
         }
         panel.refresh();
         Ok(panel)
@@ -115,9 +112,9 @@ impl WifiPanel {
     pub fn refresh(&mut self) {
         if self.refresh_inner().is_err() {
             unsafe {
-                lvgl::lv_label_set_text(self.status, translate!(c"wifi.unavailable").as_ptr());
+                lvgl::lv_label_set_text(self.status, t!(c"wifi.unavailable").as_ptr());
             }
-        } else if self.message == Some(translate!(c"wifi.busy")) {
+        } else if self.message == Some(t!(c"wifi.busy")) {
             // Render a rejected action once, then let the next timer probe
             // show live progress without requiring another user action.
             self.message = None;
@@ -160,7 +157,7 @@ impl WifiPanel {
                 );
             }
             if options.is_empty() {
-                options.push_str(translate!("wifi.no_networks"));
+                options.push_str(t!("wifi.no_networks"));
             }
             if let Ok(options) = CString::new(options) {
                 unsafe {
@@ -180,15 +177,15 @@ impl WifiPanel {
         let secured = selected.is_some_and(|ap| ap.authentication != WifiAuthentication::OPEN);
         let text = self.message.unwrap_or_else(|| {
             if !enabled {
-                translate!(c"wifi.radio_off")
+                t!(c"wifi.radio_off")
             } else if scan.phase == WifiScanPhase::SCANNING {
-                translate!(c"wifi.scanning")
+                t!(c"wifi.scanning")
             } else if connection == WifiConnectionState::CONNECTING {
-                translate!(c"wifi.connecting")
+                t!(c"wifi.connecting")
             } else if connection == WifiConnectionState::DISCONNECTING {
-                translate!(c"wifi.disconnecting")
+                t!(c"wifi.disconnecting")
             } else if connection == WifiConnectionState::CONNECTED {
-                translate!(c"wifi.connected")
+                t!(c"wifi.connected")
             } else {
                 error_label(error)
             }
@@ -214,7 +211,7 @@ impl WifiPanel {
                     "{} | {} dBm | {} {} | {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
                     ssid_label(&ap.ssid),
                     ap.rssi,
-                    translate!("wifi.channel"),
+                    t!("wifi.channel"),
                     ap.channel,
                     ap.bssid[0],
                     ap.bssid[1],
@@ -270,9 +267,9 @@ impl WifiPanel {
                             xila::file_system::Error::RessourceBusy
                         )
                 ) {
-                    translate!(c"wifi.busy")
+                    t!(c"wifi.busy")
                 } else {
-                    translate!(c"wifi.command_failed")
+                    t!(c"wifi.command_failed")
                 },
             );
         }
@@ -320,21 +317,21 @@ fn ssid_label(ssid: &WifiSsid) -> String {
 }
 fn authentication_label(authentication: WifiAuthentication) -> &'static CStr {
     match authentication {
-        WifiAuthentication::OPEN => translate!(c"wifi.open"),
+        WifiAuthentication::OPEN => t!(c"wifi.open"),
         WifiAuthentication::WPA2_PERSONAL => c"WPA2",
         WifiAuthentication::WPA3_PERSONAL => c"WPA3",
         WifiAuthentication::WPA2_WPA3_PERSONAL => c"WPA2/WPA3",
-        _ => translate!(c"wifi.unsupported"),
+        _ => t!(c"wifi.unsupported"),
     }
 }
 fn error_label(error: WifiConnectionErrorKind) -> &'static CStr {
     match error {
-        WifiConnectionErrorKind::NONE => translate!(c"wifi.disconnected"),
-        WifiConnectionErrorKind::AUTHENTICATION => translate!(c"wifi.authentication_failed"),
-        WifiConnectionErrorKind::ACCESS_POINT_NOT_FOUND => translate!(c"wifi.not_found"),
-        WifiConnectionErrorKind::TIMEOUT => translate!(c"wifi.timeout"),
-        WifiConnectionErrorKind::UNSUPPORTED_CONFIGURATION => translate!(c"wifi.unsupported"),
-        _ => translate!(c"wifi.connection_failed"),
+        WifiConnectionErrorKind::NONE => t!(c"wifi.disconnected"),
+        WifiConnectionErrorKind::AUTHENTICATION => t!(c"wifi.authentication_failed"),
+        WifiConnectionErrorKind::ACCESS_POINT_NOT_FOUND => t!(c"wifi.not_found"),
+        WifiConnectionErrorKind::TIMEOUT => t!(c"wifi.timeout"),
+        WifiConnectionErrorKind::UNSUPPORTED_CONFIGURATION => t!(c"wifi.unsupported"),
+        _ => t!(c"wifi.connection_failed"),
     }
 }
 unsafe fn disabled(object: *mut lvgl::lv_obj_t, value: bool) {
@@ -445,12 +442,12 @@ pub(crate) mod tests {
         panel.handle_event(&Event::new(EventKind::Clicked, panel.connect, None));
         assert_eq!(
             unsafe { CStr::from_ptr(lvgl::lv_label_get_text(panel.status)) },
-            translate!(c"wifi.busy")
+            t!(c"wifi.busy")
         );
         panel.refresh();
         assert_eq!(
             unsafe { CStr::from_ptr(lvgl::lv_label_get_text(panel.status)) },
-            translate!(c"wifi.scanning")
+            t!(c"wifi.scanning")
         );
         drop(lock);
         xila::task::sleep(Duration::from_millis(60)).await;
