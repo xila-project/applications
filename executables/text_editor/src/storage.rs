@@ -6,6 +6,8 @@ use std::{
 };
 
 pub const PAGE_BYTES: usize = 4096;
+/// Untitled document in the application data folder the Xila runtime provides.
+#[cfg(target_arch = "wasm32")]
 pub fn default_path() -> Option<String> {
     std::env::var("XILA_APPLICATION_DATA")
         .ok()
@@ -388,6 +390,23 @@ mod tests {
             format!("{}{tail}", "y".repeat(PAGE_BYTES)).as_bytes()
         );
         drop(copy);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn new_working_copy_starts_empty_saves_and_removes_its_temporary_file() {
+        let dir = directory();
+        let mut copy = WorkingCopy::create(&dir).unwrap();
+        assert_eq!(copy.length(), 0);
+        let mut page = [0; PAGE_BYTES];
+        assert_eq!(copy.read_page(0, &mut page).unwrap().length, 0);
+        copy.replace_page(0, 0, "hello").unwrap();
+        let saved = dir.join("new.txt");
+        copy.save_to(&saved).unwrap();
+        assert_eq!(fs::read(&saved).unwrap(), b"hello");
+        drop(copy);
+        // Only the saved document remains once the working copy is dropped.
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
         fs::remove_dir_all(dir).unwrap();
     }
 
