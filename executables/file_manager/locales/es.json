@@ -2,5 +2,10 @@
   "errors": {
     "event_handling_failed": "Error al procesar un evento del gestor de archivos: {arg0:?}",
     "invalid_entered_path": "Ruta introducida no válida: {arg0}"
+  },
+  "status": {
+    "summary": "Carpetas: {arg0}, archivos: {arg1}",
+    "empty": "Esta carpeta está vacía",
+    "open_failed": "No se puede abrir {arg0}: {arg1}"
   }
 }

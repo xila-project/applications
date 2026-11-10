@@ -2,5 +2,10 @@
   "errors": {
     "event_handling_failed": "Errore durante la gestione dell'evento del file manager: {arg0:?}",
     "invalid_entered_path": "Percorso inserito non valido: {arg0}"
+  },
+  "status": {
+    "summary": "Cartelle: {arg0}, file: {arg1}",
+    "empty": "Questa cartella è vuota",
+    "open_failed": "Impossibile aprire {arg0}: {arg1}"
   }
 }

@@ -2,5 +2,10 @@
   "errors": {
     "event_handling_failed": "Fehler bei der Verarbeitung eines Dateimanager-Ereignisses: {arg0:?}",
     "invalid_entered_path": "Ungültiger Pfad eingegeben: {arg0}"
+  },
+  "status": {
+    "summary": "Ordner: {arg0}, Dateien: {arg1}",
+    "empty": "Dieser Ordner ist leer",
+    "open_failed": "{arg0} kann nicht geöffnet werden: {arg1}"
   }
 }

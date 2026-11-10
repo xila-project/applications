@@ -1,6 +1,11 @@
 #![no_std]
 
 extern crate alloc;
+#[cfg(test)]
+extern crate std;
+
+#[cfg(all(test, target_os = "linux"))]
+testing::instantiate_global_allocator!();
 
 xila::internationalization::i18n!("locales");
 

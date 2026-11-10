@@ -2,5 +2,10 @@
   "errors": {
     "event_handling_failed": "Error handling file manager event: {arg0:?}",
     "invalid_entered_path": "Invalid path entered: {arg0}"
+  },
+  "status": {
+    "summary": "Folders: {arg0}, files: {arg1}",
+    "empty": "This folder is empty",
+    "open_failed": "Cannot open {arg0}: {arg1}"
   }
 }

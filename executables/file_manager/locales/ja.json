@@ -2,5 +2,10 @@
   "errors": {
     "event_handling_failed": "ファイルマネージャーのイベント処理に失敗しました: {arg0:?}",
     "invalid_entered_path": "入力されたパスが無効です: {arg0}"
+  },
+  "status": {
+    "summary": "フォルダー: {arg0}、ファイル: {arg1}",
+    "empty": "このフォルダーは空です",
+    "open_failed": "{arg0} を開けません: {arg1}"
   }
 }
