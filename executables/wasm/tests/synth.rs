@@ -137,6 +137,44 @@ async fn wait_label(manager: &Manager, text: &str) {
     panic!("Synth did not display {text:?}");
 }
 
+/// Selects a value on the first widget of `class` and reports it to the guest.
+async fn change(manager: &Manager, class: *const lvgl::lv_obj_class_t, value: i32) {
+    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let _lock = manager.synchronous_lock();
+    unsafe {
+        let widget = find_class(root, class);
+        assert!(!widget.is_null(), "missing Synth widget");
+        if class == &raw const lvgl::lv_dropdown_class {
+            lvgl::lv_dropdown_set_selected(widget, value as u32);
+        } else {
+            lvgl::lv_slider_set_value(widget, value, false);
+        }
+        lvgl::lv_obj_send_event(
+            widget,
+            lvgl::lv_event_code_t_LV_EVENT_VALUE_CHANGED,
+            core::ptr::null_mut(),
+        );
+    }
+}
+
+unsafe fn find_class(
+    root: *mut lvgl::lv_obj_t,
+    class: *const lvgl::lv_obj_class_t,
+) -> *mut lvgl::lv_obj_t {
+    unsafe {
+        if lvgl::lv_obj_has_class(root, class) {
+            return root;
+        }
+        for index in 0..lvgl::lv_obj_get_child_count(root) {
+            let found = find_class(lvgl::lv_obj_get_child(root, index as i32), class);
+            if !found.is_null() {
+                return found;
+            }
+        }
+        core::ptr::null_mut()
+    }
+}
+
 async fn event(manager: &Manager, text: &str, code: u32) {
     let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
@@ -182,8 +220,9 @@ async fn real_synth_guest_recovers_from_silent_mode_plays_releases_and_closes() 
     wait_label(manager, "Silent mode").await;
     // A real pointer press still provides feedback without an audio device.
     event(manager, "C", lvgl::lv_event_code_t_LV_EVENT_PRESSED).await;
-    wait_label(manager, "C *").await;
-    event(manager, "C *", lvgl::lv_event_code_t_LV_EVENT_PRESS_LOST).await;
+    wait_label(manager, "Playing C4").await;
+    event(manager, "C", lvgl::lv_event_code_t_LV_EVENT_PRESS_LOST).await;
+    wait_label(manager, "Hold a key").await;
 
     let system: &'static audio::AudioSystem =
         Box::leak(Box::new(audio::AudioSystem::new().unwrap()));
@@ -209,12 +248,12 @@ async fn real_synth_guest_recovers_from_silent_mode_plays_releases_and_closes() 
     )
     .await;
     wait_label(manager, "Audio ready").await;
-    event(manager, "Sound", lvgl::lv_event_code_t_LV_EVENT_CLICKED).await;
+    change(manager, &raw const lvgl::lv_dropdown_class, 1).await;
     wait_label(manager, "Octave 4 | Square").await;
     event(manager, "Oct +", lvgl::lv_event_code_t_LV_EVENT_CLICKED).await;
     wait_label(manager, "Octave 5 | Square").await;
     event(manager, "C", lvgl::lv_event_code_t_LV_EVENT_PRESSED).await;
-    wait_label(manager, "C *").await;
+    wait_label(manager, "Playing C5").await;
     let mut heard = false;
     let mut bytes = [0u8; 1024];
     for _ in 0..100 {
@@ -228,7 +267,7 @@ async fn real_synth_guest_recovers_from_silent_mode_plays_releases_and_closes() 
     // guest must keep its stream instead of falling back to silent mode.
     assert!(busy.load(Ordering::Relaxed) > 0);
     wait_label(manager, "Audio ready").await;
-    event(manager, "C *", lvgl::lv_event_code_t_LV_EVENT_RELEASED).await;
+    event(manager, "C", lvgl::lv_event_code_t_LV_EVENT_RELEASED).await;
     for _ in 0..150 {
         system.mix_next_block().unwrap();
         output.with_consumer(|consumer| consumer.read(&mut bytes));
@@ -238,7 +277,7 @@ async fn real_synth_guest_recovers_from_silent_mode_plays_releases_and_closes() 
         bytes.iter().all(|byte| *byte == 0),
         "released note must become silent"
     );
-    event(manager, "Vol -", lvgl::lv_event_code_t_LV_EVENT_CLICKED).await;
+    change(manager, &raw const lvgl::lv_slider_class, 60).await;
     wait_label(manager, "Octave 5 | Square | Volume 60%").await;
     manager
         .send_window_close_request(manager.get_window_identifier(0).await.unwrap())

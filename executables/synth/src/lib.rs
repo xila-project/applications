@@ -76,6 +76,10 @@ impl Keyboard {
         *held = Some(note);
         Some(note)
     }
+    /// MIDI note of a held key.
+    pub fn held(&self, key: usize) -> Option<u8> {
+        self.held.get(key).copied().flatten()
+    }
     pub fn release(&mut self, key: usize) -> Option<u8> {
         self.held.get_mut(key)?.take()
     }
@@ -269,7 +273,10 @@ mod tests {
     #[test]
     fn keyboard_releases_pressed_pitch_and_ignores_duplicate_events() {
         let mut keys = Keyboard::default();
+        assert_eq!(keys.held(0), None);
         assert_eq!(keys.press(0), Some(60));
+        assert_eq!(keys.held(0), Some(60));
+        assert_eq!(keys.held(13), None);
         assert_eq!(keys.press(0), None);
         assert_eq!(keys.release(0), Some(60));
         assert_eq!(keys.release(0), None);
