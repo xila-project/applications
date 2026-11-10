@@ -12,3 +12,4 @@ pub mod model;
 pub mod net;
 pub mod state;
 pub mod trigger;
+pub mod view;
