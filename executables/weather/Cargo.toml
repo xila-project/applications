@@ -28,6 +28,7 @@ xila = { workspace = true, features = [
 drivers_core = { workspace = true }
 testing = { workspace = true }
 wasm = { workspace = true, features = ["graphics"] }
+critical-section = { workspace = true, features = ["std"] }
 
 [[test]]
 name = "build_test"

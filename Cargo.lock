@@ -2148,6 +2148,7 @@ dependencies = [
 name = "xila-calculator"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "embedded-i18n",
  "nanoexpr",
  "xila",
@@ -2171,6 +2172,7 @@ dependencies = [
 name = "xila-command-line-shell"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "embedded-i18n",
  "getargs",
  "getargs-derive",
@@ -2284,6 +2286,7 @@ dependencies = [
 name = "xila-graphical-shell"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "embedded-i18n",
  "getargs",
  "getargs-derive",
@@ -2466,6 +2469,7 @@ name = "xila-settings"
 version = "0.1.0"
 dependencies = [
  "const_format",
+ "critical-section",
  "embassy-futures",
  "embedded-i18n",
  "embedded-io",
@@ -2536,6 +2540,7 @@ dependencies = [
 name = "xila-terminal"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "embedded-i18n",
  "xila",
  "xila-abi-definitions",
@@ -2623,6 +2628,7 @@ name = "xila-wasm"
 version = "0.1.0"
 dependencies = [
  "cbindgen",
+ "critical-section",
  "embassy-time",
  "getargs",
  "getargs-derive",
@@ -2651,6 +2657,7 @@ version = "0.1.0"
 name = "xila-weather"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "embedded-i18n",
  "miniserde",
  "xila",

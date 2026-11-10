@@ -57,6 +57,7 @@ testing = { workspace = true }
 audio = { workspace = true }
 wat = "1"
 serde_json = "1"
+critical-section = { workspace = true, features = ["std"] }
 
 [[test]]
 name = "integration_test"
