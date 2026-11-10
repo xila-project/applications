@@ -186,16 +186,6 @@ impl PasswordTab {
             lvgl::lv_tabview_add_tab(parent_tabview, t!(c"password.fields.password").as_ptr())
         };
 
-        unsafe {
-            lvgl::lv_obj_set_flex_flow(tab_container, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
-            lvgl::lv_obj_set_flex_align(
-                tab_container,
-                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_START,
-                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_START,
-                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_START,
-            );
-        }
-
         if tab_container.is_null() {
             return Err(crate::error::Error::FailedToCreateUiElement);
         }
@@ -210,49 +200,42 @@ impl PasswordTab {
             change_password_button,
             password_status_label,
         ) = unsafe {
-            // Current password
-            let current_password_label = lvgl::lv_label_create(tab_container);
-            lvgl::lv_label_set_text(
-                current_password_label,
-                t!(c"password.fields.current").as_ptr(),
-            );
+            super::setup_page(tab_container);
 
-            let current_password_text_area = lvgl::lv_textarea_create(tab_container);
-            lvgl::lv_textarea_set_password_mode(current_password_text_area, true);
-            lvgl::lv_textarea_set_one_line(current_password_text_area, true);
-            lvgl::lv_obj_set_width(current_password_text_area, lvgl::lv_pct(100));
+            // One form card, no wider than a comfortable line of text.
+            let form = super::card(tab_container)?;
+            lvgl::lv_obj_set_style_max_width(form, 480, 0);
+            lvgl::lv_obj_set_style_pad_row(form, 6, 0);
 
-            // New password
-            let new_password_label = lvgl::lv_label_create(tab_container);
-            lvgl::lv_label_set_text(new_password_label, t!(c"password.fields.new").as_ptr());
-
-            let new_password_text_area = lvgl::lv_textarea_create(tab_container);
-            lvgl::lv_textarea_set_password_mode(new_password_text_area, true);
-            lvgl::lv_textarea_set_one_line(new_password_text_area, true);
-            lvgl::lv_obj_set_width(new_password_text_area, lvgl::lv_pct(100));
-
-            // Confirm password
-            let confirm_password_label = lvgl::lv_label_create(tab_container);
-            lvgl::lv_label_set_text(
-                confirm_password_label,
-                t!(c"password.fields.confirm").as_ptr(),
-            );
-
-            let confirm_password_text_area = lvgl::lv_textarea_create(tab_container);
-            lvgl::lv_textarea_set_password_mode(confirm_password_text_area, true);
-            lvgl::lv_textarea_set_one_line(confirm_password_text_area, true);
-            lvgl::lv_obj_set_width(confirm_password_text_area, lvgl::lv_pct(100));
+            let field = |name: &core::ffi::CStr| -> Result<*mut lvgl::lv_obj_t> {
+                super::caption(form, name)?;
+                let text_area = super::check(lvgl::lv_textarea_create(form))?;
+                lvgl::lv_textarea_set_password_mode(text_area, true);
+                lvgl::lv_textarea_set_one_line(text_area, true);
+                lvgl::lv_obj_set_width(text_area, lvgl::lv_pct(100));
+                lvgl::lv_obj_set_style_margin_bottom(text_area, 6, 0);
+                Ok(text_area)
+            };
+            let current_password_text_area = field(t!(c"password.fields.current"))?;
+            let new_password_text_area = field(t!(c"password.fields.new"))?;
+            let confirm_password_text_area = field(t!(c"password.fields.confirm"))?;
 
             // Change password button
-            let change_password_button = lvgl::lv_button_create(tab_container);
+            let change_password_button = super::check(lvgl::lv_button_create(form))?;
+            lvgl::lv_obj_set_width(change_password_button, lvgl::lv_pct(100));
 
             let button_label = lvgl::lv_label_create(change_password_button);
             lvgl::lv_label_set_text(button_label, t!(c"password.actions.change").as_ptr());
             lvgl::lv_obj_center(button_label);
 
             // Status label
-            let password_status_label = lvgl::lv_label_create(tab_container);
+            let password_status_label = super::check(lvgl::lv_label_create(form))?;
             lvgl::lv_label_set_text(password_status_label, c"".as_ptr());
+            lvgl::lv_obj_set_width(password_status_label, lvgl::lv_pct(100));
+            lvgl::lv_label_set_long_mode(
+                password_status_label,
+                lvgl::lv_label_long_mode_t_LV_LABEL_LONG_MODE_WRAP,
+            );
 
             (
                 current_password_text_area,

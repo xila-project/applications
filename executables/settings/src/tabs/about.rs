@@ -39,17 +39,12 @@ impl AboutTab {
             return Err(crate::error::Error::FailedToCreateUiElement);
         }
 
-        // Create list
+        // One card of name and value rows.
         unsafe {
-            self.list = lvgl::lv_list_create(self.container);
-
-            if self.list.is_null() {
-                return Err(crate::error::Error::FailedToCreateUiElement);
-            }
-
-            // List properties - fill container
-            lvgl::lv_obj_set_size(self.list, lvgl::lv_pct(100), lvgl::lv_pct(100));
-            lvgl::lv_obj_set_style_pad_all(self.list, 0, lvgl::LV_STATE_DEFAULT);
+            super::setup_page(self.container);
+            self.list = super::card(self.container)?;
+            lvgl::lv_obj_set_style_pad_ver(self.list, 4, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_pad_row(self.list, 0, lvgl::LV_STATE_DEFAULT);
         }
 
         // Populate items - convert CStr to String
@@ -134,13 +129,40 @@ impl AboutTab {
 
     fn create_list_item(&mut self, name: &CStr, value: &CStr) -> Result<()> {
         unsafe {
-            lvgl::lv_list_add_text(self.list, name.as_ptr());
-
-            let button = lvgl::lv_list_add_button(self.list, core::ptr::null(), value.as_ptr());
-
-            if button.is_null() {
-                return Err(crate::error::Error::FailedToCreateUiElement);
+            // Name on the left, value on the right, wrapping when it is long.
+            let row = super::check(lvgl::lv_obj_create(self.list))?;
+            lvgl::lv_obj_set_size(row, lvgl::lv_pct(100), lvgl::LV_SIZE_CONTENT);
+            lvgl::lv_obj_set_style_bg_opa(row, lvgl::LV_OPA_TRANSP, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_radius(row, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_pad_hor(row, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_pad_ver(row, 10, lvgl::LV_STATE_DEFAULT);
+            // A separator under every row but the last one added so far.
+            lvgl::lv_obj_set_style_border_width(row, 0, lvgl::LV_STATE_DEFAULT);
+            let index = lvgl::lv_obj_get_index(row);
+            if index > 0 {
+                let previous = lvgl::lv_obj_get_child(self.list, index - 1);
+                lvgl::lv_obj_set_style_border_width(previous, 1, lvgl::LV_STATE_DEFAULT);
+                lvgl::lv_obj_set_style_border_side(
+                    previous,
+                    lvgl::lv_border_side_t_LV_BORDER_SIDE_BOTTOM,
+                    lvgl::LV_STATE_DEFAULT,
+                );
             }
+            lvgl::lv_obj_set_flex_flow(row, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW);
+            lvgl::lv_obj_remove_flag(row, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_SCROLLABLE);
+
+            let name = super::caption(row, name)?;
+            lvgl::lv_obj_set_width(
+                name,
+                lvgl::lv_pct(if super::is_compact() { 38 } else { 28 }),
+            );
+            let value_label = super::check(lvgl::lv_label_create(row))?;
+            lvgl::lv_label_set_text(value_label, value.as_ptr());
+            lvgl::lv_obj_set_flex_grow(value_label, 1);
+            lvgl::lv_label_set_long_mode(
+                value_label,
+                lvgl::lv_label_long_mode_t_LV_LABEL_LONG_MODE_WRAP,
+            );
         }
 
         Ok(())

@@ -2,7 +2,8 @@
   "tabs": {
     "about": "情報",
     "appearance": "外観",
-    "general": "一般"
+    "general": "一般",
+    "network": "ネットワーク"
   },
   "network": {
     "fields": {
@@ -16,6 +17,9 @@
     "modes": {
       "dhcp": "DHCP",
       "static": "静的"
+    },
+    "status": {
+      "no_interfaces": "ネットワークインターフェースがありません"
     }
   },
   "appearance": {
@@ -86,7 +90,8 @@
       "coming_soon": "一般設定は今後実装予定です。"
     },
     "fields": {
-      "locale": "言語:"
+      "locale": "言語:",
+      "language": "言語"
     }
   },
   "common": {

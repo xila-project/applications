@@ -26,11 +26,15 @@ impl GeneralTab {
 
         self.tab_container = tab_container;
 
-        // Create general settings UI here
+        // The language is fixed at build time; show it until it can be changed.
         unsafe {
-            let info_label = lvgl::lv_label_create(tab_container);
-            lvgl::lv_label_set_text(info_label, t!(c"general.status.coming_soon").as_ptr());
-            lvgl::lv_obj_align(info_label, lvgl::lv_align_t_LV_ALIGN_CENTER, 0, 0);
+            super::setup_page(tab_container);
+            let row = super::setting_row(tab_container, t!(c"general.fields.language"))?;
+            let locale = alloc::ffi::CString::new(xila::internationalization::locale!())?;
+            let value = super::check(lvgl::lv_label_create(row))?;
+            lvgl::lv_label_set_text(value, locale.as_ptr());
+            lvgl::lv_obj_set_style_text_opa(value, super::MUTED, 0);
+            super::caption(tab_container, t!(c"general.status.coming_soon"))?;
         }
 
         Ok(tab_container)

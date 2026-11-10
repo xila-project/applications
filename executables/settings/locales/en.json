@@ -2,7 +2,8 @@
   "tabs": {
     "about": "About",
     "appearance": "Appearance",
-    "general": "General"
+    "general": "General",
+    "network": "Network"
   },
   "network": {
     "fields": {
@@ -16,6 +17,9 @@
     "modes": {
       "dhcp": "DHCP",
       "static": "Static"
+    },
+    "status": {
+      "no_interfaces": "No network interface"
     }
   },
   "appearance": {
@@ -86,7 +90,8 @@
       "coming_soon": "General settings will be implemented here."
     },
     "fields": {
-      "locale": "Locale:"
+      "locale": "Locale:",
+      "language": "Language"
     }
   },
   "common": {
