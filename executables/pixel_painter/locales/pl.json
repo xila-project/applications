@@ -6,7 +6,11 @@
     "undo": "Cofnij",
     "clear": "Wyczyść",
     "save": "Zapisz",
-    "open": "Otwórz"
+    "open": "Otwórz",
+    "paint": "Maluj",
+    "tools": "Narzędzia",
+    "file": "Plik",
+    "brush": "Pędzel"
   },
   "status": {
     "ready_white_erases": "Gotowe - biały kolor wymazuje",

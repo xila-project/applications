@@ -6,7 +6,11 @@
     "clear": "清空",
     "open": "打开",
     "save": "保存",
-    "undo": "撤销"
+    "undo": "撤销",
+    "paint": "绘画",
+    "tools": "工具",
+    "file": "文件",
+    "brush": "画笔"
   },
   "errors": {
     "invalid_file_drawing_preserved": "无效的像素画板文件 - 已保留当前画作",

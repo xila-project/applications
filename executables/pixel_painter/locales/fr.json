@@ -6,7 +6,11 @@
     "undo": "Annuler",
     "clear": "Effacer",
     "save": "Enregistrer",
-    "open": "Ouvrir"
+    "open": "Ouvrir",
+    "paint": "Peindre",
+    "tools": "Outils",
+    "file": "Fichier",
+    "brush": "Pinceau"
   },
   "status": {
     "ready_white_erases": "Prêt - le blanc efface",

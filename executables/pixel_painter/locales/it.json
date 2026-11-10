@@ -6,7 +6,11 @@
     "undo": "Annulla",
     "clear": "Cancella",
     "save": "Salva",
-    "open": "Apri"
+    "open": "Apri",
+    "paint": "Dipingi",
+    "tools": "Strumenti",
+    "file": "File",
+    "brush": "Pennello"
   },
   "status": {
     "ready_white_erases": "Pronto - il bianco cancella",

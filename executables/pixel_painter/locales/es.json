@@ -6,7 +6,11 @@
     "undo": "Deshacer",
     "clear": "Borrar",
     "save": "Guardar",
-    "open": "Abrir"
+    "open": "Abrir",
+    "paint": "Pintar",
+    "tools": "Herramientas",
+    "file": "Archivo",
+    "brush": "Pincel"
   },
   "status": {
     "ready_white_erases": "Listo: el blanco borra",
