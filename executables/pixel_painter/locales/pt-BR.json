@@ -6,7 +6,11 @@
     "undo": "Desfazer",
     "clear": "Limpar",
     "save": "Salvar",
-    "open": "Abrir"
+    "open": "Abrir",
+    "paint": "Pintar",
+    "tools": "Ferramentas",
+    "file": "Arquivo",
+    "brush": "Pincel"
   },
   "status": {
     "ready_white_erases": "Pronto - branco apaga",

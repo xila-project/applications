@@ -6,7 +6,11 @@
     "undo": "Rückgängig",
     "clear": "Löschen",
     "save": "Speichern",
-    "open": "Öffnen"
+    "open": "Öffnen",
+    "paint": "Malen",
+    "tools": "Werkzeuge",
+    "file": "Datei",
+    "brush": "Pinsel"
   },
   "status": {
     "ready_white_erases": "Bereit - Weiß dient als Radierer",

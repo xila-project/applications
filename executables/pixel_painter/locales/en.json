@@ -6,7 +6,11 @@
     "undo": "Undo",
     "clear": "Clear",
     "save": "Save",
-    "open": "Open"
+    "open": "Open",
+    "paint": "Paint",
+    "tools": "Tools",
+    "file": "File",
+    "brush": "Brush"
   },
   "status": {
     "ready_white_erases": "Ready - white erases",
