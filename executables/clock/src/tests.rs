@@ -117,3 +117,44 @@ fn snooze_uses_elapsed_time_and_dismiss_cancels_a_pending_alert() {
     assert!(!alert.tick(999_999));
     assert!(!alert.is_ringing());
 }
+
+#[test]
+fn timer_picker_rows_round_trip_and_clamp() {
+    assert_eq!(split_duration(300), (0, 5, 0));
+    assert_eq!(split_duration(3725), (1, 2, 5));
+    assert_eq!(split_duration(u32::MAX), (23, 59, 59));
+    assert_eq!(join_duration(1, 2, 5), 3725);
+    // A zero selection still starts a one-second countdown.
+    assert_eq!(join_duration(0, 0, 0), 1);
+    assert_eq!(join_duration(99, 99, 99), MAX_TIMER_SECONDS);
+    for seconds in [1, 59, 60, 3599, 3600, MAX_TIMER_SECONDS] {
+        let (h, m, s) = split_duration(seconds);
+        assert_eq!(join_duration(h, m, s), seconds);
+    }
+}
+
+#[test]
+fn progress_ring_tracks_the_remaining_share() {
+    assert_eq!(remaining_permille(30_000, 60_000), 500);
+    assert_eq!(remaining_permille(60_000, 60_000), 1000);
+    assert_eq!(remaining_permille(90_000, 60_000), 1000);
+    assert_eq!(remaining_permille(0, 60_000), 0);
+    assert_eq!(remaining_permille(5, 0), 0);
+}
+
+#[test]
+fn timer_stays_active_until_cancelled() {
+    let mut timer = Timer::default();
+    assert!(!timer.is_active());
+    timer.start(1000, 0);
+    assert!(timer.is_active());
+    assert_eq!(timer.duration(), 1000);
+    timer.pause(400);
+    assert!(timer.is_active() && !timer.is_running());
+    timer.resume(400);
+    assert!(timer.tick(1400));
+    assert!(timer.is_active() && timer.finished());
+    timer.cancel();
+    assert!(!timer.is_active());
+    assert_eq!(timer.duration(), 0);
+}

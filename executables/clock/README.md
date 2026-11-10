@@ -5,17 +5,25 @@ Shadcn theme. This is the first increment of [#310](https://github.com/xila-proj
 
 ## Available views
 
-- **Clock:** UTC date/time from the host, with a saved 12/24-hour preference.
-- **Alarm:** one saved alarm, editable hour/minute, selected weekdays or a
-  one-time occurrence, enable/disable/delete, five-minute snooze, and dismiss.
-- **Stopwatch:** start/pause/resume/reset and up to 32 cumulative lap times.
-- **Timer:** one countdown, from one second to 24 hours, with pause/resume,
-  restart/cancel, and a visible completion alert. The duration controls select
-  the next countdown; Start replaces the current countdown.
+- **Clock:** UTC date/time from the host, with a saved 12/24-hour switch. Wide
+  windows frame the time with a seconds ring.
+- **Alarm:** one saved alarm. Hour and minute come from wrapping rollers, and
+  weekday chips select repeat days (none means a one-time occurrence). Actions
+  enable, disable or delete it; a ringing alarm offers a five-minute snooze and
+  dismiss.
+- **Stopwatch:** start/pause/resume/reset and up to 32 cumulative lap times,
+  newest first, in a card that appears with the first lap.
+- **Timer:** one countdown, from one second to 23:59:59, picked on hour, minute
+  and second rollers. A running, paused or finished countdown shows a progress
+  ring with the time left, plus pause/resume, restart and cancel.
 
-Controls use buttons and checkboxes so no keyboard is required. All alarm times
-are explicitly **UTC**; no fixed city offsets are presented as timezone support.
-The host supplies the date/time, including whether its clock is set correctly.
+Alerts (alarm ringing, timer finished, snoozed, settings not saved) appear in a
+banner above the tabs only while they apply. Windows smaller than 560×360 use a
+compact arrangement: smaller tab titles, top-aligned scrolling tabs and smaller
+rings. Controls use buttons, rollers, a switch and theme variants, so no
+keyboard is required. All alarm times are explicitly **UTC**; no fixed city
+offsets are presented as timezone support. The host supplies the date/time,
+including whether its clock is set correctly.
 
 ## Build and run
 

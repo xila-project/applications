@@ -143,6 +143,14 @@ impl Timer {
     pub fn is_running(&self) -> bool {
         self.deadline.is_some()
     }
+    /// Length of the current countdown in milliseconds, zero when idle.
+    pub fn duration(&self) -> u64 {
+        self.duration
+    }
+    /// A countdown exists (running, paused or finished) until cancelled.
+    pub fn is_active(&self) -> bool {
+        self.duration != 0
+    }
     pub fn finished(&self) -> bool {
         self.finished
     }
@@ -280,6 +288,40 @@ impl Settings {
         }
         Some(settings)
     }
+}
+
+/// Longest timer the picker can select (23:59:59).
+pub const MAX_TIMER_SECONDS: u32 = 24 * 3600 - 1;
+
+/// Splits a timer duration into the picker's hour, minute and second rows.
+pub const fn split_duration(seconds: u32) -> (u32, u32, u32) {
+    let seconds = if seconds > MAX_TIMER_SECONDS {
+        MAX_TIMER_SECONDS
+    } else {
+        seconds
+    };
+    (seconds / 3600, seconds / 60 % 60, seconds % 60)
+}
+
+/// Joins picker rows into a startable duration of at least one second.
+pub const fn join_duration(hours: u32, minutes: u32, seconds: u32) -> u32 {
+    let total = hours.saturating_mul(3600) + minutes.saturating_mul(60) + seconds;
+    if total == 0 {
+        1
+    } else if total > MAX_TIMER_SECONDS {
+        MAX_TIMER_SECONDS
+    } else {
+        total
+    }
+}
+
+/// Remaining share of a countdown in thousandths, for the progress ring.
+pub const fn remaining_permille(remaining: u64, total: u64) -> i32 {
+    if total == 0 {
+        return 0;
+    }
+    let remaining = if remaining > total { total } else { remaining };
+    (remaining * 1000 / total) as i32
 }
 
 #[cfg(test)]

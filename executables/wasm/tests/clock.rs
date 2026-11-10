@@ -61,15 +61,68 @@ async fn wait_label(manager: &Manager, text: &str, contains: bool) {
     panic!("Clock did not display {text:?}");
 }
 
+/// Depth-first search for the first object of `class`.
+unsafe fn find_class(
+    root: *mut lvgl::lv_obj_t,
+    class: *const lvgl::lv_obj_class_t,
+    found: &mut Vec<*mut lvgl::lv_obj_t>,
+) {
+    unsafe {
+        if lvgl::lv_obj_has_class(root, class) {
+            found.push(root);
+        }
+        for index in 0..lvgl::lv_obj_get_child_count(root) {
+            find_class(lvgl::lv_obj_get_child(root, index as i32), class, found);
+        }
+    }
+}
+
+/// Activates tab `index` and returns its page.
+unsafe fn open_tab(root: *mut lvgl::lv_obj_t, index: i32) -> *mut lvgl::lv_obj_t {
+    unsafe {
+        let mut tabviews = Vec::new();
+        find_class(root, &lvgl::lv_tabview_class, &mut tabviews);
+        assert_eq!(tabviews.len(), 1);
+        let tabs = tabviews[0];
+        assert_eq!(lvgl::lv_tabview_get_tab_count(tabs), 4);
+        lvgl::lv_tabview_set_active(tabs, index as u32, false);
+        lvgl::lv_obj_get_child(lvgl::lv_tabview_get_content(tabs), index)
+    }
+}
+
+/// Selects roller values in a tab's picker, in on-screen order.
+async fn set_rollers(manager: &Manager, tab: i32, values: &[u32]) {
+    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let _lock = manager.synchronous_lock();
+    unsafe {
+        let page = open_tab(root, tab);
+        let mut rollers = Vec::new();
+        find_class(page, &lvgl::lv_roller_class, &mut rollers);
+        assert_eq!(rollers.len(), values.len());
+        for (roller, value) in rollers.into_iter().zip(values) {
+            lvgl::lv_roller_set_selected(roller, *value, false);
+        }
+    }
+}
+
+/// Reads the selected value of a tab's first roller.
+async fn first_roller(manager: &Manager, tab: i32) -> u32 {
+    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let _lock = manager.synchronous_lock();
+    unsafe {
+        let page = open_tab(root, tab);
+        let mut rollers = Vec::new();
+        find_class(page, &lvgl::lv_roller_class, &mut rollers);
+        lvgl::lv_roller_get_selected(rollers[0])
+    }
+}
+
 async fn click(manager: &Manager, tab: Option<i32>, text: &str) {
     let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let parent = if let Some(index) = tab {
-            let tabs = lvgl::lv_obj_get_child(root, 2);
-            assert_eq!(lvgl::lv_tabview_get_tab_count(tabs), 4);
-            lvgl::lv_tabview_set_active(tabs, index as u32, false);
-            lvgl::lv_obj_get_child(lvgl::lv_tabview_get_content(tabs), index)
+            open_tab(root, index)
         } else {
             root
         };
@@ -139,12 +192,11 @@ async fn real_clock_guest_runs_stopwatch_timer_saves_alarm_and_closes() {
     wait_label(manager, "1: ", true).await;
     click(manager, Some(2), &text("stopwatch.controls.toggle_pause")).await;
 
-    // Select a one-second countdown using the actual touch controls.
-    for _ in 0..5 {
-        click(manager, Some(3), &text("timer.controls.decrement_minute")).await;
-    }
+    // Select a one-second countdown on the hour, minute and second rollers.
+    set_rollers(manager, 3, &[0, 0, 1]).await;
     click(manager, Some(3), &text("timer.controls.start")).await;
-    wait_label(manager, &text("alerts.timer_finished"), true).await;
+    // The alert banner shows catalog messages without their trailing space.
+    wait_label(manager, text("alerts.timer_finished").trim(), true).await;
     click(manager, None, &text("alerts.dismiss")).await;
 
     // Keep the saved occurrence well ahead of now, including around midnight.
@@ -155,13 +207,11 @@ async fn real_clock_guest_runs_stopwatch_timer_saves_alarm_and_closes() {
         / 3600
         % 24;
     let alarm_hour = (current_hour + 12) % 24;
-    for _ in 0..(alarm_hour + 24 - 7) % 24 {
-        click(manager, Some(1), &text("alarm.controls.increment_hour")).await;
-    }
+    set_rollers(manager, 1, &[alarm_hour as u32, 0]).await;
     click(manager, Some(1), &text("alarm.controls.save_and_enable")).await;
     wait_label(
         manager,
-        &format!("{alarm_hour:02}:00 UTC\n{}", text("alarm.status.enabled")),
+        &format!("{}{alarm_hour:02}:00 UTC", text("alarm.status.enabled")),
         true,
     )
     .await;
@@ -191,19 +241,25 @@ async fn real_clock_guest_runs_stopwatch_timer_saves_alarm_and_closes() {
     .await
     .unwrap();
     wait_label(manager, &text("timer.controls.cancel"), true).await;
-    // No save action: the new guest must load the existing enabled alarm.
-    click(manager, Some(1), &text("alarm.controls.increment_hour")).await;
+    // No save action: the new guest must load the existing enabled alarm,
+    // both in its status and in the hour picker.
+    open_alarm_tab(manager).await;
     wait_label(
         manager,
-        &format!(
-            "{:02}:00 UTC\n{}{alarm_hour:02}:00 UTC",
-            (alarm_hour + 1) % 24,
-            text("alarm.status.enabled")
-        ),
+        &format!("{}{alarm_hour:02}:00 UTC", text("alarm.status.enabled")),
         true,
     )
     .await;
+    assert_eq!(first_roller(manager, 1).await, alarm_hour as u32);
     close_and_join(manager, reopened).await;
+}
+
+async fn open_alarm_tab(manager: &Manager) {
+    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let _lock = manager.synchronous_lock();
+    unsafe {
+        open_tab(root, 1);
+    }
 }
 
 async fn close_and_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
