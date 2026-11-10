@@ -1,0 +1,22 @@
+{
+  "app": {
+    "title": "Digits - Narysuj cyfrę od 0 do 9"
+  },
+  "controls": {
+    "recognize": "Rozpoznaj",
+    "undo": "Cofnij",
+    "clear": "Wyczyść"
+  },
+  "status": {
+    "ready": "Narysuj cyfrę myszą lub palcem",
+    "drawing": "Rysowanie..."
+  },
+  "errors": {
+    "unavailable": "Rozpoznawanie cyfr jest niedostępne w tym środowisku",
+    "inference": "Rozpoznawanie nie powiodło się - spróbuj ponownie"
+  },
+  "results": {
+    "digit": "Cyfra",
+    "scores": "Wyniki modelu"
+  }
+}
