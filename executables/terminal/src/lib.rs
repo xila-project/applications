@@ -34,29 +34,34 @@ pub const SHORTCUT: &str = r#"
     "icon_color": [0, 0, 0]
 }"#;
 
+/// Device node of one terminal window.
+///
+/// `/devices` is writable by every user, unlike `/devices/standard_io`, which
+/// only root may change. One node per task also keeps terminals independent.
+fn device_path(task: TaskIdentifier) -> String {
+    alloc::format!("/devices/terminal_{task}")
+}
+
 async fn mount_and_open(
     task: TaskIdentifier,
     terminal: &'static Terminal,
     standard: &Standard<'static>,
 ) -> Result<Standard<'static>> {
     let virtual_file_system = &standard.context.virtual_file_system;
+    let path = device_path(task);
+    let path = path.as_str();
 
-    let _ = virtual_file_system
-        .remove(task, &"/devices/standard_io/terminal")
-        .await;
+    // A stale node may remain if an earlier terminal reused this identifier.
+    let _ = virtual_file_system.remove(task, &path).await;
 
     virtual_file_system
-        .mount_static(
-            task,
-            &"/devices/standard_io/terminal",
-            ItemStatic::CharacterDevice(terminal),
-        )
+        .mount_static(task, &path, ItemStatic::CharacterDevice(terminal))
         .await?;
 
     let standard = Standard::open(
-        &"/devices/standard_io/terminal",
-        &"/devices/standard_io/terminal",
-        &"/devices/standard_io/terminal",
+        &path,
+        &path,
+        &path,
         task,
         virtual_file_system,
         standard.context,
@@ -70,6 +75,7 @@ async fn inner_main(task: TaskIdentifier, standard: &Standard<'static>) -> Resul
     let terminal = Terminal::new(graphics::ffi_manager()).await?;
 
     let terminal = Box::leak(Box::new(terminal));
+    let virtual_file_system = standard.context.virtual_file_system;
 
     let standard = mount_and_open(task, terminal, standard).await?;
 
@@ -85,6 +91,10 @@ async fn inner_main(task: TaskIdentifier, standard: &Standard<'static>) -> Resul
     while terminal.handle_events().await? {
         task::Manager::sleep(Duration::from_millis(20)).await;
     }
+
+    let _ = virtual_file_system
+        .remove(task, &device_path(task).as_str())
+        .await;
 
     Ok(())
 }
