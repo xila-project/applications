@@ -32,6 +32,12 @@ extends = "ci:rust-wasi"
 [tasks."test:workspace"]
 extends = "ci:rust-wasi"
 
+[tasks."docs:guest"]
+extends = "ci:rust-wasi"
+
+[tasks."docs:host"]
+extends = "ci:rust-wasi"
+
 [tasks."ci:toolchain"]
 tools.rust = { version = "{{ vars.rust_version }}", profile = "minimal" }
 run = '''
