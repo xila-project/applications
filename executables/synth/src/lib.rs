@@ -22,6 +22,10 @@ pub const BLOCK_FRAMES: usize = 128;
 pub const VOICE_LIMIT: usize = 8;
 pub const FRAME_BYTES: usize = CHANNELS as usize * size_of::<f32>();
 pub const BLOCK_BYTES: usize = BLOCK_FRAMES * FRAME_BYTES;
+/// Upper bound of blocks rendered per event-loop turn (43 ms of audio). One
+/// turn of an interpreted guest can take longer than one 2.7 ms block, so
+/// submitting a single block per turn starves the device queue.
+pub const MAX_BLOCKS_PER_TURN: usize = 16;
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +75,10 @@ impl Keyboard {
         let note = (self.octave + 1) * 12 + key as u8;
         *held = Some(note);
         Some(note)
+    }
+    /// MIDI note of a held key.
+    pub fn held(&self, key: usize) -> Option<u8> {
+        self.held.get(key).copied().flatten()
     }
     pub fn release(&mut self, key: usize) -> Option<u8> {
         self.held.get_mut(key)?.take()
@@ -186,6 +194,28 @@ impl Instrument {
     }
 }
 
+impl Instrument {
+    /// Submits blocks until the device reports no writable space, a partial
+    /// write, or [`MAX_BLOCKS_PER_TURN`] blocks. `writable` queries the free
+    /// device bytes before each block. Returns the number of whole blocks
+    /// submitted; a retained partial block is completed on a later turn.
+    pub fn fill<W: PcmWriter>(
+        &mut self,
+        writer: &mut W,
+        mut writable: impl FnMut(&mut W) -> Result<usize, W::Error>,
+    ) -> Result<usize, W::Error> {
+        let mut submitted = 0;
+        while submitted < MAX_BLOCKS_PER_TURN {
+            let bytes = writable(writer)?;
+            match self.write_once(bytes, writer)? {
+                WriteProgress::BlockSubmitted => submitted += 1,
+                WriteProgress::Partial | WriteProgress::Backpressure => break,
+            }
+        }
+        Ok(submitted)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigurationError {
     Invalid,
@@ -243,7 +273,10 @@ mod tests {
     #[test]
     fn keyboard_releases_pressed_pitch_and_ignores_duplicate_events() {
         let mut keys = Keyboard::default();
+        assert_eq!(keys.held(0), None);
         assert_eq!(keys.press(0), Some(60));
+        assert_eq!(keys.held(0), Some(60));
+        assert_eq!(keys.held(13), None);
         assert_eq!(keys.press(0), None);
         assert_eq!(keys.release(0), Some(60));
         assert_eq!(keys.release(0), None);
@@ -350,6 +383,49 @@ mod tests {
             Ok(WriteProgress::Partial)
         );
         assert_eq!(sink.bytes.len(), BLOCK_BYTES + FRAME_BYTES * 29);
+    }
+
+    #[test]
+    fn fill_keeps_the_device_queue_full_within_a_bounded_turn() {
+        // A device with room for 2.5 blocks is filled exactly: the third block
+        // is rendered at the remaining half-block size.
+        let mut instrument = instrument();
+        instrument.note_on(69);
+        let mut sink = Sink {
+            maximum: usize::MAX,
+            bytes: Vec::new(),
+        };
+        let capacity = BLOCK_BYTES * 5 / 2;
+        let submitted = instrument
+            .fill(&mut sink, |sink| Ok(capacity - sink.bytes.len()))
+            .unwrap();
+        assert_eq!(submitted, 3);
+        assert_eq!(sink.bytes.len(), capacity);
+
+        // An empty queue receives at most the per-turn bound.
+        let mut sink = Sink {
+            maximum: usize::MAX,
+            bytes: Vec::new(),
+        };
+        let submitted = instrument
+            .fill(&mut sink, |_| Ok(BLOCK_BYTES * 100))
+            .unwrap();
+        assert_eq!(submitted, MAX_BLOCKS_PER_TURN);
+        assert_eq!(sink.bytes.len(), MAX_BLOCKS_PER_TURN * BLOCK_BYTES);
+
+        // A short write stops the turn and retains the rest of the block.
+        let mut sink = Sink {
+            maximum: FRAME_BYTES * 7,
+            bytes: Vec::new(),
+        };
+        assert_eq!(instrument.fill(&mut sink, |_| Ok(BLOCK_BYTES * 4)), Ok(0));
+        assert_eq!(sink.bytes.len(), FRAME_BYTES * 7);
+
+        // Errors from the writable query are returned unchanged.
+        assert_eq!(
+            instrument.fill(&mut sink, |_| Err("query failed")),
+            Err("query failed")
+        );
     }
 
     #[test]

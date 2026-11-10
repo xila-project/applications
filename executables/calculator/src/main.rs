@@ -3,6 +3,9 @@ embedded_i18n::i18n!("locales");
 #[cfg(any(target_arch = "wasm32", test))]
 mod engine;
 
+#[cfg(any(target_arch = "wasm32", test))]
+mod keypad;
+
 #[cfg(target_arch = "wasm32")]
 mod interface;
 

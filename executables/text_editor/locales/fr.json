@@ -10,7 +10,8 @@
     "new_file": "Nouveau",
     "open_file": "Ouvrir",
     "save_file": "Enregistrer",
-    "choose_folder": "Dossier"
+    "choose_folder": "Dossier",
+    "save_as": "Enregistrer sous"
   },
   "file_path": {
     "instructions": "Choisissez un chemin, puis créez ou ouvrez un fichier texte",

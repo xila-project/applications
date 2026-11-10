@@ -216,6 +216,9 @@ pub fn vfs_error(err: xila::virtual_file_system::Error) -> Error {
         Vfs::FileSystem(Fs::NoSpaceLeft | Fs::FileSystemFull) => Error::Nospc,
         Vfs::FileSystem(Fs::NotDirectory) => Error::Notdir,
         Vfs::FileSystem(Fs::IsDirectory) => Error::Isdir,
+        // Nonblocking devices report transient contention or a full queue as
+        // `RessourceBusy`; guests must be able to retry it as EAGAIN.
+        Vfs::FileSystem(Fs::RessourceBusy) => Error::Again,
         Vfs::PermissionDenied => Error::Access,
         Vfs::NotADirectory => Error::Notdir,
         Vfs::InvalidPath => Error::Inval,
@@ -254,5 +257,15 @@ mod tests {
             vfs_error(Vfs::FileSystem(Fs::NoSpaceLeft)),
             Error::Nospc
         ));
+    }
+
+    #[test]
+    fn busy_devices_are_retryable_for_guests() {
+        // Device drivers return `file_system::Error`, which the VFS wraps.
+        assert!(matches!(
+            vfs_error(Vfs::FileSystem(Fs::RessourceBusy)),
+            Error::Again
+        ));
+        assert!(matches!(vfs_error(Vfs::RessourceBusy), Error::Again));
     }
 }

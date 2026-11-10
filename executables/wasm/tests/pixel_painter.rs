@@ -23,42 +23,111 @@ use xila::{
     virtual_file_system::File,
 };
 
+// Search descendants by class/text so layout containers can change freely.
+unsafe fn find(
+    root: *mut lvgl::lv_obj_t,
+    predicate: &impl Fn(*mut lvgl::lv_obj_t) -> bool,
+) -> *mut lvgl::lv_obj_t {
+    unsafe {
+        if predicate(root) {
+            return root;
+        }
+        for index in 0..lvgl::lv_obj_get_child_count(root) {
+            let found = find(lvgl::lv_obj_get_child(root, index as i32), predicate);
+            if !found.is_null() {
+                return found;
+            }
+        }
+        core::ptr::null_mut()
+    }
+}
+
+unsafe fn label(root: *mut lvgl::lv_obj_t, text: &str) -> *mut lvgl::lv_obj_t {
+    unsafe {
+        find(root, &|object| {
+            lvgl::lv_obj_has_class(object, &lvgl::lv_label_class)
+                && core::ffi::CStr::from_ptr(lvgl::lv_label_get_text(object)).to_string_lossy()
+                    == text
+        })
+    }
+}
+
+unsafe fn class(
+    root: *mut lvgl::lv_obj_t,
+    class: *const lvgl::lv_obj_class_t,
+) -> *mut lvgl::lv_obj_t {
+    unsafe { find(root, &|object| lvgl::lv_obj_has_class(object, class)) }
+}
+
 async fn status(manager: &Manager, expected: &str) {
     let expected = localization::text("pixel_painter", expected);
-    let mut observed = String::new();
     for _ in 0..400 {
         if manager.get_window_count().await.unwrap() > 0 {
             let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
             let _lock = manager.synchronous_lock();
-            unsafe {
-                let label = lvgl::lv_obj_get_child(root, 4);
-                if !label.is_null() {
-                    observed = core::ffi::CStr::from_ptr(lvgl::lv_label_get_text(label))
-                        .to_string_lossy()
-                        .into_owned();
-                    if observed == expected {
-                        return;
-                    }
-                }
+            if unsafe { !label(root, &expected).is_null() } {
+                return;
             }
         }
         xila::task::sleep(Duration::from_millis(5)).await;
     }
-    panic!("Pixel Painter did not show {expected:?}; observed {observed:?}");
+    panic!("Pixel Painter did not show {expected:?}");
 }
 
-async fn action(manager: &Manager, button: u32) {
+async fn click(manager: &Manager, key: &str) {
     let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
-        let matrix = lvgl::lv_obj_get_child(root, 1);
-        lvgl::lv_buttonmatrix_set_selected_button(matrix, button);
+        let text = localization::text("pixel_painter", key);
+        let label = label(root, &text);
+        assert!(!label.is_null(), "missing control {text}");
+        let button = lvgl::lv_obj_get_parent(label);
+        assert!(lvgl::lv_obj_has_class(button, &lvgl::lv_button_class));
+        lvgl::lv_obj_update_layout(root);
+        let mut bounds = lvgl::lv_area_t::default();
+        let mut window = lvgl::lv_area_t::default();
+        lvgl::lv_obj_get_coords(button, &mut bounds);
+        lvgl::lv_obj_get_content_coords(root, &mut window);
+        assert!(
+            bounds.x1 >= window.x1
+                && bounds.x2 <= window.x2
+                && bounds.y1 >= window.y1
+                && bounds.y2 <= window.y2,
+            "control {text} must fit the compact window"
+        );
         lvgl::lv_obj_send_event(
-            matrix,
+            button,
             lvgl::lv_event_code_t_LV_EVENT_CLICKED,
             core::ptr::null_mut(),
         );
     }
+}
+
+async fn action(manager: &Manager, button: u32) {
+    click(
+        manager,
+        if button >= 2 {
+            "controls.file"
+        } else {
+            "controls.paint"
+        },
+    )
+    .await;
+    xila::task::sleep(Duration::from_millis(30)).await;
+    if button == 1 {
+        click(manager, "controls.tools").await;
+        xila::task::sleep(Duration::from_millis(30)).await;
+    }
+    click(
+        manager,
+        [
+            "controls.undo",
+            "controls.clear",
+            "controls.save",
+            "controls.open",
+        ][button as usize],
+    )
+    .await;
 }
 
 #[xila::task::test(task_path=xila::task)]
@@ -105,10 +174,18 @@ async fn real_painter_guest_draws_saves_opens_and_preserves_work_on_errors() {
         let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
         unsafe {
             lvgl::lv_obj_update_layout(root);
-            let canvas = lvgl::lv_obj_get_child(root, 3);
+            let canvas = find(root, &|object| {
+                lvgl::lv_obj_check_type(object, &lvgl::lv_obj_class)
+                    && lvgl::lv_obj_get_child_count(object) == 0
+                    && lvgl::lv_obj_has_flag(object, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_CLICKABLE)
+            });
+            assert!(!canvas.is_null());
             let mut area = lvgl::lv_area_t::default();
             lvgl::lv_obj_get_content_coords(canvas, &mut area);
-            assert!(area.y2 > area.y1, "canvas needs usable height");
+            assert!(
+                area.y2 - area.y1 >= 100,
+                "compact canvas needs usable height"
+            );
             let input = lvgl::lv_indev_create();
             lvgl::lv_indev_set_type(input, lvgl::lv_indev_type_t_LV_INDEV_TYPE_POINTER);
             let x = (area.x1 + area.x2) / 2;
@@ -177,7 +254,7 @@ async fn real_painter_guest_draws_saves_opens_and_preserves_work_on_errors() {
         let _lock = manager.synchronous_lock();
         let long_path = std::ffi::CString::new(format!("/{}", "é".repeat(130))).unwrap();
         unsafe {
-            let input = lvgl::lv_obj_get_child(root as *mut lvgl::lv_obj_t, 2);
+            let input = class(root as *mut lvgl::lv_obj_t, &lvgl::lv_textarea_class);
             lvgl::lv_textarea_set_text(input, long_path.as_ptr());
         }
     }
@@ -187,7 +264,7 @@ async fn real_painter_guest_draws_saves_opens_and_preserves_work_on_errors() {
         let _lock = manager.synchronous_lock();
         let path = std::ffi::CString::new(path).unwrap();
         unsafe {
-            let input = lvgl::lv_obj_get_child(root as *mut lvgl::lv_obj_t, 2);
+            let input = class(root as *mut lvgl::lv_obj_t, &lvgl::lv_textarea_class);
             lvgl::lv_textarea_set_text(input, path.as_ptr());
         }
     }
