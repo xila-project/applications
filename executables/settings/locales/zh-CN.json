@@ -59,7 +59,8 @@
   },
   "general": {
     "fields": {
-      "locale": "区域设置："
+      "locale": "区域设置：",
+      "language": "语言"
     },
     "status": {
       "coming_soon": "常规设置功能将在此提供。"
@@ -77,6 +78,9 @@
     "modes": {
       "dhcp": "DHCP",
       "static": "静态"
+    },
+    "status": {
+      "no_interfaces": "没有网络接口"
     }
   },
   "password": {
@@ -93,7 +97,8 @@
   "tabs": {
     "about": "关于",
     "appearance": "外观",
-    "general": "常规"
+    "general": "常规",
+    "network": "网络"
   },
   "wifi": {
     "title": "Wi-Fi",

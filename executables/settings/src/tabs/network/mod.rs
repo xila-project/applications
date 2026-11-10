@@ -7,6 +7,7 @@ use interface::*;
 use xila::{
     file_system::{AccessFlags, Path},
     graphics::{Event, EventKind, lvgl, symbol},
+    internationalization::t,
     log,
     network::{self, InterfaceKind},
     virtual_file_system::{Directory, File, VirtualFileSystem},
@@ -122,6 +123,16 @@ impl NetworkTab {
             }
         }
 
+        // An empty list would look like a rendering fault.
+        unsafe {
+            if lvgl::lv_obj_get_child_count(self.interfaces_list) == 0 {
+                lvgl::lv_list_add_text(
+                    self.interfaces_list,
+                    t!(c"network.status.no_interfaces").as_ptr(),
+                );
+            }
+        }
+
         Ok(())
     }
 
@@ -132,7 +143,7 @@ impl NetworkTab {
         self.parent_tabview = parent_tabview;
 
         self.tab_container =
-            unsafe { lvgl::lv_tabview_add_tab(parent_tabview, c"Network".as_ptr() as *const _) };
+            unsafe { lvgl::lv_tabview_add_tab(parent_tabview, t!(c"tabs.network").as_ptr()) };
 
         if self.tab_container.is_null() {
             return Err(crate::error::Error::FailedToCreateUiElement);
@@ -140,10 +151,7 @@ impl NetworkTab {
 
         // Flex column layout so children can use flex_grow to fill the tile
         unsafe {
-            lvgl::lv_obj_set_flex_flow(
-                self.tab_container,
-                lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN,
-            );
+            super::setup_page(self.tab_container);
         }
 
         // Create interface list

@@ -42,23 +42,10 @@ impl AppearanceTab {
                 parent,
                 t!(c"tabs.appearance").as_ptr(),
             ))?;
-            lvgl::lv_obj_set_flex_flow(tab, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
-            lvgl::lv_obj_set_style_pad_all(tab, 16, 0);
-            lvgl::lv_obj_set_style_pad_row(tab, 12, 0);
+            super::setup_page(tab);
 
-            let row = check(lvgl::lv_obj_create(tab))?;
-            lvgl::lv_obj_set_width(row, lvgl::lv_pct(100));
-            lvgl::lv_obj_set_height(row, lvgl::LV_SIZE_CONTENT);
-            lvgl::lv_obj_set_flex_flow(row, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW);
-            lvgl::lv_obj_set_flex_align(
-                row,
-                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_START,
-                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
-                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
-            );
-            graphics::theme::set_surface(row, graphics::theme::Surface::Card);
-            let label = create_label(row, t!(c"appearance.fields.dark_mode"))?;
-            lvgl::lv_obj_set_flex_grow(label, 1);
+            // Every setting is one row: its name, then its control.
+            let row = super::setting_row(tab, t!(c"appearance.fields.dark_mode"))?;
             self.dark_mode = check(lvgl::lv_switch_create(row))?;
 
             // LVGL copies this options string; no per-preset objects are needed.
@@ -71,14 +58,15 @@ impl AppearanceTab {
                 t!("appearance.colors.rose"),
                 t!("appearance.colors.violet")
             ))?;
-            create_label(tab, t!(c"appearance.fields.primary_color"))?;
-            self.primary = check(lvgl::lv_dropdown_create(tab))?;
+            let width = if super::is_compact() { 150 } else { 220 };
+            let row = super::setting_row(tab, t!(c"appearance.fields.primary_color"))?;
+            self.primary = check(lvgl::lv_dropdown_create(row))?;
             lvgl::lv_dropdown_set_options(self.primary, options.as_ptr());
-            lvgl::lv_obj_set_width(self.primary, lvgl::lv_pct(100));
-            create_label(tab, t!(c"appearance.fields.secondary_color"))?;
-            self.secondary = check(lvgl::lv_dropdown_create(tab))?;
+            lvgl::lv_obj_set_width(self.primary, width);
+            let row = super::setting_row(tab, t!(c"appearance.fields.secondary_color"))?;
+            self.secondary = check(lvgl::lv_dropdown_create(row))?;
             lvgl::lv_dropdown_set_options(self.secondary, options.as_ptr());
-            lvgl::lv_obj_set_width(self.secondary, lvgl::lv_pct(100));
+            lvgl::lv_obj_set_width(self.secondary, width);
             self.sync_controls();
             self.status = create_label(tab, c"")?;
             lvgl::lv_obj_set_width(self.status, lvgl::lv_pct(100));
