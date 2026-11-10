@@ -20,3 +20,11 @@ run = "cargo test --locked --workspace --features xila/graphics_rendering_xrgb88
 [tasks."localization:lint"]
 description = "Validate application translation keys and catalogs"
 run = "node tools/localization/check.mjs && node --test tolgee.extractor.test.mjs tools/localization/catalog.test.mjs"
+
+[tasks."docs:guest"]
+description = "Build WebAssembly guest API documentation"
+run = "cargo doc --locked --package xila-wasm --no-default-features --features default_guest --target wasm32-wasip1 --no-deps"
+
+[tasks."docs:host"]
+description = "Build host application and runtime documentation"
+run = "cargo doc --locked --workspace --features xila-wasm/graphics,xila/graphics_rendering_xrgb8888 --target x86_64-unknown-linux-gnu --no-deps"
