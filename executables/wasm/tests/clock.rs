@@ -215,19 +215,27 @@ async fn real_clock_guest_runs_stopwatch_timer_saves_alarm_and_closes() {
         true,
     )
     .await;
+    // Clock shows a change before writing it, so wait for the record.
+    let settings = format!(
+        "/users/{}/applications/clock/configuration/settings.1",
+        administrator.as_u16()
+    );
     let mut saved = Vec::new();
-    xila::virtual_file_system::File::read_from_path(
-        context.virtual_file_system,
-        task,
-        format!(
-            "/users/{}/applications/clock/configuration/settings.1",
-            administrator.as_u16()
+    for attempt in 0.. {
+        saved.clear();
+        match xila::virtual_file_system::File::read_from_path(
+            context.virtual_file_system,
+            task,
+            settings.as_str(),
+            &mut saved,
         )
-        .as_str(),
-        &mut saved,
-    )
-    .await
-    .unwrap();
+        .await
+        {
+            Ok(_) if saved.len() == 38 => break,
+            _ if attempt < 200 => xila::task::sleep(Duration::from_millis(10)).await,
+            result => panic!("settings were not saved: {result:?}, {} bytes", saved.len()),
+        }
+    }
     assert_eq!(saved.len(), 38, "real WASI persistence record");
 
     close_and_join(manager, handle).await;
