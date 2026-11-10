@@ -20,5 +20,14 @@
     "idle": "Demo: stopped",
     "running": "Demo: running (512 bytes / 25 ms)",
     "failed": "Demo: unavailable (allocation failed)"
+  },
+  "cards": {
+    "uptime": "Uptime",
+    "tasks": "Tasks",
+    "memory": "Memory",
+    "memory_share": "{arg0} % of {arg1}",
+    "history": "Memory history",
+    "demo": "Demo workload",
+    "demo_detail": "Holds 4 KiB for 10 s"
   }
 }

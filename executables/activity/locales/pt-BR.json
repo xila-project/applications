@@ -20,5 +20,14 @@
     "idle": "Demonstração: parada",
     "running": "Demonstração: em execução (512 bytes / 25 ms)",
     "failed": "Demonstração: indisponível (falha de alocação)"
+  },
+  "cards": {
+    "uptime": "Tempo ativo",
+    "tasks": "Tarefas",
+    "memory": "Memória",
+    "memory_share": "{arg0} % de {arg1}",
+    "history": "Histórico de memória",
+    "demo": "Carga de demonstração",
+    "demo_detail": "Mantém 4 KiB por 10 s"
   }
 }

@@ -20,5 +20,14 @@
     "idle": "Demo: gestoppt",
     "running": "Demo: läuft (512 Bytes / 25 ms)",
     "failed": "Demo: nicht verfügbar (Speicherzuweisung fehlgeschlagen)"
+  },
+  "cards": {
+    "uptime": "Betriebszeit",
+    "tasks": "Tasks",
+    "memory": "Speicher",
+    "memory_share": "{arg0} % von {arg1}",
+    "history": "Speicherverlauf",
+    "demo": "Demo-Last",
+    "demo_detail": "Hält 4 KiB für 10 s"
   }
 }

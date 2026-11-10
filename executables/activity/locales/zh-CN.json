@@ -20,5 +20,14 @@
     "idle": "演示：已停止",
     "running": "演示：运行中（512 字节 / 25 毫秒）",
     "failed": "演示：不可用（内存分配失败）"
+  },
+  "cards": {
+    "uptime": "运行时间",
+    "tasks": "任务",
+    "memory": "内存",
+    "memory_share": "{arg1} 的 {arg0} %",
+    "history": "内存历史",
+    "demo": "演示负载",
+    "demo_detail": "保留 4 KiB 共 10 秒"
   }
 }

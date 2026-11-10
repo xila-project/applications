@@ -20,5 +20,14 @@
     "idle": "Demo: ferma",
     "running": "Demo: in esecuzione (512 byte / 25 ms)",
     "failed": "Demo: non disponibile (allocazione non riuscita)"
+  },
+  "cards": {
+    "uptime": "Tempo di attività",
+    "tasks": "Task",
+    "memory": "Memoria",
+    "memory_share": "{arg0} % di {arg1}",
+    "history": "Cronologia della memoria",
+    "demo": "Carico dimostrativo",
+    "demo_detail": "Trattiene 4 KiB per 10 s"
   }
 }
