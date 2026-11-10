@@ -10,7 +10,8 @@
     "new_file": "Novo",
     "open_file": "Abrir",
     "save_file": "Salvar",
-    "choose_folder": "Pasta"
+    "choose_folder": "Pasta",
+    "save_as": "Salvar como"
   },
   "file_path": {
     "instructions": "Escolha um caminho e crie ou abra um arquivo de texto",

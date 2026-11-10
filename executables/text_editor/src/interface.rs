@@ -11,7 +11,15 @@ use wasm::*;
 
 struct Interface {
     window: *mut Object,
-    actions: *mut Object,
+    actions: [*mut Object; 7],
+    more: *mut Object,
+    details: *mut Object,
+    details_open: bool,
+    title: *mut Object,
+    rendered_title: String,
+    secondary: *mut Object,
+    navigation: *mut Object,
+    compact: bool,
     path: *mut Object,
     text: *mut Object,
     keyboard: *mut Object,
@@ -28,7 +36,6 @@ struct Interface {
     working_unusable: bool,
     picker: Option<(*mut Object, FilePickerMode)>,
     retained_picker: Option<*mut Object>,
-    _action_map: [*const i8; 8],
 }
 
 pub fn run() -> wasm::Result<()> {
@@ -73,8 +80,32 @@ pub fn run() -> wasm::Result<()> {
                 ui.confirm_close = Some(ui.revision);
             } else if ui.picker.is_some() {
                 continue;
-            } else if code == EventCode::ValueChanged as u32 && target == ui.actions {
-                let action = unsafe { buttonmatrix_get_selected_button(ui.actions)? };
+            } else if code == EventCode::Clicked as u32 && target == ui.more {
+                ui.details_open = !ui.details_open;
+                unsafe {
+                    object_add_flag(ui.keyboard, ObjectFlag::Hidden)?;
+                    set_hidden(ui.details, !ui.details_open)?;
+                    set_hidden(ui.text, false)?;
+                    if ui.compact {
+                        set_hidden(ui.secondary, false)?;
+                    }
+                    set_hidden(ui.navigation, false)?;
+                    set_hidden(ui.status, false)?;
+                }
+            } else if code == EventCode::Clicked as u32
+                && let Some(action) = ui.actions.iter().position(|button| *button == target)
+            {
+                unsafe {
+                    object_add_flag(ui.keyboard, ObjectFlag::Hidden)?;
+                    object_add_flag(ui.details, ObjectFlag::Hidden)?;
+                    set_hidden(ui.text, false)?;
+                    if ui.compact {
+                        set_hidden(ui.secondary, false)?;
+                    }
+                    set_hidden(ui.navigation, false)?;
+                    set_hidden(ui.status, false)?;
+                }
+                ui.details_open = false;
                 match action {
                     0 => ui.navigate(false)?,
                     1 => ui.navigate(true)?,
@@ -82,30 +113,90 @@ pub fn run() -> wasm::Result<()> {
                     3 => ui.choose_path(FilePickerMode::OpenFile)?,
                     4 => ui.choose_path(FilePickerMode::SaveFile)?,
                     5 => ui.choose_path(FilePickerMode::Directory)?,
+                    6 => ui.save_document()?,
                     _ => (),
                 }
             } else if code == EventCode::Focused as u32 && (target == ui.path || target == ui.text)
             {
                 unsafe {
                     keyboard_set_textarea(ui.keyboard, target)?;
+                    if ui.compact {
+                        object_add_flag(ui.navigation, ObjectFlag::Hidden)?;
+                        object_add_flag(ui.status, ObjectFlag::Hidden)?;
+                        set_hidden(ui.text, target == ui.path)?;
+                        set_hidden(ui.secondary, target == ui.path)?;
+                        if target == ui.text {
+                            object_add_flag(ui.details, ObjectFlag::Hidden)?;
+                            ui.details_open = false;
+                        }
+                    }
                     object_remove_flag(ui.keyboard, ObjectFlag::Hidden)?;
                 }
-            } else if code == EventCode::ValueChanged as u32
-                && target == ui.text
-                && ui.working_unusable
-            {
-                ui.revision = ui.revision.wrapping_add(1);
-                ui.confirm_open = None;
-                ui.confirm_close = None;
+            } else if code == EventCode::ValueChanged as u32 && target == ui.text {
+                if ui.working_unusable {
+                    ui.revision = ui.revision.wrapping_add(1);
+                    ui.confirm_open = None;
+                    ui.confirm_close = None;
+                }
+                ui.refresh_title()?;
             } else if (code == EventCode::Ready as u32 || code == EventCode::Cancel as u32)
                 && target == ui.keyboard
             {
                 unsafe {
                     object_add_flag(ui.keyboard, ObjectFlag::Hidden)?;
+                    set_hidden(ui.text, false)?;
+                    if ui.compact {
+                        set_hidden(ui.secondary, false)?;
+                    }
+                    set_hidden(ui.navigation, false)?;
+                    set_hidden(ui.status, false)?;
                 }
             }
+            ui.refresh_title()?;
         }
         sleep(Duration::from_millis(16));
+    }
+}
+
+unsafe fn set_hidden(object: *mut Object, hidden: bool) -> wasm::Result<()> {
+    unsafe {
+        if hidden {
+            object_add_flag(object, ObjectFlag::Hidden)
+        } else {
+            object_remove_flag(object, ObjectFlag::Hidden)
+        }
+    }
+}
+
+unsafe fn row(parent: *mut Object, height: i32) -> wasm::Result<*mut Object> {
+    unsafe {
+        let row = object_create(parent)?;
+        object_set_background(row, 0, 0, 0)?;
+        object_set_border(row, 0, 0, 0, 0)?;
+        object_set_padding(row, 0)?;
+        object_set_size(row, percentage(100)?, height)?;
+        object_set_flex_flow(row, FlexFlow::Row)?;
+        object_set_flex_align(row, FlexAlign::Start, FlexAlign::Center, FlexAlign::Center)?;
+        object_remove_flag(row, ObjectFlag::Scrollable)?;
+        Ok(row)
+    }
+}
+
+unsafe fn action_button(
+    parent: *mut Object,
+    title: &CStr,
+    variant: u32,
+) -> wasm::Result<*mut Object> {
+    unsafe {
+        let button = button_create(parent)?;
+        object_set_theme_variant(button, variant)?;
+        object_set_min_max_size(button, 0, 16384, 0, 16384, 0)?;
+        object_set_size(button, size_content(), 28)?;
+        object_set_padding(button, 6)?;
+        let label = label_create(button)?;
+        label_set_text(label, title.as_ptr())?;
+        object_align(label, Align::Center, 0, 0)?;
+        Ok(button)
     }
 }
 
@@ -124,21 +215,32 @@ impl Interface {
             )?;
             object_set_flex_flow(window, FlexFlow::Column)?;
             object_set_padding(window, 4)?;
-            let actions = buttonmatrix_create(window)?;
-            object_set_width(actions, percentage(100)?)?;
-            object_set_height(actions, 72)?;
-            let action_map = [
-                t!(c"navigation.previous_page").as_ptr(),
-                t!(c"navigation.next_page").as_ptr(),
-                c"\n".as_ptr(),
-                t!(c"controls.new_file").as_ptr(),
-                t!(c"controls.open_file").as_ptr(),
-                t!(c"controls.save_file").as_ptr(),
-                t!(c"controls.choose_folder").as_ptr(),
-                c"".as_ptr(),
-            ];
-            buttonmatrix_set_map(actions, action_map.as_ptr())?;
-            let path = textarea_create(window)?;
+            object_remove_flag(window, ObjectFlag::Scrollable)?;
+            object_set_font(window, 1, 0)?;
+            object_update_layout(window)?;
+            let compact = object_get_width(window)? < 560 || object_get_height(window)? < 360;
+            let toolbar = row(window, 32)?;
+            let title = label_create(toolbar)?;
+            label_set_text(title, c"".as_ptr())?;
+            object_set_width(title, 0)?;
+            object_set_height(title, 18)?;
+            object_set_flex_grow(title, 1)?;
+            let details = row(window, size_content())?;
+            object_set_flex_flow(details, FlexFlow::Column)?;
+            object_add_flag(details, ObjectFlag::Hidden)?;
+            let secondary = if compact { row(details, 30)? } else { toolbar };
+            let new = action_button(secondary, t!(c"controls.new_file"), 3)?;
+            let open = action_button(secondary, t!(c"controls.open_file"), 3)?;
+            let save = action_button(secondary, t!(c"controls.save_file"), 2)?;
+            let save_as = action_button(toolbar, t!(c"controls.save_as"), 0)?;
+            let more = action_button(toolbar, c"...", 3)?;
+            object_set_width(more, 32)?;
+            let folder = action_button(
+                if compact { secondary } else { details },
+                t!(c"controls.choose_folder"),
+                3,
+            )?;
+            let path = textarea_create(details)?;
             textarea_set_one_line(path, true)?;
             textarea_set_max_length(path, 1023)?;
             let initial = std::env::args()
@@ -147,25 +249,46 @@ impl Interface {
                 .unwrap_or_default();
             let initial = CString::new(initial).map_err(|_| -1)?;
             textarea_set_text(path, initial.as_ptr())?;
-            object_set_width(path, percentage(100)?)?;
-            object_set_height(path, 36)?;
-            let page_label = label_create(window)?;
-            object_set_width(page_label, percentage(100)?)?;
+            object_set_size(path, percentage(100)?, 30)?;
             let text = textarea_create(window)?;
             textarea_set_max_length(text, PAGE_BYTES as u32)?;
             object_set_width(text, percentage(100)?)?;
+            object_set_height(text, 0)?;
             object_set_flex_grow(text, 1)?;
+            object_set_font(text, 5, 0)?;
+            object_set_min_max_size(text, 0, 16384, 36, 16384, 0)?;
+            let navigation = row(window, 28)?;
+            let previous = action_button(navigation, t!(c"navigation.previous_page"), 3)?;
+            let page_label = label_create(navigation)?;
+            label_set_text(page_label, c"".as_ptr())?;
+            object_set_width(page_label, 0)?;
+            object_set_flex_grow(page_label, 1)?;
+            object_set_text_align(page_label, TextAlign::Center as u32, 0)?;
+            let next = action_button(navigation, t!(c"navigation.next_page"), 3)?;
+            let actions = [previous, next, new, open, save_as, folder, save];
             let status = label_create(window)?;
+            label_set_text(status, c"".as_ptr())?;
+            object_set_font(status, 0, 0)?;
             object_set_width(status, percentage(100)?)?;
             let keyboard = keyboard_create(window)?;
-            object_set_height(keyboard, 110)?;
+            object_set_size(keyboard, percentage(100)?, if compact { 100 } else { 180 })?;
             object_add_flag(keyboard, ObjectFlag::Hidden)?;
-            for object in [actions, path, text, keyboard] {
+            // Leave room for the shell's home handle below the status/keyboard.
+            row(window, 8)?;
+            for object in actions.into_iter().chain([more, path, text, keyboard]) {
                 object_add_flag(object, ObjectFlag::EventBubble)?;
             }
             let mut ui = Self {
                 window,
                 actions,
+                more,
+                details,
+                details_open: false,
+                title,
+                rendered_title: String::new(),
+                secondary,
+                navigation,
+                compact,
                 path,
                 text,
                 keyboard,
@@ -182,12 +305,39 @@ impl Interface {
                 working_unusable: false,
                 picker: None,
                 retained_picker: None,
-                _action_map: action_map,
             };
             ui.status(t!("file_path.picker_instructions"))?;
             ui.show_page()?;
+            ui.refresh_title()?;
             Ok(ui)
         }
+    }
+
+    fn refresh_title(&mut self) -> wasm::Result<()> {
+        let path = self.path().unwrap_or_default();
+        let name = Path::new(&path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("");
+        let modified = self.dirty
+            || (self.working.is_some()
+                && self.edited_text()?.as_deref() != Some(&self.original_page));
+        // Keep long filenames on one line; the complete path remains editable
+        // in file details. Truncate at a character boundary, never inside UTF-8.
+        let limit = if self.compact { 24 } else { 48 };
+        let mut name_text: String = name.chars().take(limit).collect();
+        if name.chars().count() > limit {
+            name_text.push('…');
+        }
+        let title = format!("{}{}", if modified { "* " } else { "" }, name_text);
+        if title != self.rendered_title {
+            let text = CString::new(title.as_str()).map_err(|_| -1)?;
+            unsafe {
+                label_set_text(self.title, text.as_ptr())?;
+            }
+            self.rendered_title = title;
+        }
+        Ok(())
     }
 
     fn path(&self) -> wasm::Result<String> {
@@ -464,8 +614,9 @@ impl Interface {
             textarea_set_text(self.text, text.as_ptr())?;
             let total_length = self.working.as_ref().map_or(0, WorkingCopy::length);
             let label = CString::new(format!(
-                "{} | {} of {} bytes",
-                self.page_start, page.length, total_length
+                "{} / {}",
+                self.page_start + page.length as u64,
+                total_length
             ))
             .map_err(|_| -1)?;
             label_set_text(self.page_label, label.as_ptr().cast_mut())?;

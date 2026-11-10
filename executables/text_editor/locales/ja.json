@@ -10,7 +10,8 @@
     "new_file": "新規",
     "open_file": "開く",
     "save_file": "保存",
-    "choose_folder": "フォルダー"
+    "choose_folder": "フォルダー",
+    "save_as": "名前を付けて保存"
   },
   "file_path": {
     "instructions": "パスを選択して、テキストファイルを作成または開いてください",
