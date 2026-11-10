@@ -29,14 +29,17 @@ impl Home {
                     return Err(crate::error::Error::FailedToCreateObject);
                 }
 
-                lvgl::lv_obj_set_size(button, lvgl::lv_pct(40), 8);
+                // A slim pill over the window content; the touch target stays
+                // comfortable through the extended click area.
+                lvgl::lv_obj_set_size(button, lvgl::lv_pct(28), 5);
+                lvgl::lv_obj_set_ext_click_area(button, 10);
                 lvgl::lv_theme_shadcn_set_variant(
                     button,
                     lvgl::lv_theme_shadcn_variant_t_LV_THEME_SHADCN_VARIANT_DEFAULT,
                 );
                 lvgl::lv_obj_set_style_bg_opa(button, lvgl::LV_OPA_50, lvgl::LV_STATE_DEFAULT);
                 lvgl::lv_obj_set_align(button, lvgl::lv_align_t_LV_ALIGN_BOTTOM_MID);
-                lvgl::lv_obj_set_y(button, -5);
+                lvgl::lv_obj_set_y(button, -4);
 
                 lvgl::lv_obj_remove_flag(button, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_GESTURE_BUBBLE);
 
@@ -86,7 +89,7 @@ unsafe extern "C" fn handle_released(event: *mut lvgl::lv_event_t) {
 
         let y = lvgl::lv_obj_get_y_aligned(object);
 
-        lvgl::lv_obj_set_y(object, -5);
+        lvgl::lv_obj_set_y(object, -4);
 
         if y < -20 {
             let desk = lvgl::lv_event_get_user_data(event) as *mut lvgl::lv_obj_t;

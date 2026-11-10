@@ -1,7 +1,7 @@
-use alloc::string::ToString;
+use alloc::{ffi::CString, string::ToString};
 pub(crate) use core::ffi::CStr;
 use xila::authentication;
-use xila::graphics::{self, EventKind, OwnedWindow, lvgl};
+use xila::graphics::{self, Color, EventKind, Logo, OwnedWindow, fonts, lvgl, theme};
 use xila::internationalization::t;
 use xila::users::UserIdentifier;
 
@@ -26,32 +26,80 @@ impl Login {
             // - Create a window
             let mut window = graphics_manager.create_window().await?;
 
-            unsafe {
-                lvgl::lv_obj_set_flex_flow(window.as_object_mutable(), lvgl::LV_FLEX_COLUMN);
+            // One centered card: logo, the two fields, the error line and the
+            // primary action. Small displays drop the logo to keep the form on
+            // screen.
+            let card = unsafe {
+                let root = window.as_object_mutable();
+                lvgl::lv_obj_update_layout(root);
+                let compact =
+                    lvgl::lv_obj_get_width(root) < 560 || lvgl::lv_obj_get_height(root) < 360;
+                lvgl::lv_obj_set_flex_flow(root, lvgl::LV_FLEX_COLUMN);
                 lvgl::lv_obj_set_flex_align(
-                    window.as_object_mutable(),
+                    root,
                     lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
                     lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
                     lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
                 );
-            }
+
+                let card = lvgl::lv_obj_create(root);
+                if card.is_null() {
+                    return Err(Error::FailedToCreateObject);
+                }
+                theme::set_surface(card, theme::Surface::Card);
+                lvgl::lv_obj_set_size(
+                    card,
+                    if compact { lvgl::lv_pct(90) } else { 320 },
+                    lvgl::LV_SIZE_CONTENT,
+                );
+                lvgl::lv_obj_set_flex_flow(card, lvgl::LV_FLEX_COLUMN);
+                lvgl::lv_obj_set_flex_align(
+                    card,
+                    lvgl::lv_flex_align_t_LV_FLEX_ALIGN_START,
+                    lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
+                    lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
+                );
+                let padding = if compact { 10 } else { 24 };
+                lvgl::lv_obj_set_style_pad_all(card, padding, lvgl::LV_STATE_DEFAULT);
+                lvgl::lv_obj_set_style_pad_row(
+                    card,
+                    if compact { 8 } else { 12 },
+                    lvgl::LV_STATE_DEFAULT,
+                );
+                lvgl::lv_obj_remove_flag(card, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_SCROLLABLE);
+
+                if !compact {
+                    let logo = Logo::new(card, 2, Color::WHITE)?;
+                    logo.follow_palette_color(theme::PaletteColor::Foreground);
+                    lvgl::lv_obj_set_style_margin_bottom(
+                        logo.get_inner_object(),
+                        8,
+                        lvgl::LV_STATE_DEFAULT,
+                    );
+                    // The card owns the widget tree from here on.
+                    core::mem::forget(logo);
+                }
+
+                card
+            };
 
             let user_name_text_area = unsafe {
                 // - Create a text area for the user name
-                let user_name_text_area = lvgl::lv_textarea_create(window.as_object_mutable());
+                let user_name_text_area = lvgl::lv_textarea_create(card);
 
                 lvgl::lv_textarea_set_placeholder_text(
                     user_name_text_area,
                     t!(c"login.fields.username").as_ptr(),
                 );
                 lvgl::lv_textarea_set_one_line(user_name_text_area, true);
+                lvgl::lv_obj_set_width(user_name_text_area, lvgl::lv_pct(100));
 
                 user_name_text_area
             };
 
             let password_text_area = unsafe {
                 // - Create a text area for the password
-                let password_text_area = lvgl::lv_textarea_create(window.as_mut());
+                let password_text_area = lvgl::lv_textarea_create(card);
 
                 lvgl::lv_textarea_set_placeholder_text(
                     password_text_area,
@@ -59,28 +107,43 @@ impl Login {
                 );
                 lvgl::lv_textarea_set_one_line(password_text_area, true);
                 lvgl::lv_textarea_set_password_mode(password_text_area, true);
+                lvgl::lv_obj_set_width(password_text_area, lvgl::lv_pct(100));
 
                 password_text_area
             };
 
-            let error_label = unsafe {
-                // - Create a label for the error
-                let error_label = lvgl::lv_label_create(window.as_mut());
-
-                lvgl::lv_label_set_text(error_label, c"".as_ptr());
-
-                error_label
-            };
-
             let button = unsafe {
-                // - Create a button
-                let button = lvgl::lv_button_create(window.as_mut());
+                let button = lvgl::lv_button_create(card);
+                lvgl::lv_obj_set_width(button, lvgl::lv_pct(100));
 
                 let label = lvgl::lv_label_create(button);
 
                 lvgl::lv_label_set_text(label, t!(c"login.actions.submit").as_ptr());
+                lvgl::lv_obj_center(label);
 
                 button
+            };
+
+            // Hidden until there is something to report, so the card does not
+            // keep an empty line.
+            let error_label = unsafe {
+                let error_label = lvgl::lv_label_create(card);
+
+                lvgl::lv_label_set_text(error_label, c"".as_ptr());
+                lvgl::lv_obj_set_width(error_label, lvgl::lv_pct(100));
+                lvgl::lv_label_set_long_mode(
+                    error_label,
+                    lvgl::lv_label_long_mode_t_LV_LABEL_LONG_MODE_WRAP,
+                );
+                lvgl::lv_obj_set_style_text_font(
+                    error_label,
+                    fonts::get_font_small(),
+                    lvgl::LV_STATE_DEFAULT,
+                );
+                lvgl::lv_theme_shadcn_set_error(error_label, true);
+                lvgl::lv_obj_add_flag(error_label, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
+
+                error_label
             };
 
             Ok(Login {
@@ -97,19 +160,19 @@ impl Login {
     }
 
     pub fn print_error(&mut self, error: Error) {
-        let error = error.to_string();
-        let error = error.as_bytes();
+        // The message needs its own terminator before LVGL copies it.
+        let error = CString::new(error.to_string()).unwrap_or_default();
 
         unsafe {
-            let error = CStr::from_bytes_with_nul_unchecked(error);
-
             lvgl::lv_label_set_text(self.error_label, error.as_ptr());
+            lvgl::lv_obj_remove_flag(self.error_label, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
         }
     }
 
     pub fn clear_error(&mut self) {
         unsafe {
             lvgl::lv_label_set_text(self.error_label, c"".as_ptr());
+            lvgl::lv_obj_add_flag(self.error_label, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
         }
     }
 

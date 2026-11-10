@@ -68,6 +68,24 @@ impl Desk {
     const DOCK_ICON_SIZE: Point = Point::new(40, 40);
     const DRAWER_ICON_SIZE: Point = Point::new(48, 48);
     const MAIN_BUTTON_SIZE: Point = Point::new(32, 32);
+    /// Width of one drawer tile: the icon plus room for a short name.
+    const DRAWER_TILE_WIDTH: i32 = 88;
+    const DRAWER_GAP: i32 = 8;
+    const DOCK_BOTTOM_MARGIN: i32 = 14;
+
+    /// Side padding and gap that center whole drawer columns in `width`.
+    const fn drawer_grid(width: i32) -> (i32, i32) {
+        let gap = Self::DRAWER_GAP;
+        let step = Self::DRAWER_TILE_WIDTH + gap;
+        let columns = if (width - gap) / step > 1 {
+            (width - gap) / step
+        } else {
+            1
+        };
+        let used = columns * step - gap;
+        let side = if width > used { (width - used) / 2 } else { 0 };
+        (side, gap)
+    }
 
     pub const HOME_EVENT: EventKind = EventKind::Custom1;
 
@@ -158,6 +176,14 @@ impl Desk {
                 }
 
                 lvgl::lv_obj_set_flex_flow(drawer, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW_WRAP);
+                // Side padding centers as many whole columns as fit, so the
+                // last row stays aligned with the others.
+                lvgl::lv_obj_update_layout(tile_view);
+                let (side, gap) = Self::drawer_grid(lvgl::lv_obj_get_width(tile_view));
+                lvgl::lv_obj_set_style_pad_hor(drawer, side, lvgl::LV_STATE_DEFAULT);
+                lvgl::lv_obj_set_style_pad_ver(drawer, 16, lvgl::LV_STATE_DEFAULT);
+                lvgl::lv_obj_set_style_pad_column(drawer, gap, lvgl::LV_STATE_DEFAULT);
+                lvgl::lv_obj_set_style_pad_row(drawer, gap, lvgl::LV_STATE_DEFAULT);
 
                 drawer
             };
@@ -173,6 +199,8 @@ impl Desk {
                 theme::set_surface(dock, theme::Surface::Muted);
 
                 lvgl::lv_obj_set_align(dock, lvgl::lv_align_t_LV_ALIGN_BOTTOM_MID);
+                // Float above the home indicator instead of sitting under it.
+                lvgl::lv_obj_set_y(dock, -Self::DOCK_BOTTOM_MARGIN);
                 lvgl::lv_obj_set_size(dock, lvgl::LV_SIZE_CONTENT, lvgl::LV_SIZE_CONTENT);
                 lvgl::lv_obj_set_flex_flow(dock, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW);
                 // Floating dock bar: the theme container style supplies the card
@@ -225,14 +253,24 @@ impl Desk {
         drawer: *mut lvgl::lv_obj_t,
     ) -> Result<()> {
         let icon = unsafe {
+            // Every tile has the same width, so the drawer reads as a grid:
+            // the icon over its name, with no frame of its own.
             let container = lvgl::lv_obj_create(drawer);
 
-            lvgl::lv_obj_set_size(container, lvgl::LV_SIZE_CONTENT, lvgl::LV_SIZE_CONTENT);
+            if container.is_null() {
+                return Err(Error::FailedToCreateObject);
+            }
+
+            lvgl::lv_obj_set_size(container, Self::DRAWER_TILE_WIDTH, lvgl::LV_SIZE_CONTENT);
             lvgl::lv_obj_set_style_bg_opa(container, lvgl::LV_OPA_0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_border_width(container, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_pad_all(container, 4, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_pad_row(container, 6, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_remove_flag(container, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_SCROLLABLE);
             lvgl::lv_obj_set_flex_flow(container, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
             lvgl::lv_obj_set_flex_align(
                 container,
-                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_SPACE_EVENLY,
+                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_START,
                 lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
                 lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
             );
@@ -241,9 +279,26 @@ impl Desk {
 
             let label = lvgl::lv_label_create(container);
 
+            if label.is_null() {
+                return Err(Error::FailedToCreateObject);
+            }
+
             let name = CString::new(name).map_err(Error::NullCharacterInString)?;
 
             lvgl::lv_label_set_text(label, name.as_ptr());
+            // Long names end with dots instead of widening the tile.
+            lvgl::lv_obj_set_width(label, lvgl::lv_pct(100));
+            lvgl::lv_label_set_long_mode(label, lvgl::lv_label_long_mode_t_LV_LABEL_LONG_MODE_DOTS);
+            lvgl::lv_obj_set_style_text_align(
+                label,
+                lvgl::lv_text_align_t_LV_TEXT_ALIGN_CENTER,
+                lvgl::LV_STATE_DEFAULT,
+            );
+            lvgl::lv_obj_set_style_text_font(
+                label,
+                xila::graphics::fonts::get_font_small(),
+                lvgl::LV_STATE_DEFAULT,
+            );
 
             icon
         };
@@ -771,6 +826,16 @@ mod tests {
             .iter()
             .map(|(window_identifier, _, _)| *window_identifier)
             .collect()
+    }
+
+    #[test]
+    fn drawer_columns_are_centered() {
+        // 800 px: eight 88 px tiles with 8 px gaps use 760 px, 20 px a side.
+        assert_eq!(super::Desk::drawer_grid(800), (20, 8));
+        // 320 px: three tiles.
+        assert_eq!(super::Desk::drawer_grid(320), (20, 8));
+        // Narrower than one tile: a single column without negative padding.
+        assert_eq!(super::Desk::drawer_grid(60), (0, 8));
     }
 
     #[test]
