@@ -70,12 +70,16 @@ waits for the already scheduled occurrence and does not replay a fired alarm.
 Changing an alarm and saving it creates a new schedule. Alarm state is persisted
 when an occurrence fires; if that write fails, a future launch may replay it.
 
-Alerts are **visual and in-app**. They keep counting when another tab/window is
-focused while the process runs, but a hidden window does not provide a system
-notification. Closing Clock stops delivery; after relaunch, saved overdue alarms
-are handled as described above. Timers, stopwatch, laps and snooze are deliberately
-not restored after process exit or reboot. There is no audio alert, wake-from-sleep,
-powered-off alarm, or host background alarm service in this increment.
+Alerts are **in-app**: the banner, plus a tone while the alarm rings or the timer
+is finished. The tone (two 150 ms, 880 Hz beeps per second, `src/sound.rs`) plays
+through `/devices/audio/playback` and stops on dismiss or snooze; without an audio
+device the alert stays visual. While it plays, the event loop waits 5 ms between
+turns instead of 100 ms to keep the device queue filled. Alerts keep counting when
+another tab/window is focused while the process runs, but a hidden window does not
+provide a system notification. Closing Clock stops delivery; after relaunch, saved
+overdue alarms are handled as described above. Timers, stopwatch, laps and snooze
+are deliberately not restored after process exit or reboot. There is no
+wake-from-sleep, powered-off alarm, or host background alarm service in this increment.
 
 The guest currently lacks a blocking window-event wait API. Clock cooperatively
 sleeps between event checks: 250 ms normally, 100 ms while the visible stopwatch
@@ -104,7 +108,7 @@ power loss. Shared storage also does not serialize concurrent app instances.
 - Saved city/world clocks and daylight-saving-aware timezone data/APIs.
 - Multiple alarms with labels, user-scoped settings, and concurrent editing.
 - Host-owned scheduling/notifications for delivery after the guest exits, plus
-  audio output and platform-specific RTC wake capabilities.
+  platform-specific RTC wake capabilities.
 - Blocking guest event waits, interactive display verification, constrained-target
   validation, and measured CPU/RAM consumption of representative app workloads.
 

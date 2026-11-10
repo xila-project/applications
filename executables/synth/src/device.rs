@@ -9,7 +9,7 @@ use std::{
 
 use synth::{
     AudioConfiguration, GET_CONFIGURATION, GET_VOLUME, GET_WRITABLE, Instrument, PcmWriter,
-    SET_VOLUME, START, STOP, WriteProgress,
+    SET_VOLUME, START, STOP,
 };
 
 #[repr(align(16))]
@@ -129,16 +129,17 @@ impl AudioOutput {
         // Already submitted PCM drains through the bounded device queue.
     }
 
-    pub fn pump(&mut self) -> io::Result<WriteProgress> {
-        let mut writable = Aligned(0u32);
-        if let Err(error) = read_control(&self.file.0, GET_WRITABLE, &mut writable) {
-            if error.kind() == io::ErrorKind::WouldBlock {
-                return Ok(WriteProgress::Backpressure);
+    /// Fills the device queue for this turn; returns the blocks submitted.
+    pub fn pump(&mut self) -> io::Result<usize> {
+        self.instrument.fill(&mut self.file, |file| {
+            let mut writable = Aligned(0u32);
+            match read_control(&file.0, GET_WRITABLE, &mut writable) {
+                Ok(()) => Ok(writable.0 as usize),
+                // A busy device is full for this turn.
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => Ok(0),
+                Err(error) => Err(error),
             }
-            return Err(error);
-        }
-        self.instrument
-            .write_once(writable.0 as usize, &mut self.file)
+        })
     }
 }
 

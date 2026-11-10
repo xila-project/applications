@@ -17,7 +17,92 @@ use core::{
     task::Poll,
     time::Duration,
 };
-use xila::graphics::{Manager, lvgl};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use xila::{
+    file_system::{
+        BaseOperations, CharacterDevice, Context, ControlCommandIdentifier, Error, MountOperations,
+        Result, Size,
+    },
+    graphics::{Manager, lvgl},
+};
+
+/// Playback device that reports every third write and every third control as
+/// busy, as the real mixer does when its thread holds the nonblocking queue lock.
+struct ContendedPlayback {
+    device: audio::AudioStreamDevice,
+    writes: AtomicUsize,
+    controls: AtomicUsize,
+    busy: &'static AtomicUsize,
+}
+
+impl ContendedPlayback {
+    fn contended(&self, calls: &AtomicUsize) -> bool {
+        if calls.fetch_add(1, Ordering::Relaxed).is_multiple_of(3) {
+            self.busy.fetch_add(1, Ordering::Relaxed);
+            true
+        } else {
+            false
+        }
+    }
+}
+
+impl BaseOperations for ContendedPlayback {
+    fn open(&self, context: &mut Context) -> Result<()> {
+        self.device.open(context)
+    }
+
+    fn close(&self, context: &mut Context) -> Result<()> {
+        self.device.close(context)
+    }
+
+    fn read(
+        &self,
+        context: &mut Context,
+        cx: &mut core::task::Context<'_>,
+        buffer: &mut [u8],
+        position: Size,
+    ) -> Poll<Result<usize>> {
+        self.device.read(context, cx, buffer, position)
+    }
+
+    fn write(
+        &self,
+        context: &mut Context,
+        cx: &mut core::task::Context<'_>,
+        buffer: &[u8],
+        position: Size,
+    ) -> Poll<Result<usize>> {
+        if self.contended(&self.writes) {
+            return Poll::Ready(Err(Error::RessourceBusy));
+        }
+        self.device.write(context, cx, buffer, position)
+    }
+
+    fn flush(&self, context: &mut Context, cx: &mut core::task::Context<'_>) -> Poll<Result<()>> {
+        self.device.flush(context, cx)
+    }
+
+    fn control(
+        &self,
+        context: &mut Context,
+        cx: &mut core::task::Context<'_>,
+        command: ControlCommandIdentifier,
+        input: &xila::shared::AnyByLayout,
+        output: &mut xila::shared::AnyByLayout,
+    ) -> Poll<Result<()>> {
+        if self.contended(&self.controls) {
+            return Poll::Ready(Err(Error::RessourceBusy));
+        }
+        self.device.control(context, cx, command, input, output)
+    }
+
+    fn clone_context(&self, context: &Context) -> Result<Context> {
+        self.device.clone_context(context)
+    }
+}
+
+impl MountOperations for ContendedPlayback {}
+impl CharacterDevice for ContendedPlayback {}
 
 unsafe fn label(root: *mut lvgl::lv_obj_t, text: &str) -> *mut lvgl::lv_obj_t {
     unsafe {
@@ -105,13 +190,16 @@ async fn real_synth_guest_recovers_from_silent_mode_plays_releases_and_closes() 
     // SAFETY: this leaked system never moves and outlives all device streams.
     let system = unsafe { core::pin::Pin::new_unchecked(system) };
     let mut output = system.open_output().unwrap();
+    let busy: &'static AtomicUsize = Box::leak(Box::new(AtomicUsize::new(0)));
+    let playback = ContendedPlayback {
+        device: audio::AudioStreamDevice::new(system),
+        writes: AtomicUsize::new(0),
+        controls: AtomicUsize::new(0),
+        busy,
+    };
     context
         .virtual_file_system
-        .mount_character_device(
-            task,
-            "/devices/audio/playback",
-            audio::AudioStreamDevice::new(system),
-        )
+        .mount_character_device(task, "/devices/audio/playback", playback)
         .await
         .unwrap();
     event(
@@ -136,6 +224,10 @@ async fn real_synth_guest_recovers_from_silent_mode_plays_releases_and_closes() 
         xila::task::sleep(Duration::from_millis(3)).await;
     }
     assert!(heard, "held note must reach the real VFS/PCM mixer");
+    // Busy writes and controls are retryable (EAGAIN), not fatal (EIO): the
+    // guest must keep its stream instead of falling back to silent mode.
+    assert!(busy.load(Ordering::Relaxed) > 0);
+    wait_label(manager, "Audio ready").await;
     event(manager, "C *", lvgl::lv_event_code_t_LV_EVENT_RELEASED).await;
     for _ in 0..150 {
         system.mix_next_block().unwrap();

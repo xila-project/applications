@@ -2,6 +2,7 @@
 
 #[cfg(any(test, target_arch = "wasm32"))]
 extern crate std;
+pub mod sound;
 #[cfg(any(test, target_arch = "wasm32"))]
 pub mod storage;
 
