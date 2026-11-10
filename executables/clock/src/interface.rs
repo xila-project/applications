@@ -105,6 +105,7 @@ pub fn run() -> wasm::Result<()> {
     let epoch = Instant::now();
     let mut ui = unsafe { Interface::new()? };
     let mut last_refresh = None;
+    let mut alarm_sound = clock::sound::AlarmSound::default();
     loop {
         let now = epoch.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
         let wall = SystemTime::now()
@@ -172,9 +173,15 @@ pub fn run() -> wasm::Result<()> {
                 unsafe { ui.render(now, wall)? };
             }
         }
+        alarm_sound.update(ui.alarm_alert.is_ringing() || ui.timer.finished());
         // There is no blocking guest window-event API yet. Cooperatively wait
         // between bounded event checks; elapsed durations do not count polls.
-        sleep(Duration::from_millis(100));
+        // A ringing tone needs short turns to keep the audio queue filled.
+        sleep(Duration::from_millis(if alarm_sound.is_active() {
+            5
+        } else {
+            100
+        }));
     }
 }
 
