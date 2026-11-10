@@ -129,7 +129,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [calculator, clock, weather, pixel_painter, text_editor, synth]
+        app: [calculator, clock, weather, pixel_painter, text_editor, synth, digits]
     permissions:
       contents: read
       id-token: write

@@ -2209,6 +2209,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "xila-digits"
+version = "0.1.0"
+dependencies = [
+ "embedded-i18n",
+ "xila-device",
+ "xila-file-system",
+ "xila-pixel-painter",
+ "xila-wasm",
+]
+
+[[package]]
 name = "xila-drivers-core"
 version = "0.1.0"
 source = "git+https://github.com/xila-project/core?branch=main#cd211cc7ae1503cb21ce372644ad0608f55d65fe"

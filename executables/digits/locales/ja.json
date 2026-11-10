@@ -1,0 +1,22 @@
+{
+  "app": {
+    "title": "Digits - 0から9までの数字を描いてください"
+  },
+  "controls": {
+    "recognize": "認識",
+    "undo": "元に戻す",
+    "clear": "消去"
+  },
+  "status": {
+    "ready": "マウスまたは指で数字を描いてください",
+    "drawing": "描画中..."
+  },
+  "errors": {
+    "unavailable": "この実行環境では数字認識を利用できません",
+    "inference": "認識に失敗しました - もう一度お試しください"
+  },
+  "results": {
+    "digit": "数字",
+    "scores": "モデルのスコア"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "app": {
+    "title": "Digits - Disegna una cifra da 0 a 9"
+  },
+  "controls": {
+    "recognize": "Riconosci",
+    "undo": "Annulla",
+    "clear": "Cancella"
+  },
+  "status": {
+    "ready": "Disegna una cifra con il mouse o con un dito",
+    "drawing": "Disegno..."
+  },
+  "errors": {
+    "unavailable": "Il riconoscimento delle cifre non è disponibile in questo ambiente",
+    "inference": "Riconoscimento non riuscito - riprova"
+  },
+  "results": {
+    "digit": "Cifra",
+    "scores": "Punteggi del modello"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "app": {
+    "title": "Digits - Zeichne eine Ziffer von 0 bis 9"
+  },
+  "controls": {
+    "recognize": "Erkennen",
+    "undo": "Rückgängig",
+    "clear": "Löschen"
+  },
+  "status": {
+    "ready": "Zeichne eine Ziffer mit der Maus oder dem Finger",
+    "drawing": "Zeichnen..."
+  },
+  "errors": {
+    "unavailable": "Die Ziffernerkennung ist in dieser Laufzeitumgebung nicht verfügbar",
+    "inference": "Erkennung fehlgeschlagen - erneut versuchen"
+  },
+  "results": {
+    "digit": "Ziffer",
+    "scores": "Modellbewertungen"
+  }
+}

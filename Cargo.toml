@@ -111,6 +111,7 @@ members = [
   "executables/debug",
   "executables/file_manager",
   "executables/pixel_painter",
+  "executables/digits",
   "executables/settings",
   "executables/synth",
   "executables/terminal",

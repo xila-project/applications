@@ -1,0 +1,22 @@
+{
+  "app": {
+    "title": "Digits - 绘制一个 0 到 9 的数字"
+  },
+  "controls": {
+    "recognize": "识别",
+    "undo": "撤销",
+    "clear": "清除"
+  },
+  "status": {
+    "ready": "使用鼠标或手指绘制一个数字",
+    "drawing": "正在绘制..."
+  },
+  "errors": {
+    "unavailable": "当前运行环境不支持数字识别",
+    "inference": "识别失败 - 请重试"
+  },
+  "results": {
+    "digit": "数字",
+    "scores": "模型评分"
+  }
+}

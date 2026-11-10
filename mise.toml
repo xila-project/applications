@@ -7,11 +7,11 @@ shellcheck_version = "0.11.0"
 
 [tasks."check:guest"]
 description = "Check all WASI guest applications"
-run = "cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth"
+run = "cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits"
 
 [tasks."build:applications"]
-description = "Build the six WASI application artifacts"
-run = "cargo build --locked --target wasm32-wasip1 --profile release-wasm -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth"
+description = "Build the seven WASI application artifacts"
+run = "cargo build --locked --target wasm32-wasip1 --profile release-wasm -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits"
 
 [tasks."test:workspace"]
 description = "Test application crates on the host"

@@ -1,0 +1,22 @@
+{
+  "app": {
+    "title": "Digits - Dibuja un dígito del 0 al 9"
+  },
+  "controls": {
+    "recognize": "Reconocer",
+    "undo": "Deshacer",
+    "clear": "Borrar"
+  },
+  "status": {
+    "ready": "Dibuja un dígito con el ratón o el dedo",
+    "drawing": "Dibujando..."
+  },
+  "errors": {
+    "unavailable": "El reconocimiento de dígitos no está disponible en este entorno",
+    "inference": "Error de reconocimiento - inténtalo de nuevo"
+  },
+  "results": {
+    "digit": "Dígito",
+    "scores": "Puntuaciones del modelo"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json",
+  "name": "Digits",
+  "command": "/applications/executables/wasm",
+  "arguments": [
+    "@bundle/executables/digits.wasm"
+  ],
+  "terminal": false,
+  "icon_string": "09",
+  "icon_color": [
+    209,
+    119,
+    230
+  ]
+}
