@@ -1,0 +1,35 @@
+[package]
+name = "xila-digits"
+version = "0.1.0"
+edition = "2024"
+description = "Handwritten digit recognition through the Xila NN device."
+
+[dependencies]
+pixel_painter = { workspace = true }
+embedded-i18n = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+device = { workspace = true }
+file_system = { workspace = true }
+wasm = { workspace = true, default-features = false, features = [
+  "guest",
+  "graphics",
+  "memory_32",
+] }
+
+[[bin]]
+name = "digits"
+path = "src/main.rs"
+
+[lib]
+name = "digits"
+
+[package.metadata.i18n]
+load-path = "locales"
+default-locale = "en"
+fallback = ["en"]
+strict = true
+
+[features]
+default = []
+model = []

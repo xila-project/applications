@@ -1,0 +1,15 @@
+{
+  "format_version": 1,
+  "name": "xila.digits",
+  "version": "0.1.0",
+  "target": "wasm32-wasip1",
+  "minimum_xila_abi": 1,
+  "capabilities": [],
+  "application": {
+    "entrypoint": "executables/digits.wasm",
+    "display_name": "Digits",
+    "icon": "",
+    "show_in_launcher": true
+  },
+  "$schema": "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
+}

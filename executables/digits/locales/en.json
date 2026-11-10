@@ -1,0 +1,22 @@
+{
+  "app": {
+    "title": "Digits - draw a digit from 0 to 9"
+  },
+  "controls": {
+    "recognize": "Recognize",
+    "undo": "Undo",
+    "clear": "Clear"
+  },
+  "status": {
+    "ready": "Draw a digit with the mouse or your finger",
+    "drawing": "Drawing..."
+  },
+  "errors": {
+    "unavailable": "Digit recognition is unavailable on this runtime",
+    "inference": "Recognition failed - try again"
+  },
+  "results": {
+    "digit": "Digit",
+    "scores": "Model scores"
+  }
+}

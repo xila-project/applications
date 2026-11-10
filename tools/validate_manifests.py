@@ -10,7 +10,7 @@ import sys
 import tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
-APPS = ("calculator", "clock", "weather", "pixel_painter", "text_editor", "synth")
+APPS = ("calculator", "clock", "weather", "pixel_painter", "text_editor", "synth", "digits")
 SCHEMA = "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
 SHORTCUT_SCHEMA = "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json"
 
@@ -71,4 +71,4 @@ for app in APPS:
         raise SystemExit(f"invalid shortcut RGB color for {app}")
     if shortcut_file.stat().st_size > 2048:
         raise SystemExit(f"shortcut exceeds graphical Shell read limit for {app}")
-print("All six v1 package manifests and application-owned graphical Shell shortcuts match Cargo identities, versions, ABI and entrypoints.")
+print("All seven v1 package manifests and application-owned graphical Shell shortcuts match Cargo identities, versions, ABI and entrypoints.")

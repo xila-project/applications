@@ -7,7 +7,7 @@ import unittest
 from locked_revision import locked_revision
 
 ROOT = Path(__file__).resolve().parents[2]
-GUESTS = ('calculator', 'clock', 'weather', 'pixel_painter', 'text_editor', 'synth')
+GUESTS = ('calculator', 'clock', 'weather', 'pixel_painter', 'text_editor', 'synth', 'digits')
 NATIVE = {'activity': 'xila-activity', 'debug': 'xila-debug-application', 'file_manager': 'xila-file-manager',
           'settings': 'xila-settings', 'terminal': 'xila-terminal', 'package': 'xila-package-application', 'shell/command_line': 'xila-command-line-shell',
           'shell/graphical': 'xila-graphical-shell'}

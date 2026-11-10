@@ -1,0 +1,3 @@
+Dataset SHA-256: 731c5ac602752760c8e48fbffcf8c3b850d9dc2a2aedcf2cc48468fc17b673d1
+Model SHA-256: f651aa10903636677ae9e9e4cb1f0002d86e1770ef3ab925d70188f16e67dc73
+MNIST test accuracy: 0.9697 (10000 held-out images)

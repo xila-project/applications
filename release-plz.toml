@@ -51,3 +51,10 @@ release = true
 git_release_enable = true
 git_tag_name = "xila.synth-v{{ version }}"
 git_release_name = "xila.synth v{{ version }}"
+
+[[package]]
+name = "xila-digits"
+release = true
+git_release_enable = true
+git_tag_name = "xila.digits-v{{ version }}"
+git_release_name = "xila.digits v{{ version }}"

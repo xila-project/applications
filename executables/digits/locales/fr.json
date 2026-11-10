@@ -1,0 +1,22 @@
+{
+  "app": {
+    "title": "Digits - dessinez un chiffre de 0 à 9"
+  },
+  "controls": {
+    "recognize": "Reconnaître",
+    "undo": "Annuler",
+    "clear": "Effacer"
+  },
+  "status": {
+    "ready": "Dessinez un chiffre à la souris ou au doigt",
+    "drawing": "Dessin..."
+  },
+  "errors": {
+    "unavailable": "Reconnaissance indisponible sur ce runtime",
+    "inference": "Échec de la reconnaissance - réessayez"
+  },
+  "results": {
+    "digit": "Chiffre",
+    "scores": "Scores du modèle"
+  }
+}
