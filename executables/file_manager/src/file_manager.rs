@@ -6,13 +6,14 @@ pub(crate) use alloc::{
     vec::Vec,
 };
 use core::ptr::null_mut;
+use xila::graphics::fonts;
 use xila::log;
 use xila::task;
 use xila::virtual_file_system::Directory;
 use xila::{
     file_system::{Kind, Path, PathOwned},
     graphics::{
-        self, EventKind, lvgl,
+        self, EventKind, Key, lvgl,
         palette::{self, Hue},
     },
 };
@@ -28,6 +29,7 @@ pub struct FileManager {
     refresh_button: *mut lvgl::lv_obj_t,
     path_text_area: *mut lvgl::lv_obj_t,
     go_button: *mut lvgl::lv_obj_t,
+    status: *mut lvgl::lv_obj_t,
     file_list: *mut lvgl::lv_obj_t,
     current_path: PathOwned,
     files: Vec<FileItem>,
@@ -59,6 +61,7 @@ impl FileManager {
                 refresh_button: null_mut(),
                 path_text_area: null_mut(),
                 go_button: null_mut(),
+                status: null_mut(),
                 file_list: null_mut(),
                 current_path: PathOwned::root(),
                 files: Vec::new(),
@@ -80,11 +83,18 @@ impl FileManager {
                     0,
                     lvgl::LV_STATE_DEFAULT,
                 );
+                // Toolbar, status line and list form one continuous surface.
+                lvgl::lv_obj_set_style_pad_row(
+                    manager.window.as_object_mutable(),
+                    0,
+                    lvgl::LV_STATE_DEFAULT,
+                );
             }
 
             manager.create_toolbar().await?;
+            manager.create_status()?;
             manager.create_file_list().await?;
-            manager.load_directory().await?;
+            manager.open(PathOwned::root()).await?;
 
             manager
         });
@@ -133,6 +143,12 @@ impl FileManager {
                     self.handle_file_click(target).await?;
                 }
             }
+            // Enter in the path field navigates like the Go button.
+            EventKind::Key if event.target == self.path_text_area => {
+                if let Some(Key::Enter) = event.key {
+                    self.handle_go_click().await?;
+                }
+            }
             _ => {}
         }
 
@@ -159,6 +175,13 @@ impl FileManager {
                 lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
                 lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
             );
+            lvgl::lv_obj_remove_flag(self.toolbar, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_SCROLLABLE);
+            // Narrow windows keep the path field usable with tighter spacing.
+            lvgl::lv_obj_update_layout(self.window.as_object_mutable());
+            let compact = lvgl::lv_obj_get_width(self.window.as_object_mutable()) < 560;
+            let spacing = if compact { 4 } else { 8 };
+            lvgl::lv_obj_set_style_pad_all(self.toolbar, spacing, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_pad_column(self.toolbar, spacing, lvgl::LV_STATE_DEFAULT);
 
             // Up button
             self.up_button = lvgl::lv_button_create(self.toolbar);
@@ -203,6 +226,15 @@ impl FileManager {
             );
             lvgl::lv_obj_center(refresh_label);
 
+            // Navigation is secondary to the content: only Go keeps the
+            // primary style.
+            for button in [self.up_button, self.home_button, self.refresh_button] {
+                lvgl::lv_theme_shadcn_set_variant(
+                    button,
+                    lvgl::lv_theme_shadcn_variant_t_LV_THEME_SHADCN_VARIANT_OUTLINE,
+                );
+            }
+
             // Remove event handler - events bubble up to window
 
             // Path text area - use flex grow to take remaining space
@@ -230,10 +262,82 @@ impl FileManager {
             );
             lvgl::lv_obj_center(go_label);
 
+            if compact {
+                for button in [
+                    self.up_button,
+                    self.home_button,
+                    self.refresh_button,
+                    self.go_button,
+                ] {
+                    lvgl::lv_obj_set_style_pad_hor(button, 10, lvgl::LV_STATE_DEFAULT);
+                }
+            }
+
             self.update_path_label();
         }
 
         Ok(())
+    }
+
+    /// One line under the toolbar: folder summary, selected file or error.
+    fn create_status(&mut self) -> Result<()> {
+        unsafe {
+            self.status = lvgl::lv_label_create(self.window.as_object_mutable());
+            if self.status.is_null() {
+                return Err(Error::FailedToCreateObject);
+            }
+            lvgl::lv_label_set_text(self.status, c"".as_ptr());
+            lvgl::lv_obj_set_width(self.status, lvgl::lv_pct(100));
+            lvgl::lv_label_set_long_mode(
+                self.status,
+                lvgl::lv_label_long_mode_t_LV_LABEL_LONG_MODE_DOTS,
+            );
+            lvgl::lv_obj_set_style_text_font(
+                self.status,
+                fonts::get_font_small(),
+                lvgl::LV_STATE_DEFAULT,
+            );
+            lvgl::lv_obj_set_style_pad_hor(self.status, 12, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_pad_top(self.status, 2, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_pad_bottom(self.status, 8, lvgl::LV_STATE_DEFAULT);
+            graphics::theme::set_surface(self.status, graphics::theme::Surface::Card);
+            lvgl::lv_obj_set_style_bg_opa(self.status, lvgl::LV_OPA_COVER, lvgl::LV_STATE_DEFAULT);
+        }
+        Ok(())
+    }
+
+    fn set_status(&self, message: &str, error: bool) {
+        // Catalog text, names and paths contain no interior NULs.
+        if let Ok(message) = CString::new(message) {
+            unsafe {
+                lvgl::lv_label_set_text(self.status, message.as_ptr());
+                lvgl::lv_theme_shadcn_set_error(self.status, error);
+                lvgl::lv_obj_set_style_text_opa(
+                    self.status,
+                    if error { lvgl::LV_OPA_COVER } else { MUTED },
+                    lvgl::LV_STATE_DEFAULT,
+                );
+            }
+        }
+    }
+
+    fn show_summary(&self) {
+        let folders = self
+            .files
+            .iter()
+            .filter(|file| file.kind == Kind::Directory)
+            .count();
+        self.set_status(
+            &alloc::format!(
+                "{}",
+                t!(
+                    "status.summary",
+                    arg0 = folders,
+                    arg1 = self.files.len() - folders
+                )
+            ),
+            false,
+        );
     }
 
     async fn create_file_list(&mut self) -> Result<()> {
@@ -249,58 +353,84 @@ impl FileManager {
 
             // Ensure proper scrolling behavior
             lvgl::lv_obj_set_style_pad_all(self.file_list, 0, lvgl::LV_STATE_DEFAULT);
+            // Edge-to-edge like the window: no card frame around the rows.
+            lvgl::lv_obj_set_style_border_width(self.file_list, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_radius(self.file_list, 0, lvgl::LV_STATE_DEFAULT);
         }
 
         Ok(())
     }
 
-    async fn load_directory(&mut self) -> Result<()> {
-        // Clear existing files
-        self.clear_file_list();
-
+    /// Reads and sorts a directory without touching the interface, so a
+    /// failed navigation leaves the current listing in place.
+    async fn read_directory(&self, path: &Path) -> Result<Vec<FileItem>> {
         let task = self
             .context
             .task_manager
             .get_current_task_identifier()
             .await;
-
-        // Open directory
         let virtual_file_system = &self.context.virtual_file_system;
+        let mut directory = Directory::open(virtual_file_system, task, path).await?;
 
-        let mut directory = Directory::open(virtual_file_system, task, &self.current_path).await?;
-
-        // Read directory entries
+        let mut files = Vec::new();
         while let Some(entry) = directory.read().await? {
-            let name = entry.name.clone();
-
             // Skip "." and ".." entries
-            if name == "." || name == ".." {
+            if entry.name == "." || entry.name == ".." {
                 continue;
             }
-
-            let file_item = FileItem {
-                name: name.clone(),
+            files.push(FileItem {
+                name: entry.name.clone(),
                 kind: entry.kind,
                 size: entry.size,
-            };
-
-            self.files.push(file_item);
+            });
         }
 
-        // Sort files: directories first, then files
-        self.files.sort_by(|a, b| match (a.kind, b.kind) {
+        // Directories first, then files, each by name.
+        files.sort_by(|a, b| match (a.kind, b.kind) {
             (Kind::Directory, Kind::Directory) => a.name.cmp(&b.name),
             (Kind::Directory, _) => core::cmp::Ordering::Less,
             (_, Kind::Directory) => core::cmp::Ordering::Greater,
             _ => a.name.cmp(&b.name),
         });
+        Ok(files)
+    }
 
-        // Create UI for each file
+    /// Shows `path`, or reports why it cannot be opened and stays in place.
+    async fn open(&mut self, path: PathOwned) -> Result<()> {
+        let files = match self.read_directory(&path).await {
+            Ok(files) => files,
+            Err(error) => {
+                self.set_status(
+                    &alloc::format!("{}", t!("status.open_failed", arg0 = path, arg1 = error)),
+                    true,
+                );
+                return Err(error);
+            }
+        };
+        self.clear_file_list();
+        self.current_path = path;
+        self.files = files;
+        self.update_path_label();
         for i in 0..self.files.len() {
             self.create_file_item(i).await?;
         }
-
+        unsafe {
+            if self.files.is_empty() {
+                lvgl::lv_list_add_text(self.file_list, t!(c"status.empty").as_ptr());
+            }
+            lvgl::lv_obj_scroll_to_y(self.file_list, 0, false);
+            lvgl::lv_obj_set_state(
+                self.up_button,
+                lvgl::lv_state_t_LV_STATE_DISABLED,
+                self.current_path.go_parent().is_none(),
+            );
+        }
+        self.show_summary();
         Ok(())
+    }
+
+    async fn load_directory(&mut self) -> Result<()> {
+        self.open(self.current_path.clone()).await
     }
 
     async fn create_file_item(&mut self, index: usize) -> Result<()> {
@@ -322,6 +452,32 @@ impl FileManager {
             if button.is_null() {
                 return Err(Error::FailedToCreateObject);
             }
+
+            // Directories lead somewhere; files show how large they are.
+            let detail = lvgl::lv_label_create(button);
+            if detail.is_null() {
+                return Err(Error::FailedToCreateObject);
+            }
+            let detail_text = match file.kind {
+                Kind::Directory => CString::from(
+                    core::ffi::CStr::from_bytes_with_nul(lvgl::LV_SYMBOL_RIGHT).unwrap_or_default(),
+                ),
+                _ => CString::new(format_size(file.size)).unwrap_or_default(),
+            };
+            lvgl::lv_label_set_text(detail, detail_text.as_ptr());
+            lvgl::lv_obj_set_style_text_font(
+                detail,
+                fonts::get_font_small(),
+                lvgl::LV_STATE_DEFAULT,
+            );
+            lvgl::lv_obj_set_style_text_opa(detail, MUTED, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_flex_align(
+                button,
+                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_START,
+                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
+                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
+            );
+            lvgl::lv_obj_set_style_pad_right(button, 16, lvgl::LV_STATE_DEFAULT);
 
             // Store the file index in the button's user data for identification
             lvgl::lv_obj_set_user_data(button, index as *mut core::ffi::c_void);
@@ -365,14 +521,14 @@ impl FileManager {
                         if let Some(new_path) =
                             self.current_path.clone().join(Path::from_str(&file.name))
                         {
-                            self.current_path = new_path;
-                            self.update_path_label();
-                            // Reload directory contents
-                            self.load_directory().await?;
+                            self.open(new_path).await?;
                         }
                     } else {
-                        // Handle file selection/opening
-                        // Could open files with appropriate applications
+                        // No application association yet: describe the file.
+                        self.set_status(
+                            &alloc::format!("{} - {}", file.name, format_size(file.size)),
+                            false,
+                        );
                     }
                 }
             }
@@ -383,18 +539,13 @@ impl FileManager {
 
     async fn handle_up_click(&mut self) -> Result<()> {
         if let Some(parent_path) = self.current_path.go_parent() {
-            self.current_path = parent_path.to_owned();
-            self.update_path_label();
-            self.load_directory().await?;
+            self.open(parent_path.to_owned()).await?;
         }
         Ok(())
     }
 
     async fn handle_home_click(&mut self) -> Result<()> {
-        self.current_path = PathOwned::root();
-        self.update_path_label();
-        self.load_directory().await?;
-        Ok(())
+        self.open(PathOwned::root()).await
     }
 
     async fn handle_refresh_click(&mut self) -> Result<()> {
@@ -412,18 +563,18 @@ impl FileManager {
                     // Convert C string to Rust string
                     let text_cstr = core::ffi::CStr::from_ptr(text_ptr);
                     if let Ok(path_str) = text_cstr.to_str() {
-                        // Try to create a path from the entered string
-                        let new_path = PathOwned::new(path_str.to_string()).unwrap_or_else(|| {
-                            log::error!("{}", t!("errors.invalid_entered_path", arg0 = path_str));
-                            self.current_path.clone()
-                        });
-
-                        // Navigate to the new path
-                        self.current_path = new_path;
-                        self.update_path_label();
-
-                        // Try to load the directory
-                        self.load_directory().await?;
+                        // An invalid or unreadable path is reported in the
+                        // status line and the entered text is kept for editing.
+                        match PathOwned::new(path_str.to_string()) {
+                            Some(new_path) => self.open(new_path).await?,
+                            None => self.set_status(
+                                &alloc::format!(
+                                    "{}",
+                                    t!("errors.invalid_entered_path", arg0 = path_str)
+                                ),
+                                true,
+                            ),
+                        }
                     }
                 }
             }
@@ -437,9 +588,7 @@ impl FileManager {
     }
 
     pub async fn navigate_to(&mut self, path: &Path) -> Result<()> {
-        self.current_path = path.to_owned();
-        self.update_path_label();
-        self.load_directory().await
+        self.open(path.to_owned()).await
     }
 
     pub fn get_current_path(&self) -> &Path {
@@ -448,5 +597,44 @@ impl FileManager {
 
     pub fn is_running(&self) -> bool {
         self.running
+    }
+}
+
+/// Opacity of secondary text; dimming follows the palette.
+const MUTED: u8 = 150;
+
+/// Binary-prefixed size with at most one decimal, such as `512 B` or `1.5 MiB`.
+pub fn format_size(bytes: u64) -> String {
+    const UNITS: [&str; 4] = ["KiB", "MiB", "GiB", "TiB"];
+    if bytes < 1024 {
+        return alloc::format!("{bytes} B");
+    }
+    // Tenths of the current unit, rounded to nearest.
+    let mut tenths = (bytes as u128 * 10 + 512) / 1024;
+    let mut unit = 0;
+    while tenths >= 10_240 && unit + 1 < UNITS.len() {
+        tenths = (tenths + 512) / 1024;
+        unit += 1;
+    }
+    if tenths >= 1000 || tenths.is_multiple_of(10) {
+        alloc::format!("{} {}", (tenths + 5) / 10, UNITS[unit])
+    } else {
+        alloc::format!("{}.{} {}", tenths / 10, tenths % 10, UNITS[unit])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_size;
+
+    #[test]
+    fn sizes_use_binary_prefixes() {
+        assert_eq!(format_size(0), "0 B");
+        assert_eq!(format_size(1023), "1023 B");
+        assert_eq!(format_size(1024), "1 KiB");
+        assert_eq!(format_size(1536), "1.5 KiB");
+        assert_eq!(format_size(250_000), "244 KiB");
+        assert_eq!(format_size(5 * 1024 * 1024), "5 MiB");
+        assert_eq!(format_size(3 * 1024 * 1024 * 1024 / 2), "1.5 GiB");
     }
 }

@@ -2,5 +2,10 @@
   "errors": {
     "event_handling_failed": "处理文件管理器事件时出错：{arg0:?}",
     "invalid_entered_path": "输入的路径无效：{arg0}"
+  },
+  "status": {
+    "summary": "文件夹：{arg0}，文件：{arg1}",
+    "empty": "此文件夹为空",
+    "open_failed": "无法打开 {arg0}：{arg1}"
   }
 }
