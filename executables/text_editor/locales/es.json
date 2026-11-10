@@ -10,7 +10,8 @@
     "new_file": "Nuevo",
     "open_file": "Abrir",
     "save_file": "Guardar",
-    "choose_folder": "Carpeta"
+    "choose_folder": "Carpeta",
+    "save_as": "Guardar como"
   },
   "file_path": {
     "instructions": "Elige una ruta y crea o abre un archivo de texto",
