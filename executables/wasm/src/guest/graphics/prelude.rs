@@ -298,10 +298,13 @@ impl ChartSeries {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Mirrors LVGL's `lv_chart_type_t`; the host forwards the value unchanged.
 pub enum ChartType {
     None,
     Line,
+    Curve,
     Bar,
+    Stacked,
     Scatter,
 }
 
@@ -779,3 +782,19 @@ pub use super::enumeration::{
     STATE_FOCUS_KEY, STATE_FOCUSED, STATE_HOVERED, STATE_PRESSED, STATE_SCROLLED, STATE_USER_1,
     STATE_USER_2, STATE_USER_3, STATE_USER_4, State, TextLeadingTrim,
 };
+
+#[cfg(test)]
+mod chart_type_tests {
+    use super::ChartType;
+
+    #[test]
+    fn chart_types_match_lvgl_values() {
+        // lv_chart_type_t: NONE, LINE, CURVE, BAR, STACKED, SCATTER.
+        assert_eq!(ChartType::None as u32, 0);
+        assert_eq!(ChartType::Line as u32, 1);
+        assert_eq!(ChartType::Curve as u32, 2);
+        assert_eq!(ChartType::Bar as u32, 3);
+        assert_eq!(ChartType::Stacked as u32, 4);
+        assert_eq!(ChartType::Scatter as u32, 5);
+    }
+}
