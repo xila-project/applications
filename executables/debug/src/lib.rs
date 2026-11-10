@@ -23,6 +23,8 @@ use xila::{
     virtual_file_system::{File, VirtualFileSystem},
 };
 
+mod inspection;
+
 pub struct DebugExecutable;
 
 impl ExecutableTrait for DebugExecutable {
@@ -211,6 +213,48 @@ async fn dispatch(
     let mut payload = None;
     let result: Result<serde_json::Value, (&'static str, String)> = match request {
         Request::Diagnostics => diagnostics(context).await,
+        Request::Capabilities => Ok(serde_json::json!({
+            "protocol_version": 2,
+            "operations": ["diagnostics","capabilities","resolution","screenshot","ui_tree","pointer_move","pointer_button","pointer_click","click","key","press_key","text"],
+            "scene_layers": ["screen","top","system"],
+            "screenshot": "composited_rgba8888",
+            "input_acknowledgement": "queued",
+            "visibility": "geometry_hidden_opacity_not_occlusion",
+            "style_parts": ["main"],
+            "per_app_profiling": false, "log_stream": false,
+            "limits": {"response_bytes":MAX_RESPONSE_BYTES,"tree_elements":256,"tree_depth":24,"matrix_buttons_per_widget":64,"matrix_buttons_per_tree":128}
+        })),
+        Request::Click {
+            role,
+            name,
+            text,
+            button,
+        } => graphics_manager
+            .click_ui(
+                role.as_deref(),
+                name.as_deref(),
+                text.as_deref(),
+                button.as_deref(),
+            )
+            .await
+            .map(|(x, y)| serde_json::json!({"x":x,"y":y,"status":"queued"}))
+            .map_err(|code| {
+                (
+                    code,
+                    "Control could not be uniquely and safely clicked.".into(),
+                )
+            }),
+        Request::PointerClick { x, y } => match (i16::try_from(x), i16::try_from(y)) {
+            (Ok(x), Ok(y)) => graphics_manager
+                .inject_pointer_click(graphics::Point::new(x, y))
+                .await
+                .map(|()| serde_json::json!({"status":"queued"}))
+                .map_err(input_error),
+            _ => Err((
+                "invalid_coordinates",
+                "Coordinates are outside the display.".into(),
+            )),
+        },
         Request::Resolution => graphics_manager
             .get_resolution()
             .await
@@ -248,32 +292,7 @@ async fn dispatch(
             .inspect_ui_tree(max_elements, max_depth)
             .await
         {
-            Ok(snapshot) => {
-                let elements: Vec<serde_json::Value> = snapshot
-                    .elements
-                    .into_iter()
-                    .map(|element| {
-                        serde_json::json!({
-                            "id": element.id,
-                            "parent_id": element.parent_id,
-                            "role": element.role,
-                            "semantic_role": element.semantic_role,
-                            "name": element.name,
-                            "text": element.text,
-                            "hidden": element.hidden,
-                            "disabled": element.disabled,
-                            "focused": element.focused,
-                            "clickable": element.clickable,
-                            "checked": element.checked,
-                            "bounds": element.bounds,
-                        })
-                    })
-                    .collect();
-                Ok(serde_json::json!({
-                    "elements": elements,
-                    "truncated": snapshot.truncated
-                }))
-            }
+            Ok(snapshot) => Ok(inspection::encode(snapshot)),
             Err(error) => Err(("ui_tree_failed", error.to_string())),
         },
         Request::PointerMove { x, y } => {
@@ -381,54 +400,9 @@ fn state_to_graphics(state: InputState) -> State {
     }
 }
 
-async fn diagnostics(
-    context: &'static xila::executable::ExecutableContext,
-) -> Result<serde_json::Value, (&'static str, String)> {
-    let memory = xila::memory::global_manager();
-    let mut stack = context
-        .task_manager
-        .get_children(task::Manager::ROOT_TASK_IDENTIFIER)
-        .await
-        .map_err(|error| ("diagnostics_failed", error.to_string()))?;
-    let mut tasks = Vec::new();
-    while let Some(task) = stack.pop() {
-        if tasks.len() >= 64 {
-            break;
-        }
-        let name = context
-            .task_manager
-            .get_name(task)
-            .await
-            .unwrap_or_else(|_| "unknown".into());
-        let children = context
-            .task_manager
-            .get_children(task)
-            .await
-            .unwrap_or_default();
-        stack.extend(children);
-        let parent = context
-            .task_manager
-            .get_parent(task)
-            .await
-            .map(usize::from)
-            .ok();
-        tasks.push(serde_json::json!({
-            "id": usize::from(task),
-            "parent_id": parent,
-            "name": name
-        }));
-    }
-    Ok(serde_json::json!({
-        "tasks": tasks,
-        "truncated": !stack.is_empty(),
-        "memory": {
-            "total_bytes": memory.get_total_size(),
-            "used_bytes": memory.get_used(),
-            "free_bytes": memory.get_free(),
-            "page_size": memory.get_page_size(),
-        }
-    }))
-}
+mod diagnostics;
+
+use diagnostics::diagnostics;
 
 fn error_response(code: &str, message: &str) -> serde_json::Value {
     serde_json::json!({"ok": false, "error": {"code": code, "message": message}})
