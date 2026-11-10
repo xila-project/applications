@@ -20,5 +20,14 @@
     "idle": "Démo : arrêtée",
     "running": "Démo : en cours (512 octets / 25 ms)",
     "failed": "Démo : indisponible (échec d’allocation)"
+  },
+  "cards": {
+    "uptime": "Durée de fonctionnement",
+    "tasks": "Tâches",
+    "memory": "Mémoire",
+    "memory_share": "{arg0} % de {arg1}",
+    "history": "Historique de la mémoire",
+    "demo": "Charge de démonstration",
+    "demo_detail": "Retient 4 KiB pendant 10 s"
   }
 }

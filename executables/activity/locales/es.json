@@ -20,5 +20,14 @@
     "idle": "Demo: detenida",
     "running": "Demo: en ejecución (512 bytes / 25 ms)",
     "failed": "Demo: no disponible (fallo de asignación)"
+  },
+  "cards": {
+    "uptime": "Tiempo activo",
+    "tasks": "Tareas",
+    "memory": "Memoria",
+    "memory_share": "{arg0} % de {arg1}",
+    "history": "Historial de memoria",
+    "demo": "Carga de demostración",
+    "demo_detail": "Retiene 4 KiB durante 10 s"
   }
 }

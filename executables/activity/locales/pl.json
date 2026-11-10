@@ -20,5 +20,14 @@
     "idle": "Demo: zatrzymane",
     "running": "Demo: działa (512 bajtów / 25 ms)",
     "failed": "Demo: niedostępne (błąd alokacji)"
+  },
+  "cards": {
+    "uptime": "Czas działania",
+    "tasks": "Zadania",
+    "memory": "Pamięć",
+    "memory_share": "{arg0} % z {arg1}",
+    "history": "Historia pamięci",
+    "demo": "Obciążenie demonstracyjne",
+    "demo_detail": "Utrzymuje 4 KiB przez 10 s"
   }
 }

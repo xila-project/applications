@@ -20,5 +20,14 @@
     "idle": "デモ: 停止中",
     "running": "デモ: 実行中 (512 バイト / 25 ミリ秒)",
     "failed": "デモ: 利用不可（割り当て失敗）"
+  },
+  "cards": {
+    "uptime": "稼働時間",
+    "tasks": "タスク",
+    "memory": "メモリ",
+    "memory_share": "{arg1} の {arg0} %",
+    "history": "メモリ履歴",
+    "demo": "デモ負荷",
+    "demo_detail": "4 KiB を 10 秒間保持"
   }
 }

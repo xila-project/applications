@@ -7,9 +7,18 @@ loaded for it. A fresh native seed includes its desktop shortcut. Existing disks
 can launch it from Terminal with `/applications/executables/activity`, or regenerate a separate seed/disk.
 
 Launch with `/applications/executables/activity --interval-ms 250`. The default refresh is 1000 ms; accepted
-values are 100–10000 ms. The Refresh button cycles 250, 1000 and 2000 ms. Sampling
+values are 100–10000 ms. The segmented control in the header selects 250 ms, 1 s
+or 2 s. Sampling
 and event waits use async timers; provider reads happen outside the graphics
 lock. Window events do not reset the sampling deadline.
+
+## Interface
+
+Uptime, registered tasks and allocator usage are shown as cards; the memory card
+adds the share of the reported capacity as a bar. A line chart keeps the last 60
+allocator samples and scales its axis to them, so the 4 KiB demo is visible. The
+demo workload is toggled with a switch, which returns to off when the workload
+stops on its own. Windows smaller than 560×360 use a denser layout and scroll.
 
 ## Metric sources and limits
 
@@ -29,9 +38,9 @@ explicit unavailable state, and document their scope here.
 
 ## Bounded workload
 
-Start demo retains a fallibly allocated 4096-byte buffer inside the app. Its
+Turning the demo switch on retains a fallibly allocated 4096-byte buffer inside the app. Its
 async loop mutates at most 512 bytes per 25 ms batch and stops automatically
-after 10 seconds. Missed batches are skipped rather than replayed. Stop, window
+after 10 seconds. Missed batches are skipped rather than replayed. Switching off, window
 close and app cancellation immediately drop the owned buffer; no demo task or
 executor pool is spawned. Repeated starts cannot create concurrent workloads in
 one window. Allocation failure is shown without taking down the dashboard. The

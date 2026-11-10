@@ -48,22 +48,23 @@ async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), 
                 Action::Close => {
                     return Ok(());
                 }
-                Action::ToggleWorkload => {
+                Action::Workload(enabled) => {
                     failed = false;
-                    if workload.take().is_none() {
+                    // The switch may race the automatic stop; follow its state.
+                    if !enabled {
+                        workload = None;
+                    } else if workload.is_none() {
                         match Workload::new(context.time_manager.uptime()) {
                             Ok(running) => workload = Some(running),
                             Err(()) => failed = true,
                         }
                     }
+                    // Always resynchronize the switch with the real state.
+                    shown_controls = None;
                     next_sample = Duration::ZERO;
                 }
-                Action::Interval => {
-                    config.interval_ms = match config.interval_ms {
-                        250 => 1000,
-                        1000 => 2000,
-                        _ => 250,
-                    };
+                Action::Interval(interval) => {
+                    config.interval_ms = interval;
                     next_sample = Duration::ZERO;
                 }
             }
