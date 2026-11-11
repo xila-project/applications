@@ -29,7 +29,3 @@ load-path = "locales"
 default-locale = "en"
 fallback = ["en"]
 strict = true
-
-[features]
-default = []
-model = []

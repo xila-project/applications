@@ -1,9 +1,8 @@
-use digits::{DEVICE_PATH, LOADER_PATH, MODEL_BYTES};
+use digits::{LOADER_PATH, MODEL_BYTES};
 
 #[test]
-fn paths_match_the_platform_nodes() {
+fn loader_path_matches_the_platform_node() {
     assert_eq!(LOADER_PATH, "/devices/nn/cpu");
-    assert_eq!(DEVICE_PATH, "/devices/nn/digits");
 }
 
 #[test]
