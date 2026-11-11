@@ -13,7 +13,9 @@
   },
   "errors": {
     "unavailable": "Rozpoznawanie cyfr jest niedostępne w tym środowisku",
-    "inference": "Rozpoznawanie nie powiodło się - spróbuj ponownie"
+    "inference": "Rozpoznawanie nie powiodło się - spróbuj ponownie",
+    "loader_missing": "Brak węzła ładowarki sieci neuronowej",
+    "load_failed": "Nie udało się załadować modelu rozpoznawania cyfr"
   },
   "results": {
     "digit": "Cyfra",

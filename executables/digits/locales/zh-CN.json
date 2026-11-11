@@ -13,7 +13,9 @@
   },
   "errors": {
     "unavailable": "当前运行环境不支持数字识别",
-    "inference": "识别失败 - 请重试"
+    "inference": "识别失败 - 请重试",
+    "loader_missing": "未找到神经网络加载器节点",
+    "load_failed": "加载数字识别模型失败"
   },
   "results": {
     "digit": "数字",

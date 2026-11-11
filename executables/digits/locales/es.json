@@ -13,7 +13,9 @@
   },
   "errors": {
     "unavailable": "El reconocimiento de dígitos no está disponible en este entorno",
-    "inference": "Error de reconocimiento - inténtalo de nuevo"
+    "inference": "Error de reconocimiento - inténtalo de nuevo",
+    "loader_missing": "Falta el nodo del cargador de red neuronal",
+    "load_failed": "Error al cargar el modelo de reconocimiento de dígitos"
   },
   "results": {
     "digit": "Dígito",

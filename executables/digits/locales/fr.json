@@ -13,7 +13,9 @@
   },
   "errors": {
     "unavailable": "Reconnaissance indisponible sur ce runtime",
-    "inference": "Échec de la reconnaissance - réessayez"
+    "inference": "Échec de la reconnaissance - réessayez",
+    "loader_missing": "Le nœud du chargeur de réseau neuronal est manquant",
+    "load_failed": "Échec du chargement du modèle de reconnaissance"
   },
   "results": {
     "digit": "Chiffre",

@@ -13,7 +13,9 @@
   },
   "errors": {
     "unavailable": "Die Ziffernerkennung ist in dieser Laufzeitumgebung nicht verfügbar",
-    "inference": "Erkennung fehlgeschlagen - erneut versuchen"
+    "inference": "Erkennung fehlgeschlagen - erneut versuchen",
+    "loader_missing": "Der Neuronale-Netzwerk-Ladeknoten fehlt",
+    "load_failed": "Laden des Ziffernerkennungsmodells fehlgeschlagen"
   },
   "results": {
     "digit": "Ziffer",

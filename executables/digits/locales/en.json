@@ -13,7 +13,9 @@
   },
   "errors": {
     "unavailable": "Digit recognition is unavailable on this runtime",
-    "inference": "Recognition failed - try again"
+    "inference": "Recognition failed - try again",
+    "loader_missing": "Neural network loader node is missing",
+    "load_failed": "Failed to load digit recognition model"
   },
   "results": {
     "digit": "Digit",
