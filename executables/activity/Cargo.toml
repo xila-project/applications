@@ -5,12 +5,14 @@ edition = "2024"
 
 [dependencies]
 embedded-i18n = { workspace = true }
-xila = { workspace = true, features = ["graphics"] }
+xila = { workspace = true, default-features = true, features = ["graphics"] }
 embassy-futures = { workspace = true }
 
 [dev-dependencies]
 testing = { workspace = true }
-xila = { workspace = true, features = ["graphics_rendering_xrgb8888"] }
+xila = { workspace = true, default-features = true, features = [
+  "graphics_rendering_xrgb8888",
+] }
 critical-section = { workspace = true, features = ["std"] }
 
 [lib]

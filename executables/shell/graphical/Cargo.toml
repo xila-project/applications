@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 embedded-i18n = { workspace = true }
-xila = { workspace = true, features = ["graphics"] }
+xila = { workspace = true, default-features = true, features = ["graphics"] }
 miniserde = { workspace = true }
 getargs = { version = "0.5" }
 getargs-derive = { workspace = true }

@@ -2,8 +2,10 @@ use core::fmt::Display;
 use core::num::{NonZeroU16, NonZeroUsize};
 
 use alloc::fmt;
+#[cfg(feature = "network")]
+use xila::network;
+use xila::virtual_file_system;
 use xila::{authentication, internationalization::t, task};
-use xila::{network, virtual_file_system};
 
 pub type Result<T, E = Error<'static>> = core::result::Result<T, E>;
 
@@ -41,7 +43,9 @@ pub enum Error<'a> {
     InvalidOption,
     FailedToGetMetadata(virtual_file_system::Error),
     FailedToReadDirectoryEntry(virtual_file_system::Error),
+    #[cfg(feature = "network")]
     FailedToResolve(network::Error),
+    #[cfg(feature = "network")]
     FailedToCreateSocket(network::Error),
     Format,
     InvalidSleepDuration,
@@ -290,6 +294,7 @@ impl Display for Error<'_> {
                     t!("errors.failed_to_read_directory_entry", arg0 = error)
                 )
             }
+            #[cfg(feature = "network")]
             Error::FailedToResolve(error) => {
                 write!(
                     formatter,
@@ -297,6 +302,7 @@ impl Display for Error<'_> {
                     t!("errors.failed_to_resolve_domain", arg0 = error)
                 )
             }
+            #[cfg(feature = "network")]
             Error::FailedToCreateSocket(error) => {
                 write!(
                     formatter,

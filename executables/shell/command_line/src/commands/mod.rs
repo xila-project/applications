@@ -5,6 +5,7 @@ mod clear;
 mod concatenate;
 mod cp;
 mod directory;
+#[cfg(feature = "network")]
 mod dns;
 mod echo;
 mod environment_variables;
@@ -14,10 +15,12 @@ mod find;
 mod grep;
 mod head;
 mod help;
+#[cfg(feature = "network")]
 mod ip;
 mod list;
 mod ln;
 mod mv;
+#[cfg(feature = "network")]
 mod ping;
 mod print_working_directory;
 mod realpath;
@@ -26,6 +29,7 @@ mod statistics;
 mod tail;
 mod touch;
 mod tree;
+#[cfg(feature = "network")]
 mod web_request;
 mod which;
 mod word_count;
@@ -47,7 +51,6 @@ use self::{
     concatenate::ConcatenateCommand,
     cp::CopyCommand,
     directory::{CreateDirectoryCommand, RemoveDirectoryCommand, RemoveFileCommand},
-    dns::DnsResolveCommand,
     echo::EchoCommand,
     environment_variables::{
         PrintEnvironmentVariableCommand, RemoveEnvironmentVariableCommand,
@@ -56,19 +59,20 @@ use self::{
     exit::ExitCommand,
     find::FindCommand,
     head::HeadCommand,
-    ip::IpCommand,
     list::ListCommand,
     mv::MoveCommand,
-    ping::PingCommand,
     print_working_directory::PrintWorkingDirectoryCommand,
     sleep::SleepCommand,
     statistics::StatisticsCommand,
     tail::TailCommand,
     touch::TouchCommand,
     tree::TreeCommand,
-    web_request::WebRequestCommand,
     which::WhichCommand,
     word_count::WordCountCommand,
+};
+#[cfg(feature = "network")]
+use self::{
+    dns::DnsResolveCommand, ip::IpCommand, ping::PingCommand, web_request::WebRequestCommand,
 };
 
 pub trait CommandContext {
@@ -116,9 +120,13 @@ pub enum UserCommandKind {
     RemoveEnvironmentVariable,
     RemoveFile,
     RemoveDirectory,
+    #[cfg(feature = "network")]
     WebRequest,
+    #[cfg(feature = "network")]
     DnsResolve,
+    #[cfg(feature = "network")]
     Ping,
+    #[cfg(feature = "network")]
     Ip,
     PrintWorkingDirectory,
     Realpath,
@@ -214,17 +222,21 @@ const BUILTINS: &[(&str, UserCommandKind, &str)] = &[
         UserCommandKind::RemoveDirectory,
         directory::DirectoryRemoveArguments::HELP,
     ),
+    #[cfg(feature = "network")]
     (
         "web_request",
         UserCommandKind::WebRequest,
         "Usage: web_request [-h HEADER] [-m METHOD] [-b BODY] [-f BODY_FILE] URL\nSend an HTTP request.",
     ),
+    #[cfg(feature = "network")]
     (
         "dns_resolve",
         UserCommandKind::DnsResolve,
         dns::DnsResolveArguments::HELP,
     ),
+    #[cfg(feature = "network")]
     ("ping", UserCommandKind::Ping, ping::PingArguments::HELP),
+    #[cfg(feature = "network")]
     ("ip", UserCommandKind::Ip, ip::IpArguments::HELP),
     (
         "pwd",
@@ -317,9 +329,13 @@ where
                 .execute(context, options, paths)
                 .await
         }
+        #[cfg(feature = "network")]
         UserCommandKind::WebRequest => WebRequestCommand.execute(context, options, paths).await,
+        #[cfg(feature = "network")]
         UserCommandKind::DnsResolve => DnsResolveCommand.execute(context, options, paths).await,
+        #[cfg(feature = "network")]
         UserCommandKind::Ping => PingCommand.execute(context, options, paths).await,
+        #[cfg(feature = "network")]
         UserCommandKind::Ip => IpCommand.execute(context, options, paths).await,
         UserCommandKind::PrintWorkingDirectory => {
             PrintWorkingDirectoryCommand
@@ -434,6 +450,7 @@ mod tests {
             ("find", UserCommandKind::Find),
             ("mv", UserCommandKind::Move),
             ("exit", UserCommandKind::Exit),
+            #[cfg(feature = "network")]
             ("ping", UserCommandKind::Ping),
             ("ls", UserCommandKind::List),
             ("tail", UserCommandKind::Tail),
@@ -451,7 +468,9 @@ mod tests {
             ("unset", UserCommandKind::RemoveEnvironmentVariable),
             ("printenv", UserCommandKind::PrintEnvironmentVariable),
             ("which", UserCommandKind::Which),
+            #[cfg(feature = "network")]
             ("dns_resolve", UserCommandKind::DnsResolve),
+            #[cfg(feature = "network")]
             ("ip", UserCommandKind::Ip),
         ] {
             let mut context = HelpContext {
@@ -561,6 +580,7 @@ mod tests {
             (alloc::vec!["cat"], "Usage: cat"),
             (alloc::vec!["echo"], "Usage: echo"),
             (alloc::vec!["pwd"], "Usage: pwd"),
+            #[cfg(feature = "network")]
             (alloc::vec!["web_request"], "Usage: web_request"),
             (alloc::vec!["help"], "Usage: help"),
             (alloc::vec!["--help"], "Usage: help"),
@@ -588,6 +608,14 @@ mod tests {
             if expected == xila::internationalization::t!("help.built_in_commands_title") {
                 for name in ["help", "exit", "ls", "wc", "tail", "grep"] {
                     assert!(context.output.lines().any(|line| line == name));
+                }
+                #[cfg(feature = "network")]
+                for name in ["web_request", "dns_resolve", "ping", "ip"] {
+                    assert!(context.output.lines().any(|line| line == name));
+                }
+                #[cfg(not(feature = "network"))]
+                for name in ["web_request", "dns_resolve", "ping", "ip"] {
+                    assert!(!context.output.lines().any(|line| line == name));
                 }
             }
         }
@@ -801,22 +829,33 @@ mod tests {
             resolve_user_command("rmdir"),
             Some(UserCommandKind::RemoveDirectory)
         ));
+        #[cfg(feature = "network")]
         assert!(matches!(
             resolve_user_command("web_request"),
             Some(UserCommandKind::WebRequest)
         ));
+        #[cfg(feature = "network")]
         assert!(matches!(
             resolve_user_command("dns_resolve"),
             Some(UserCommandKind::DnsResolve)
         ));
+        #[cfg(feature = "network")]
         assert!(matches!(
             resolve_user_command("ping"),
             Some(UserCommandKind::Ping)
         ));
+        #[cfg(feature = "network")]
         assert!(matches!(
             resolve_user_command("ip"),
             Some(UserCommandKind::Ip)
         ));
+        #[cfg(not(feature = "network"))]
+        {
+            assert!(resolve_user_command("web_request").is_none());
+            assert!(resolve_user_command("dns_resolve").is_none());
+            assert!(resolve_user_command("ping").is_none());
+            assert!(resolve_user_command("ip").is_none());
+        }
         assert!(matches!(
             resolve_user_command("pwd"),
             Some(UserCommandKind::PrintWorkingDirectory)
