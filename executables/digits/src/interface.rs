@@ -127,22 +127,29 @@ impl Interface {
             for object in [canvas, actions] {
                 object_add_flag(object, ObjectFlag::EventBubble)?;
             }
+            let (classifier, initial_status) = match Classifier::open() {
+                Ok(classifier) => (Some(classifier), t!("status.ready")),
+                Err(crate::device::OpenError::LoaderMissing(error)) => {
+                    eprintln!("Digits loader missing: {error}");
+                    (None, t!("errors.loader_missing"))
+                }
+                Err(crate::device::OpenError::LoadFailed(error)) => {
+                    eprintln!("Digits model load failed: {error}");
+                    (None, t!("errors.load_failed"))
+                }
+            };
             let ui = Self {
                 window,
                 canvas,
                 actions,
                 result,
                 drawing: Drawing::new(),
-                classifier: Classifier::open().ok(),
+                classifier,
                 palette: [0x101216, 0xffffff],
                 _actions: action_map,
             };
             ui.upload()?;
-            ui.status(if ui.classifier.is_some() {
-                t!("status.ready")
-            } else {
-                t!("errors.unavailable")
-            })?;
+            ui.status(initial_status)?;
             Ok(ui)
         }
     }
@@ -166,10 +173,32 @@ impl Interface {
 
     fn predict(&mut self) -> wasm::Result<()> {
         let Some(input) = digits::prepare(self.drawing.pixels()) else {
-            return self.status(t!("status.ready"));
+            let status_msg = if self.classifier.is_some() {
+                t!("status.ready")
+            } else {
+                match Classifier::open() {
+                    Ok(classifier) => {
+                        self.classifier = Some(classifier);
+                        t!("status.ready")
+                    }
+                    Err(crate::device::OpenError::LoaderMissing(_)) => t!("errors.loader_missing"),
+                    Err(crate::device::OpenError::LoadFailed(_)) => t!("errors.load_failed"),
+                }
+            };
+            return self.status(status_msg);
         };
         if self.classifier.is_none() {
-            self.classifier = Classifier::open().ok();
+            match Classifier::open() {
+                Ok(classifier) => self.classifier = Some(classifier),
+                Err(crate::device::OpenError::LoaderMissing(error)) => {
+                    eprintln!("Digits loader missing: {error}");
+                    return self.status(t!("errors.loader_missing"));
+                }
+                Err(crate::device::OpenError::LoadFailed(error)) => {
+                    eprintln!("Digits model load failed: {error}");
+                    return self.status(t!("errors.load_failed"));
+                }
+            }
         }
         let Some(classifier) = self.classifier.as_mut() else {
             return self.status(t!("errors.unavailable"));

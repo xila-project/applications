@@ -2,6 +2,7 @@
 use device::neural_network::*;
 use file_system::ControlCommand;
 use std::{
+    fmt,
     fs::{File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
     os::fd::AsRawFd,
@@ -34,25 +35,55 @@ where
     Ok(output.0)
 }
 
+#[derive(Debug)]
+pub enum OpenError {
+    LoaderMissing(io::Error),
+    LoadFailed(io::Error),
+}
+
+impl fmt::Display for OpenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::LoaderMissing(err) => write!(f, "loader missing: {err}"),
+            Self::LoadFailed(err) => write!(f, "load failed: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for OpenError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::LoaderMissing(err) | Self::LoadFailed(err) => Some(err),
+        }
+    }
+}
+
 pub struct Classifier(File);
 
 impl Classifier {
-    pub fn open() -> io::Result<Self> {
-        let file = OpenOptions::new()
+    pub fn open() -> Result<Self, OpenError> {
+        let mut file = OpenOptions::new()
             .read(true)
             .write(true)
-            .open(digits::DEVICE_PATH)?;
-        let input = control(&file, GET_INPUT_INFO, 0)?;
-        let output = control(&file, GET_OUTPUT_INFO, 0)?;
-        if control(&file, GET_INPUT_COUNT, ())? != 1
-            || control(&file, GET_OUTPUT_COUNT, ())? != 1
+            .open(digits::LOADER_PATH)
+            .map_err(OpenError::LoaderMissing)?;
+        file.seek(SeekFrom::Start(0))
+            .map_err(OpenError::LoadFailed)?;
+        // The loader copies the bytes into its own aligned buffer.
+        file.write_all(digits::MODEL_BYTES)
+            .map_err(OpenError::LoadFailed)?;
+        control(&file, LOAD, LoadRequest::tensorflow_lite()).map_err(OpenError::LoadFailed)?;
+        let input = control(&file, GET_INPUT_INFO, 0).map_err(OpenError::LoadFailed)?;
+        let output = control(&file, GET_OUTPUT_INFO, 0).map_err(OpenError::LoadFailed)?;
+        if control(&file, GET_INPUT_COUNT, ()).map_err(OpenError::LoadFailed)? != 1
+            || control(&file, GET_OUTPUT_COUNT, ()).map_err(OpenError::LoadFailed)? != 1
             || !matches_tensor(input, &[1, 784], 784 * 4)
             || !matches_tensor(output, &[1, 10], 10 * 4)
         {
-            return Err(io::Error::new(
+            return Err(OpenError::LoadFailed(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "incompatible digit model",
-            ));
+            )));
         }
         Ok(Self(file))
     }
