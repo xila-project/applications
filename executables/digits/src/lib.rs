@@ -8,11 +8,6 @@ pub const INPUT_LEN: usize = SIDE * SIDE;
 /// Default runtime loader node path for neural network models.
 pub const LOADER_PATH: &str = "/devices/nn/cpu";
 
-/// Legacy device path for Platforms boot-time ROM mount.
-///
-/// Kept for backward compatibility with Platforms until it switches to runtime loading.
-pub const DEVICE_PATH: &str = "/devices/nn/digits";
-
 /// The TensorFlow Lite model the guest loads at runtime through [`LOADER_PATH`].
 pub const MODEL_BYTES: &[u8] = include_bytes!("../models/mnist.tflite");
 
@@ -76,16 +71,3 @@ pub fn top_three(scores: [f32; 10]) -> Option<[(u8, f32); 3]> {
     ranked.sort_unstable_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
     Some([ranked[0], ranked[1], ranked[2]])
 }
-
-/// Legacy aligned model wrapper for Platforms boot-time ROM mount.
-///
-/// Kept for backward compatibility with Platforms until it switches to runtime loading.
-#[cfg(feature = "model")]
-#[repr(align(16))]
-pub struct AlignedModel(pub [u8; include_bytes!("../models/mnist.tflite").len()]);
-
-/// Legacy static model instance for Platforms boot-time ROM mount.
-///
-/// Kept for backward compatibility with Platforms until it switches to runtime loading.
-#[cfg(feature = "model")]
-pub static MODEL: AlignedModel = AlignedModel(*include_bytes!("../models/mnist.tflite"));

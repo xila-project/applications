@@ -27,8 +27,8 @@ a Xila host, rather than running directly as a standalone browser module.
 
 ## Runtime contract
 
-The runtime mounts the model at `/devices/nn/digits`. Digits opens that node
-read/write, checks the input/output metadata, writes 784 little-endian floats,
+Digits opens the runtime's loader node `/devices/nn/cpu` read/write, writes its
+embedded model and sends `LOAD`, then checks the input/output metadata, writes 784 little-endian floats,
 issues `COMPUTE`, then reads 10 floats. Every inference seeks both input and output
 to zero and rewrites the entire input. Closing the descriptor releases its arena.
 The ABI identifiers and tensor layouts come from Core, not private copies.
@@ -37,10 +37,9 @@ The model must have one unquantized FLOAT32 input `[1,784]` and one FLOAT32 outp
 NN devices show an error while leaving drawing and closing usable. Recognize
 retries opening the device, so an unavailable backend can recover.
 
-Platforms' native and browser examples embed the aligned model with their
-`digits` feature. The model bytes are exported by this crate's optional `model`
-feature and are not included in the guest build. Other boards can mount the same
-model using Platforms' portable Nanoglia backend. Hardware execution has not been
+The model is embedded in the guest and loaded at runtime: Digits writes it to the
+platform's loader node `/devices/nn/cpu` and sends `LOAD`, so any platform that
+mounts a loader (Platforms' portable Nanoglia backend does) can run it. Hardware execution has not been
 validated by these host tests.
 
 For a local development image, build all guests and use Platforms' existing
