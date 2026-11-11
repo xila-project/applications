@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 embedded-i18n = { workspace = true }
-xila = { workspace = true, features = ["graphics"] }
+xila = { workspace = true, default-features = true, features = ["graphics"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dev-dependencies]
 task = { workspace = true, features = ["test_harness"] }

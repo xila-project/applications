@@ -16,7 +16,7 @@ rust-version = "1.90.0"
 repository = "https://github.com/xila-project/core"
 
 [workspace.dependencies]
-xila = { git = "https://github.com/xila-project/core", branch = "main" }
+xila = { git = "https://github.com/xila-project/core", branch = "main", default-features = false }
 xila_http = { git = "https://github.com/xila-project/core", branch = "main", default-features = false }
 verification = { package = "xila-package-verification", git = "https://github.com/xila-project/package_manager", branch = "main", default-features = false }
 audio = { package = "xila-audio", git = "https://github.com/xila-project/core", branch = "main" }
