@@ -61,7 +61,7 @@ fn copy_guest_path(
 fn base_path(
     caller: &Caller<'_, GlobalStore>,
     fd: i32,
-) -> Result<(xila::task::TaskIdentifier, PathOwned), Error> {
+) -> Result<(xila::task::TaskIdentifier, PathOwned, PathOwned), Error> {
     let item = caller
         .data()
         .wasi
@@ -71,7 +71,11 @@ fn base_path(
     let FileSystemItem::Directory(dir) = item else {
         return Err(Error::Notdir);
     };
-    Ok((caller.data().wasi.task, dir.path.clone()))
+    Ok((
+        caller.data().wasi.task,
+        dir.path.clone(),
+        dir.confinement_root.as_ref().unwrap_or(&dir.path).clone(),
+    ))
 }
 
 fn resolve_guest_path(directory: &PathOwned, path: &str) -> Result<PathOwned, Error> {
@@ -85,14 +89,20 @@ fn resolve_guest_path(directory: &PathOwned, path: &str) -> Result<PathOwned, Er
         .ok_or(Error::Inval)
 }
 
+fn guest_relative<'a>(directory: &Path, path: &'a Path) -> Result<&'a Path, Error> {
+    let relative = path
+        .strip_prefix_absolute(directory)
+        .ok_or(Error::Notcapable)?;
+    Ok(Path::new(relative.as_str().trim_start_matches('/')))
+}
+
 fn check_guest_symlink_target(
     directory: &PathOwned,
     link: &PathOwned,
     target: &str,
 ) -> Result<(), Error> {
     if target.starts_with('/') {
-        let _ = resolve_guest_path(directory, target)?;
-        return Ok(());
+        return Err(Error::Notcapable);
     }
 
     let link_parent = link.go_parent().ok_or(Error::Inval)?;
@@ -121,10 +131,10 @@ define_wasi_module! {
         wrap_function!({
             let mut caller = caller;
             let path_bytes = copy_guest_path(&mut caller, path_ptr, path_len)?;
-            let (task_id, directory) = base_path(&caller, fd)?;
+            let (task_id, directory, root) = base_path(&caller, fd)?;
             let relative = core::str::from_utf8(&path_bytes).map_err(|_| Error::Ilseq)?;
             let absolute_path = resolve_guest_path(&directory, relative)?;
-            task::block_on(caller.data().context.virtual_file_system.create_directory(task_id, &absolute_path)).map_err(vfs_error)?;
+            task::block_on(caller.data().context.virtual_file_system.create_directory_beneath(task_id, &guest_relative(&root, &absolute_path)?, &root)).map_err(vfs_error)?;
             Ok(())
         })
     }
@@ -134,17 +144,12 @@ define_wasi_module! {
             let mut caller = caller;
             let target = copy_guest_path(&mut caller, old_path_ptr, old_path_len)?;
             let link = copy_guest_path(&mut caller, new_path_ptr, new_path_len)?;
-            let (task_id, directory) = base_path(&caller, fd)?;
+            let (task_id, directory, root) = base_path(&caller, fd)?;
             let target = core::str::from_utf8(&target).map_err(|_| Error::Ilseq)?;
             let link = core::str::from_utf8(&link).map_err(|_| Error::Ilseq)?;
             let link = resolve_guest_path(&directory, link)?;
-            check_guest_symlink_target(&directory, &link, target)?;
-            if target.starts_with('/') {
-                let target = resolve_guest_path(&directory, target)?;
-                task::block_on(caller.data().context.virtual_file_system.create_symlink(task_id, Path::from_str(target.as_str()), &link)).map_err(vfs_error)?;
-            } else {
-                task::block_on(caller.data().context.virtual_file_system.create_symlink(task_id, Path::from_str(target), &link)).map_err(vfs_error)?;
-            }
+            check_guest_symlink_target(&root, &link, target)?;
+            task::block_on(caller.data().context.virtual_file_system.create_symlink_beneath(task_id, Path::from_str(target), guest_relative(&root, &link)?, &root)).map_err(vfs_error)?;
             Ok(())
         })
     }
@@ -153,14 +158,14 @@ define_wasi_module! {
         wrap_function!({
             let mut caller = caller;
             let path_bytes = copy_guest_path(&mut caller, path_ptr, path_len)?;
-            let (task_id, directory) = base_path(&caller, fd)?;
+            let (task_id, directory, root) = base_path(&caller, fd)?;
             let relative = core::str::from_utf8(&path_bytes).map_err(|_| Error::Ilseq)?;
             let absolute_path = resolve_guest_path(&directory, relative)?;
             let memory = get_memory(&caller).ok_or(Error::Fault)?;
             let output = GuestSlice::new(buf_ptr, buf_len);
             let used = GuestPointer::<WasmUsize>::new(used_ptr);
             let mut target = alloc::vec![0; 4096];
-            let length = task::block_on(caller.data().context.virtual_file_system.read_symlink(task_id, &absolute_path, &mut target)).map_err(vfs_error)?;
+            let length = task::block_on(caller.data().context.virtual_file_system.read_symlink_beneath(task_id, guest_relative(&root, &absolute_path)?, &mut target, &root)).map_err(vfs_error)?;
             let mut guest = borrow_memory(&memory, &mut caller);
             guest.validate_pointer(used).ok_or(Error::Fault)?;
             let copied = core::cmp::min(length, buf_len as usize);
@@ -174,15 +179,15 @@ define_wasi_module! {
         wrap_function!({
             let mut caller = caller;
             let path_bytes = copy_guest_path(&mut caller, path_ptr, path_len)?;
-            let (task_id, directory) = base_path(&caller, fd)?;
+            let (task_id, directory, root) = base_path(&caller, fd)?;
             let relative = core::str::from_utf8(&path_bytes).map_err(|_| Error::Ilseq)?;
             let absolute_path = resolve_guest_path(&directory, relative)?;
             let vfs = caller.data().context.virtual_file_system;
-            let statistics = task::block_on(vfs.get_link_statistics_for_task(task_id, &absolute_path)).map_err(vfs_error)?;
+            let statistics = task::block_on(vfs.get_statistics_beneath(task_id, &guest_relative(&root, &absolute_path)?, false, &root)).map_err(vfs_error)?;
             if statistics.kind == xila::file_system::Kind::Directory {
                 return Err(Error::Isdir.into());
             }
-            task::block_on(vfs.remove(task_id, &absolute_path)).map_err(vfs_error)?;
+            task::block_on(vfs.remove_beneath(task_id, guest_relative(&root, &absolute_path)?, &root)).map_err(vfs_error)?;
             Ok(())
         })
     }
@@ -191,7 +196,7 @@ define_wasi_module! {
         wrap_function!({
             let mut caller = caller;
             let path_bytes = copy_guest_path(&mut caller, path_ptr, path_len)?;
-            let (task_id, directory) = base_path(&caller, fd)?;
+            let (task_id, directory, root) = base_path(&caller, fd)?;
             let relative = core::str::from_utf8(&path_bytes).map_err(|_| Error::Ilseq)?;
             let absolute_path = resolve_guest_path(&directory, relative)?;
             let memory = get_memory(&caller).ok_or(Error::Fault)?;
@@ -204,10 +209,10 @@ define_wasi_module! {
             let state = if fdflags & 1 != 0 { Some(StateFlags::Append) } else { None };
             let vfs = caller.data().context.virtual_file_system;
             let item = if oflags & 2 != 0 {
-                let directory_handle = xila::virtual_file_system::SynchronousDirectory::open(vfs, task_id, &absolute_path).map_err(vfs_error)?;
-                FileSystemItem::Directory(DirectoryVariant { directory: directory_handle, path: absolute_path })
+                let directory_handle = task::block_on(vfs.open_directory_beneath(task_id, &guest_relative(&root, &absolute_path)?, &root)).map(|dir| dir.into_synchronous_directory()).map_err(vfs_error)?;
+                FileSystemItem::Directory(DirectoryVariant { confinement_root: Some(root), directory: directory_handle, path: absolute_path })
             } else {
-                let file = xila::virtual_file_system::SynchronousFile::open(vfs, task_id, &absolute_path, Flags::new(access, create, state)).map_err(vfs_error)?;
+                let file = task::block_on(vfs.open_beneath(&guest_relative(&root, &absolute_path)?, Flags::new(access, create, state), task_id, &root)).map(|file| file.into_synchronous_file()).map_err(vfs_error)?;
                 FileSystemItem::File(FileVariant { file })
             };
             let new_fd = caller.data_mut().wasi.insert_file_system_item(item).ok_or(Error::Mfile)?;
@@ -221,14 +226,14 @@ define_wasi_module! {
         wrap_function!({
             let mut caller = caller;
             let path_bytes = copy_guest_path(&mut caller, path_ptr, path_len)?;
-            let (task_id, directory) = base_path(&caller, fd)?;
+            let (task_id, directory, root) = base_path(&caller, fd)?;
             let relative = core::str::from_utf8(&path_bytes).map_err(|_| Error::Ilseq)?;
             let absolute_path = resolve_guest_path(&directory, relative)?;
             let vfs = caller.data().context.virtual_file_system;
             let stats = if flags & 1 != 0 {
-                task::block_on(vfs.get_statistics_for_task(task_id, &absolute_path))
+                task::block_on(vfs.get_statistics_beneath(task_id, &guest_relative(&root, &absolute_path)?, true, &root))
             } else {
-                task::block_on(vfs.get_link_statistics_for_task(task_id, &absolute_path))
+                task::block_on(vfs.get_statistics_beneath(task_id, &guest_relative(&root, &absolute_path)?, false, &root))
             }.map_err(vfs_error)?;
             let filestat = make_filestat(&stats);
             let memory = get_memory(&caller).ok_or(Error::Fault)?;
@@ -240,6 +245,7 @@ define_wasi_module! {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
     use super::{Error, check_guest_symlink_target, resolve_guest_path};
     use xila::file_system::PathOwned;
 
@@ -268,6 +274,10 @@ mod tests {
         let root = PathOwned::try_from("/sandbox").unwrap();
         let link = resolve_guest_path(&root, "nested/link").unwrap();
         assert_eq!(
+            check_guest_symlink_target(&root, &link, "/secret"),
+            Err(Error::Notcapable)
+        );
+        assert_eq!(
             check_guest_symlink_target(&root, &link, "../../outside"),
             Err(Error::Notcapable)
         );
@@ -278,6 +288,133 @@ mod tests {
         assert_eq!(
             resolve_guest_path(&root, "/outside").unwrap().as_str(),
             "/sandbox/outside"
+        );
+    }
+    #[xila::task::test(task_path = xila::task)]
+    async fn guests_cannot_follow_or_create_escaping_links() {
+        use super::*;
+        use crate::host::wasi::{DirectoryVariant, FileSystemItem, WasiContext};
+        use alloc::{boxed::Box, vec};
+        use wasmi::{Engine, Linker, Module, Store};
+        let task_manager = xila::task::test_manager();
+        let users_manager = Box::leak(Box::new(xila::users::Manager::new()));
+        let time_manager = Box::leak(Box::new(
+            xila::time::Manager::new(&testing::TimeDevice).unwrap(),
+        ));
+        let device = xila::file_system::MemoryDevice::<512>::new_static(1024 * 512);
+        let fs = xila::little_fs::FileSystem::new_format(device, 256).unwrap();
+        let vfs = Box::leak(Box::new(
+            xila::virtual_file_system::initialize(task_manager, users_manager, time_manager, fs)
+                .unwrap(),
+        ));
+        let task = task_manager.get_current_task_identifier().await;
+        for path in ["/sandbox", "/sandbox/sub", "/secret"] {
+            vfs.create_directory(task, &path).await.unwrap();
+        }
+        for (name, target) in [
+            ("absolute", "/secret"),
+            ("parent", "../secret"),
+            ("inside", "sub"),
+        ] {
+            let link = alloc::format!("/sandbox/{name}");
+            vfs.create_symlink(task, Path::new(target), Path::new(&link))
+                .await
+                .unwrap();
+        }
+        let context = Box::leak(Box::new(xila::executable::ExecutableContext {
+            task_manager,
+            users_manager,
+            virtual_file_system: vfs,
+            graphics_manager: None,
+            network_manager: None,
+            time_manager,
+        }));
+        let mut wasi = WasiContext {
+            files: Default::default(),
+            next_fd: 4,
+            arguments: vec![],
+            environment: vec![],
+            task,
+            prestats: vec![],
+            exit_code: None,
+        };
+        wasi.files.insert(
+            3,
+            FileSystemItem::Directory(DirectoryVariant {
+                confinement_root: None,
+                path: PathOwned::try_from("/sandbox").unwrap(),
+                directory: xila::virtual_file_system::SynchronousDirectory::open(
+                    vfs, task, "/sandbox",
+                )
+                .unwrap(),
+            }),
+        );
+        let engine = Engine::default();
+        let mut linker = Linker::new(&engine);
+        crate::host::wasi::register::add_wasi_to_linker(&mut linker).unwrap();
+        let word = if cfg!(feature = "memory_64") {
+            "i64"
+        } else {
+            "i32"
+        };
+        let bytes = wat::parse_str(alloc::format!(r#"(module
+            (import "wasi_snapshot_preview1" "path_filestat_get" (func $stat (param i32 i32 {word} {word} {word}) (result i32)))
+            (import "wasi_snapshot_preview1" "path_open" (func $open (param i32 i32 {word} {word} i32 i64 i64 i32 {word}) (result i32)))
+            (import "wasi_snapshot_preview1" "path_symlink" (func $link (param {word} {word} i32 {word} {word}) (result i32)))
+            (memory (export "memory") 1)
+            (data (i32.const 1) "absoluteparentinside/secretnewsubgood.")
+            (func (export "stat") (param {word} {word} i32) (result i32)
+                i32.const 3 local.get 2 local.get 0 local.get 1 {word}.const 128 call $stat)
+            (func (export "link") (param {word} {word} {word} {word}) (result i32)
+                local.get 0 local.get 1 i32.const 3 local.get 2 local.get 3 call $link)
+            (func (export "open") (param {word} {word}) (result i32)
+                i32.const 3 i32.const 1 local.get 0 local.get 1 i32.const 2 i64.const 2 i64.const 0 i32.const 0 {word}.const 256 call $open)
+            (func (export "nested_stat") (result i32)
+                i32.const 256 i32.load i32.const 1 {word}.const 38 {word}.const 1 {word}.const 128 call $stat)
+        )"#)).unwrap();
+        let module = Module::new(&engine, &bytes[..]).unwrap();
+        let mut store = Store::new(
+            &engine,
+            GlobalStore {
+                context,
+                #[cfg(feature = "graphics")]
+                graphics: crate::host::graphics::GraphicsState::new(None),
+                pending: None,
+                wasi,
+            },
+        );
+        let instance = linker.instantiate_and_start(&mut store, &module).unwrap();
+        let stat = instance
+            .get_typed_func::<(WasmUsize, WasmUsize, i32), i32>(&store, "stat")
+            .unwrap();
+        assert_eq!(stat.call(&mut store, (1, 8, 1)).unwrap(), 76);
+        assert_eq!(stat.call(&mut store, (9, 6, 1)).unwrap(), 76);
+        assert_eq!(stat.call(&mut store, (1, 8, 0)).unwrap(), 0);
+        assert_eq!(stat.call(&mut store, (15, 6, 1)).unwrap(), 0);
+        let link = instance
+            .get_typed_func::<(WasmUsize, WasmUsize, WasmUsize, WasmUsize), i32>(&store, "link")
+            .unwrap();
+        assert_eq!(link.call(&mut store, (21, 7, 28, 3)).unwrap(), 76);
+        assert_eq!(link.call(&mut store, (31, 3, 34, 4)).unwrap(), 0);
+        assert_eq!(stat.call(&mut store, (34, 4, 1)).unwrap(), 0);
+        let open = instance
+            .get_typed_func::<(WasmUsize, WasmUsize), i32>(&store, "open")
+            .unwrap();
+        assert_eq!(open.call(&mut store, (1, 8)).unwrap(), 76);
+        assert_eq!(open.call(&mut store, (15, 6)).unwrap(), 0);
+        // A guest-opened directory must never become a fresh ambient root.
+        vfs.remove(task, "/sandbox/inside").await.unwrap();
+        vfs.create_symlink(task, Path::new("/secret"), Path::new("/sandbox/inside"))
+            .await
+            .unwrap();
+        let nested_stat = instance
+            .get_typed_func::<(), i32>(&store, "nested_stat")
+            .unwrap();
+        assert_eq!(nested_stat.call(&mut store, ()).unwrap(), 76);
+        assert!(
+            vfs.get_link_statistics_for_task(task, &"/sandbox/new")
+                .await
+                .is_err()
         );
     }
 }

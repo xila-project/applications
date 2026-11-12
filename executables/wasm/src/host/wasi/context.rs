@@ -60,6 +60,8 @@ pub struct FileVariant {
 }
 
 pub struct DirectoryVariant {
+    /// Original preopen authority retained by directories opened through a guest path.
+    pub confinement_root: Option<PathOwned>,
     pub path: PathOwned,
     pub directory: SynchronousDirectory<'static>,
 }

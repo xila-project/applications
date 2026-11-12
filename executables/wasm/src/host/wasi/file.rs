@@ -415,6 +415,7 @@ mod tests {
         wasi.files.insert(
             5,
             FileSystemItem::Directory(crate::host::wasi::context::DirectoryVariant {
+                confinement_root: None,
                 path: PathOwned::root(),
                 directory,
             }),
