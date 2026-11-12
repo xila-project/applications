@@ -86,11 +86,12 @@ async fn resumable_execution_yields_sleeps_and_preserves_real_traps() {
                 pending: None,
                 wasi: WasiContext {
                     files: Default::default(),
+                    rights: Default::default(),
                     next_fd: 3,
                     arguments: vec![],
                     environment: vec![],
                     task,
-                    prestats: vec![],
+                    prestats: Default::default(),
                     exit_code: None,
                 },
             },

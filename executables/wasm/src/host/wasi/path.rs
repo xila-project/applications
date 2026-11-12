@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 use wasmi::Caller;
 use xila::{
-    file_system::{AccessFlags, CreateFlags, Flags, Path, PathOwned, StateFlags},
+    file_system::{AccessFlags, CreateFlags, Flags, Kind, Path, PathOwned, StateFlags, Time},
     task,
 };
 
@@ -14,6 +14,8 @@ use crate::{
             Error,
             context::{DirectoryVariant, FileSystemItem, FileVariant},
             error::{WasiResult, vfs_error, wrap_function},
+            rights::right,
+            time::{realtime_nanoseconds, requested_times},
             types::Filestat,
         },
     },
@@ -124,11 +126,149 @@ fn check_guest_symlink_target(
     Ok(())
 }
 
+/// A guest path confined beneath the preopen of its base directory.
+struct Confined {
+    task: xila::task::TaskIdentifier,
+    /// The preopen the path may never leave.
+    root: PathOwned,
+    /// The path joined to its base directory.
+    path: PathOwned,
+    /// The guest path only names its base directory (`.`, `./`, `/`).
+    names_base: bool,
+}
+
+impl Confined {
+    /// The path relative to the preopen, for the `*_beneath` operations.
+    fn relative(&self) -> Result<&Path, Error> {
+        guest_relative(&self.root, &self.path)
+    }
+}
+
+/// Check the base directory's right, copy the guest path and confine it.
+/// An empty path names nothing (`ENOENT`); `..` is `ENOTCAPABLE` whether or not
+/// it would stay inside.
+fn confine(
+    caller: &mut Caller<'_, GlobalStore>,
+    fd: i32,
+    ptr: WasmUsize,
+    len: WasmUsize,
+    needed: u64,
+) -> Result<Confined, Error> {
+    caller.data().wasi.require_rights(fd, needed)?;
+    let bytes = copy_guest_path(caller, ptr, len)?;
+    let text = core::str::from_utf8(&bytes).map_err(|_| Error::Ilseq)?;
+    if text.is_empty() {
+        return Err(Error::Noent);
+    }
+    let (task, directory, root) = base_path(caller, fd)?;
+    Ok(Confined {
+        task,
+        path: resolve_guest_path(&directory, text)?,
+        root,
+        names_base: text.split('/').all(|part| part.is_empty() || part == "."),
+    })
+}
+
+/// Set the timestamps of the directory open as `fd`, by path and beneath its preopen.
+pub(super) fn set_directory_times(
+    caller: &Caller<'_, GlobalStore>,
+    fd: i32,
+    access: Option<Time>,
+    modification: Option<Time>,
+) -> Result<(), Error> {
+    let (task, directory, root) = base_path(caller, fd)?;
+    let relative = guest_relative(&root, &directory)?;
+    let vfs = caller.data().context.virtual_file_system;
+    task::block_on(vfs.set_times_beneath(task, &relative, true, &root, access, modification))
+        .map_err(vfs_error)
+}
+
+/// `lookupflags`: the only defined bit is `SYMLINK_FOLLOW`.
+fn follow_symlinks(lookup: i32) -> Result<bool, Error> {
+    match lookup {
+        0 => Ok(false),
+        1 => Ok(true),
+        _ => Err(Error::Inval),
+    }
+}
+
 define_wasi_module! {
     module: "wasi_snapshot_preview1";
 
+    fn path_remove_directory(caller: Caller<GlobalStore>, fd: i32, path_ptr: WasmUsize, path_len: WasmUsize) -> Result<WasiResult, wasmi::Error> {
+        wrap_function!({
+            let mut caller = caller;
+            let target = confine(&mut caller, fd, path_ptr, path_len, right::PATH_REMOVE_DIRECTORY)?;
+            // `rmdir(".")` is invalid, and the preopen itself is never removable.
+            if target.names_base {
+                return Err(Error::Inval.into());
+            }
+            let relative = target.relative()?;
+            let vfs = caller.data().context.virtual_file_system;
+            let statistics = task::block_on(vfs.get_statistics_beneath(target.task, &relative, false, &target.root)).map_err(vfs_error)?;
+            if statistics.kind != Kind::Directory {
+                return Err(Error::Notdir.into());
+            }
+            task::block_on(vfs.remove_beneath(target.task, relative, &target.root)).map_err(vfs_error)?;
+            Ok(())
+        })
+    }
+
+    fn path_rename(caller: Caller<GlobalStore>, fd: i32, path_ptr: WasmUsize, path_len: WasmUsize, new_fd: i32, new_path_ptr: WasmUsize, new_path_len: WasmUsize) -> Result<WasiResult, wasmi::Error> {
+        wrap_function!({
+            let mut caller = caller;
+            let source = confine(&mut caller, fd, path_ptr, path_len, right::PATH_RENAME_SOURCE)?;
+            let destination = confine(&mut caller, new_fd, new_path_ptr, new_path_len, right::PATH_RENAME_TARGET)?;
+            // A base directory is in use by its descriptor: it cannot be moved or replaced.
+            if source.names_base || destination.names_base {
+                return Err(Error::Busy.into());
+            }
+            let vfs = caller.data().context.virtual_file_system;
+            task::block_on(vfs.rename_beneath(source.task, &source.relative()?, &destination.relative()?, &source.root, &destination.root)).map_err(vfs_error)?;
+            Ok(())
+        })
+    }
+
+    // Xila's file systems have no hard links (LittleFS cannot represent
+    // them), so after the paths are confined and checked a valid request is
+    // ENOTSUP rather than a copy that would silently diverge.
+    fn path_link(caller: Caller<GlobalStore>, fd: i32, lookup: i32, path_ptr: WasmUsize, path_len: WasmUsize, new_fd: i32, new_path_ptr: WasmUsize, new_path_len: WasmUsize) -> Result<WasiResult, wasmi::Error> {
+        wrap_function!({
+            let mut caller = caller;
+            let follow = follow_symlinks(lookup)?;
+            let source = confine(&mut caller, fd, path_ptr, path_len, right::PATH_LINK_SOURCE)?;
+            let destination = confine(&mut caller, new_fd, new_path_ptr, new_path_len, right::PATH_LINK_TARGET)?;
+            let vfs = caller.data().context.virtual_file_system;
+            task::block_on(vfs.link_beneath(source.task, &source.relative()?, follow, &destination.relative()?, &source.root, &destination.root)).map_err(|error| match error {
+                // Linking a directory is EPERM, not the EISDIR a read of one reports.
+                xila::virtual_file_system::Error::FileSystem(xila::file_system::Error::IsDirectory) => Error::Perm,
+                error => vfs_error(error),
+            })?;
+            Ok(())
+        })
+    }
+
+    fn path_filestat_set_times(caller: Caller<GlobalStore>, fd: i32, lookup: i32, path_ptr: WasmUsize, path_len: WasmUsize, atim: i64, mtim: i64, flags: i32) -> Result<WasiResult, wasmi::Error> {
+        wrap_function!({
+            let mut caller = caller;
+            let follow = follow_symlinks(lookup)?;
+            let (access, modification) = requested_times(atim as u64, mtim as u64, flags, || realtime_nanoseconds(&caller))?;
+            let target = confine(&mut caller, fd, path_ptr, path_len, right::PATH_FILESTAT_SET_TIMES)?;
+            let vfs = caller.data().context.virtual_file_system;
+            let relative = target.relative()?;
+            if access.is_none() && modification.is_none() {
+                // Nothing to change, but the path must still name something.
+                task::block_on(vfs.get_statistics_beneath(target.task, &relative, follow, &target.root)).map_err(vfs_error)?;
+                return Ok(());
+            }
+            task::block_on(vfs.set_times_beneath(target.task, &relative, follow, &target.root, access, modification)).map_err(vfs_error)?;
+            Ok(())
+        })
+    }
+
     fn path_create_directory(caller: Caller<GlobalStore>, fd: i32, path_ptr: WasmUsize, path_len: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
+            caller.data().wasi.require_rights(fd, right::PATH_CREATE_DIRECTORY)?;
             let mut caller = caller;
             let path_bytes = copy_guest_path(&mut caller, path_ptr, path_len)?;
             let (task_id, directory, root) = base_path(&caller, fd)?;
@@ -141,6 +281,7 @@ define_wasi_module! {
 
     fn path_symlink(caller: Caller<GlobalStore>, old_path_ptr: WasmUsize, old_path_len: WasmUsize, fd: i32, new_path_ptr: WasmUsize, new_path_len: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
+            caller.data().wasi.require_rights(fd, right::PATH_SYMLINK)?;
             let mut caller = caller;
             let target = copy_guest_path(&mut caller, old_path_ptr, old_path_len)?;
             let link = copy_guest_path(&mut caller, new_path_ptr, new_path_len)?;
@@ -156,6 +297,7 @@ define_wasi_module! {
 
     fn path_readlink(caller: Caller<GlobalStore>, fd: i32, path_ptr: WasmUsize, path_len: WasmUsize, buf_ptr: WasmUsize, buf_len: WasmUsize, used_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
+            caller.data().wasi.require_rights(fd, right::PATH_READLINK)?;
             let mut caller = caller;
             let path_bytes = copy_guest_path(&mut caller, path_ptr, path_len)?;
             let (task_id, directory, root) = base_path(&caller, fd)?;
@@ -177,6 +319,7 @@ define_wasi_module! {
 
     fn path_unlink_file(caller: Caller<GlobalStore>, fd: i32, path_ptr: WasmUsize, path_len: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
+            caller.data().wasi.require_rights(fd, right::PATH_UNLINK_FILE)?;
             let mut caller = caller;
             let path_bytes = copy_guest_path(&mut caller, path_ptr, path_len)?;
             let (task_id, directory, root) = base_path(&caller, fd)?;
@@ -192,8 +335,21 @@ define_wasi_module! {
         })
     }
 
-    fn path_open(caller: Caller<GlobalStore>, fd: i32, _dirflags: i32, path_ptr: WasmUsize, path_len: WasmUsize, oflags: i32, rights_base: i64, _rights_inheriting: i64, fdflags: i32, opened_fd_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
+    fn path_open(caller: Caller<GlobalStore>, fd: i32, _dirflags: i32, path_ptr: WasmUsize, path_len: WasmUsize, oflags: i32, rights_base: i64, rights_inheriting: i64, fdflags: i32, opened_fd_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
+            let wasi = &caller.data().wasi;
+            wasi.require_rights(fd, right::PATH_OPEN)?;
+            if oflags & 1 != 0 {
+                wasi.require_rights(fd, right::PATH_CREATE_FILE)?;
+            }
+            if oflags & 8 != 0 {
+                wasi.require_rights(fd, right::PATH_FILESTAT_SET_SIZE)?;
+            }
+            // Only a directory whose rights were reduced limits what it hands out.
+            let reduced = wasi.rights.contains_key(&(fd as u32));
+            if reduced && (rights_base as u64 | rights_inheriting as u64) & !wasi.rights_of(fd as u32).1 != 0 {
+                return Err(Error::Notcapable.into());
+            }
             let mut caller = caller;
             let path_bytes = copy_guest_path(&mut caller, path_ptr, path_len)?;
             let (task_id, directory, root) = base_path(&caller, fd)?;
@@ -216,6 +372,9 @@ define_wasi_module! {
                 FileSystemItem::File(FileVariant { file })
             };
             let new_fd = caller.data_mut().wasi.insert_file_system_item(item).ok_or(Error::Mfile)?;
+            if reduced {
+                caller.data_mut().wasi.rights.insert(new_fd, (rights_base as u64, rights_inheriting as u64));
+            }
             borrow_memory(&memory, &mut caller)
                 .write(opened_fd_out, i32::try_from(new_fd).map_err(|_| Error::Overflow)?).ok_or(Error::Fault)?;
             Ok(())
@@ -224,6 +383,7 @@ define_wasi_module! {
 
     fn path_filestat_get(caller: Caller<GlobalStore>, fd: i32, flags: i32, path_ptr: WasmUsize, path_len: WasmUsize, buf_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
+            caller.data().wasi.require_rights(fd, right::PATH_FILESTAT_GET)?;
             let mut caller = caller;
             let path_bytes = copy_guest_path(&mut caller, path_ptr, path_len)?;
             let (task_id, directory, root) = base_path(&caller, fd)?;
@@ -331,11 +491,12 @@ mod tests {
         }));
         let mut wasi = WasiContext {
             files: Default::default(),
+            rights: Default::default(),
             next_fd: 4,
             arguments: vec![],
             environment: vec![],
             task,
-            prestats: vec![],
+            prestats: Default::default(),
             exit_code: None,
         };
         wasi.files.insert(

@@ -1,3 +1,4 @@
+use super::Error;
 use alloc::{collections::btree_map::BTreeMap, string::String, vec::Vec};
 use xila::{
     file_system::PathOwned,
@@ -7,17 +8,25 @@ use xila::{
 
 pub struct WasiContext {
     pub files: BTreeMap<u32, FileSystemItem>,
+    /// Reduced (base, inheriting) rights; absent descriptors hold every right.
+    pub rights: BTreeMap<u32, (u64, u64)>,
     pub next_fd: u32,
     pub arguments: Vec<String>,
     pub environment: Vec<(String, String)>,
     pub task: TaskIdentifier,
-    pub prestats: Vec<Prestat>,
+    /// Preopen names by descriptor. They follow their descriptor when it is renumbered.
+    pub prestats: BTreeMap<u32, Prestat>,
     pub exit_code: Option<i32>,
 }
 
 impl WasiContext {
     /// Allocate and insert the next available descriptor.
     pub fn insert_file_system_item(&mut self, item: FileSystemItem) -> Option<u32> {
+        // Descriptors are only ever created here, but a table filled directly
+        // (tests, embedders) may already hold the next number.
+        while self.files.contains_key(&self.next_fd) {
+            self.next_fd = self.next_fd.checked_add(1)?;
+        }
         let fd = allocate_descriptor_id(&mut self.next_fd)?;
         self.files.insert(fd, item);
         Some(fd)
@@ -31,6 +40,14 @@ impl WasiContext {
         self.files
             .get_mut(&fd)
             .and_then(|item| item.as_synchronous_file_mut())
+    }
+
+    /// The open file `fd`: `EBADF` when closed, `EISDIR` for a directory.
+    pub(crate) fn file(&mut self, fd: i32) -> Result<&mut SynchronousFile<'static>, Error> {
+        match self.files.get_mut(&(fd as u32)) {
+            None => Err(Error::Badf),
+            Some(item) => item.as_synchronous_file_mut().ok_or(Error::Isdir),
+        }
     }
 
     pub fn is_directory(&self, fd: u32) -> bool {

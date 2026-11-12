@@ -278,6 +278,7 @@ async fn main_inner(
             graphics: super::graphics::GraphicsState::new(context.graphics_manager),
             wasi: WasiContext {
                 files: alloc::collections::BTreeMap::new(),
+                rights: Default::default(),
                 next_fd: 3,
                 arguments: {
                     let mut arguments = alloc::vec![path.to_string()];
@@ -297,7 +298,7 @@ async fn main_inner(
                     })
                     .collect(),
                 task,
-                prestats: Vec::new(),
+                prestats: Default::default(),
                 exit_code: None,
             },
         },
@@ -333,9 +334,12 @@ async fn main_inner(
                 }),
             );
             data.wasi.next_fd = 4;
-            data.wasi.prestats.push(Prestat {
-                name: b"/".to_vec(),
-            });
+            data.wasi.prestats.insert(
+                3,
+                Prestat {
+                    name: b"/".to_vec(),
+                },
+            );
         }
     }
 

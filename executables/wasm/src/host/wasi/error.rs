@@ -20,6 +20,15 @@ impl From<Error> for CombinedError {
     }
 }
 
+/// The errno (or the trap) a host function reports for `result`.
+pub fn status(result: CombinedResult<()>) -> Result<WasiResult, wasmi::Error> {
+    match result {
+        Ok(()) => Ok(0),
+        Err(CombinedError::Wasi(error)) => Ok(i32::from(error)),
+        Err(CombinedError::Wasmi(error)) => Err(error),
+    }
+}
+
 macro_rules! wrap_function {
     ($body:expr) => {{
         // Evaluates $body directly inside a try-block pattern
@@ -219,6 +228,13 @@ pub fn vfs_error(err: xila::virtual_file_system::Error) -> Error {
         // Nonblocking devices report transient contention or a full queue as
         // `RessourceBusy`; guests must be able to retry it as EAGAIN.
         Vfs::FileSystem(Fs::RessourceBusy) => Error::Again,
+        Vfs::UnsupportedOperation | Vfs::FileSystem(Fs::UnsupportedOperation) => Error::Notsup,
+        Vfs::FileSystem(Fs::DirectoryNotEmpty) => Error::Notempty,
+        Vfs::InvalidMode => Error::Badf,
+        Vfs::FileSystem(Fs::InvalidParameter) => Error::Inval,
+        Vfs::FileSystem(Fs::FileTooLarge) => Error::Fbig,
+        Vfs::FileSystem(Fs::NameTooLong) => Error::Nametoolong,
+        Vfs::CrossDevice => Error::Xdev,
         Vfs::PathEscapesRoot => Error::Notcapable,
         Vfs::PermissionDenied => Error::Access,
         Vfs::NotADirectory => Error::Notdir,
@@ -258,6 +274,22 @@ mod tests {
             vfs_error(Vfs::FileSystem(Fs::NoSpaceLeft)),
             Error::Nospc
         ));
+    }
+
+    #[test]
+    fn unsupported_and_cross_mount_operations_have_distinct_errnos() {
+        assert_eq!(vfs_error(Vfs::UnsupportedOperation), Error::Notsup);
+        assert_eq!(
+            vfs_error(Vfs::FileSystem(Fs::UnsupportedOperation)),
+            Error::Notsup
+        );
+        assert_eq!(vfs_error(Vfs::CrossDevice), Error::Xdev);
+        assert_eq!(
+            vfs_error(Vfs::FileSystem(Fs::DirectoryNotEmpty)),
+            Error::Notempty
+        );
+        assert_eq!(vfs_error(Vfs::InvalidMode), Error::Badf);
+        assert_eq!(vfs_error(Vfs::FileSystem(Fs::FileTooLarge)), Error::Fbig);
     }
 
     #[test]

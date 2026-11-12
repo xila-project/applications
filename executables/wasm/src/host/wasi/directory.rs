@@ -9,6 +9,7 @@ use crate::{
         wasi::{
             Error,
             error::{WasiResult, vfs_error, wrap_function},
+            rights::right,
         },
     },
 };
@@ -31,6 +32,7 @@ define_wasi_module! {
 
     fn fd_readdir(caller: Caller<GlobalStore>, fd: i32, buf_ptr: WasmUsize, buf_len: WasmUsize, cookie: u64, nread_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
+            caller.data().wasi.require_rights(fd, right::FD_READDIR)?;
             let mut caller = caller;
             let memory = get_memory(&caller).ok_or(Error::Fault)?;
             {

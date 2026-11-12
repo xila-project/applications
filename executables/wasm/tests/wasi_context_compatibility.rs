@@ -9,6 +9,7 @@ use wasm::WasiContext;
 fn legacy_borrowed_accessors_remain_callable_through_the_public_context() {
     let mut context = WasiContext {
         files: Default::default(),
+        rights: Default::default(),
         next_fd: 3,
         arguments: Default::default(),
         environment: Default::default(),

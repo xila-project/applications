@@ -22,11 +22,12 @@ async fn store(
             graphics: GraphicsState::new(context.graphics_manager),
             wasi: WasiContext {
                 files: Default::default(),
+                rights: Default::default(),
                 next_fd: 3,
                 arguments: vec![],
                 environment: vec![],
                 task: context.task_manager.get_current_task_identifier().await,
-                prestats: vec![],
+                prestats: Default::default(),
                 exit_code: None,
             },
         },
