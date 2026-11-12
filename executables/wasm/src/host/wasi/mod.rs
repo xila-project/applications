@@ -1,3 +1,5 @@
+#[cfg(all(test, feature = "memory_32"))]
+mod conformance;
 mod context;
 mod descriptor;
 mod directory;
