@@ -80,6 +80,7 @@ async fn resumable_execution_yields_sleeps_and_preserves_real_traps() {
         let mut store = Store::new(
             &engine,
             GlobalStore {
+                control: Default::default(),
                 context,
                 #[cfg(feature = "graphics")]
                 graphics: wasm::graphics::GraphicsState::new(context.graphics_manager),
@@ -119,4 +120,88 @@ async fn resumable_execution_yields_sleeps_and_preserves_real_traps() {
         }
         ticker.join().await;
     }
+}
+
+fn looping_guest(
+    context: &'static xila::executable::ExecutableContext,
+    task: xila::task::TaskIdentifier,
+    control: Arc<wasm::ExecutionControl>,
+) -> (Store<GlobalStore>, wasmi::TypedFunc<(), ()>) {
+    let mut config = Config::default();
+    config.consume_fuel(true);
+    let engine = Engine::new(&config);
+    let mut linker = Linker::new(&engine);
+    add_wasi_to_linker(&mut linker).unwrap();
+    let wasm = wat::parse_str(
+        r#"(module (memory (export "memory") 1) (func (export "_start") (loop $spin br $spin)))"#,
+    )
+    .unwrap();
+    let module = Module::new(&engine, &wasm[..]).unwrap();
+    let mut store = Store::new(
+        &engine,
+        GlobalStore {
+            control,
+            context,
+            #[cfg(feature = "graphics")]
+            graphics: wasm::graphics::GraphicsState::new(context.graphics_manager),
+            pending: None,
+            wasi: WasiContext {
+                files: Default::default(),
+                next_fd: 3,
+                arguments: vec![],
+                environment: vec![],
+                task,
+                prestats: vec![],
+                exit_code: None,
+            },
+        },
+    );
+    store.set_fuel(1000).unwrap();
+    let instance = linker.instantiate_and_start(&mut store, &module).unwrap();
+    let start = instance.get_typed_func::<(), ()>(&store, "_start").unwrap();
+    (store, start)
+}
+
+#[xila::task::test(task_path=xila::task)]
+async fn termination_signal_or_control_token_stops_only_that_guest() {
+    let standard = testing::initialize(false, false).await;
+    let context = standard.context;
+    let manager = context.task_manager;
+    let root = manager.get_current_task_identifier().await;
+    let spawn_guest = async |control: Arc<wasm::ExecutionControl>| {
+        manager
+            .spawn(root, "Guest", None, move |task| async move {
+                let (mut store, start) = looping_guest(context, task, control);
+                let result = run(&mut store, start, NonZeroU32::new(1000).unwrap()).await;
+                // Dropping the store releases the guest's WASI handles.
+                drop(store);
+                matches!(&result, Err(error) if format!("{error:?}") == "Interrupted")
+            })
+            .await
+            .unwrap()
+    };
+
+    let signaled_control = Arc::new(wasm::ExecutionControl::new());
+    let (signaled, signaled_task) = spawn_guest(signaled_control.clone()).await;
+    let token_control = Arc::new(wasm::ExecutionControl::new());
+    let (tokened, _) = spawn_guest(token_control.clone()).await;
+    for _ in 0..10 {
+        xila::task::yield_now().await;
+    }
+    assert!(!signaled.is_finished() && !tokened.is_finished());
+
+    manager
+        .send_signal(signaled_task, xila::task::Signal::Termination)
+        .await
+        .unwrap();
+    assert!(signaled.join().await, "signaled guest was not interrupted");
+    // The signal targeted one task: the other guest is still running.
+    for _ in 0..10 {
+        xila::task::yield_now().await;
+    }
+    assert!(!tokened.is_finished());
+    assert!(!signaled_control.is_stopped());
+
+    token_control.request_stop();
+    assert!(tokened.join().await, "stopped guest was not interrupted");
 }

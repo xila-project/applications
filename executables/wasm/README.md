@@ -269,3 +269,15 @@ it discards the actual read count and reports the buffer length even at EOF.
 Host tests and Miri do not establish embedded hardware correctness or firmware
 RAM/flash costs. Native LVGL integration tests are separate from the portable
 translation coverage gate; no full LVGL/WASI compatibility is claimed.
+
+## Cooperative execution control
+
+Host callers can retain an `Arc<ExecutionControl>` and pass a clone to
+`execute_with_control`. `request_stop()` stops only that execution and cannot be
+cleared. Join the execution future before replacing its module or releasing its
+storage/graphics. Fuel slices, yield and clock-poll waits observe the token and
+termination or interrupt signals sent to the guest's task, which is how the OS
+lifecycle stops guests during a shutdown. Guests cannot request a shutdown: the
+lifecycle request API is host-only. The legacy process-wide signal broadcast is
+retained for native runners; it is not the per-guest control API. Host calls that
+block synchronously cannot be preempted, and a timeout must retain their resources.

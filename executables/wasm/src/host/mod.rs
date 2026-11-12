@@ -11,6 +11,7 @@ pub mod translation;
 mod wasi;
 
 pub use executable::*;
+pub use main::execute_with_control;
 pub use store::GlobalStore;
 pub use wasi::WasiContext;
 pub use wasi::register::add_wasi_to_linker;
@@ -32,4 +33,36 @@ pub fn clear_shutdown_request() {
 
 pub(crate) fn shutdown_requested() -> bool {
     SHUTDOWN_REQUESTED.load(Ordering::Relaxed)
+}
+
+/// A monotonic cancellation token owned by one execution, suitable for hot reload.
+/// Clone the Arc before launching to retain a supervisor handle.
+#[derive(Default)]
+pub struct ExecutionControl(AtomicBool);
+impl ExecutionControl {
+    pub const fn new() -> Self {
+        Self(AtomicBool::new(false))
+    }
+    pub fn request_stop(&self) {
+        self.0.store(true, Ordering::Release);
+    }
+    pub fn is_stopped(&self) -> bool {
+        self.0.load(Ordering::Acquire)
+    }
+}
+
+#[cfg(test)]
+mod control_tests {
+    use super::ExecutionControl;
+    #[test]
+    fn cancellation_is_per_instance_and_monotonic() {
+        let first = alloc::sync::Arc::new(ExecutionControl::new());
+        let second = ExecutionControl::new();
+        let handle = first.clone();
+        handle.request_stop();
+        assert!(first.is_stopped());
+        assert!(!second.is_stopped());
+        drop(handle);
+        assert!(first.is_stopped());
+    }
 }

@@ -3,6 +3,7 @@ use core::fmt::Display;
 use crate::host::wasi::WasiContext;
 
 pub struct GlobalStore {
+    pub control: alloc::sync::Arc<super::ExecutionControl>,
     pub context: &'static xila::executable::ExecutableContext,
     pub wasi: WasiContext,
     pub pending: Option<super::execution::PendingCall>,

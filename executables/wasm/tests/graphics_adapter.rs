@@ -17,6 +17,7 @@ async fn store(
     Store::new(
         engine,
         GlobalStore {
+            control: Default::default(),
             context,
             pending: None,
             graphics: GraphicsState::new(context.graphics_manager),
