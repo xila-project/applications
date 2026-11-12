@@ -7,10 +7,33 @@ event variants into that contract. Graphics call IDs and state/style definitions
 still follow the bundled LVGL API, so changes to those interfaces may require
 rebuilding the host and guest applications together.
 
-Wasmi 2 runs with default features disabled for `no_std` hosts. Both the runtime
-and translation test harness explicitly enable validation, memory64 support,
-and automatic dispatch, which falls back to portable dispatch when required by
-the target or optimization level.
+Wasmi 2 runs with default features disabled for `no_std` hosts. The runtime and
+the translation test harness enable validation and automatic dispatch, which
+falls back to portable dispatch when required by the target or optimization
+level. Wasmi's memory64 support is only built for the `memory_64` configuration
+(`memory_64 = ["wasmi?/memory64"]`); the translation test harness enables it
+for both widths because it exercises both.
+
+## WebAssembly features
+
+`src/host/engine.rs` writes the validated feature set out explicitly, so a
+Wasmi upgrade cannot change what guests may use. `rustc` (1.82+) and
+`clang` (`--target=wasm32-wasip1`, default CPU) both emit exactly bulk memory,
+multi-value, mutable globals, non-trapping float-to-int, reference types and
+sign extension for this target; the guests of this repository add no
+`target-feature` flags.
+
+| Proposal | State | Reason |
+|---|---|---|
+| Mutable globals, sign extension, non-trapping float-to-int, multi-value, bulk memory, reference types | enabled | Default output of the Rust and C toolchains |
+| Tail calls, extended constants | enabled | No cost; opt-in for guest toolchains (`+tail-call`, `-mcpu=lime1`) |
+| memory64 | `memory_64` builds only | The host ABI has one address width; other builds reject memory64 modules at validation |
+| Multi-memory | disabled | The host ABI and pointer translation address the single exported `memory` |
+| SIMD, relaxed SIMD | disabled (not built) | No guest needs it; enabling Wasmi's `simd` feature grows the host by about 420 KiB (+29 %) |
+| Custom page sizes, wide arithmetic | disabled | No toolchain emits them |
+| Threads and atomics | unsupported by Wasmi | |
+
+Disabling Wasmi's memory64 support in `memory_32` builds saves about 2 KiB.
 
 `--instruction-limit` supplies the fuel budget for each cooperative execution
 slice. Wasmi 2 meters input Wasm operators instead of its internal bytecode, so
