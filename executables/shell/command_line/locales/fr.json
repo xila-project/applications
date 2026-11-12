@@ -56,6 +56,7 @@
     "invalid_option": "Option invalide",
     "invalid_path": "Chemin invalide",
     "invalid_utf_8_input": "Entrée UTF-8 invalide",
+    "lifecycle_request_failed": "Échec de la demande d'arrêt ou de redémarrage : {arg0}",
     "line_too_long": "Ligne trop longue",
     "maximum_nested_shell_depth_exceeded": "Profondeur maximale d'imbrication du shell dépassée",
     "missing_file_name_after_redirect_in": "Nom de fichier manquant après la redirection d'entrée",

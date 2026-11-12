@@ -56,6 +56,7 @@
     "invalid_option": "Invalid option",
     "invalid_path": "Invalid path",
     "invalid_utf_8_input": "Invalid UTF-8 input",
+    "lifecycle_request_failed": "Shutdown or restart request failed: {arg0}",
     "line_too_long": "Line too long",
     "maximum_nested_shell_depth_exceeded": "Maximum nested shell depth exceeded",
     "missing_file_name_after_redirect_in": "Missing file name after redirect in",

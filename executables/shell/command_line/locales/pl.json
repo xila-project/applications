@@ -58,6 +58,7 @@
     "invalid_option": "Nieprawidłowa opcja",
     "invalid_path": "Nieprawidłowa ścieżka",
     "invalid_utf_8_input": "Nieprawidłowe dane UTF-8",
+    "lifecycle_request_failed": "Żądanie wyłączenia lub ponownego uruchomienia nie powiodło się: {arg0}",
     "line_too_long": "Wiersz jest za długi",
     "maximum_nested_shell_depth_exceeded": "Przekroczono maksymalną głębokość zagnieżdżenia powłoki",
     "missing_file_name_after_redirect_in": "Brak nazwy pliku po przekierowaniu wejścia",

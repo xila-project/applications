@@ -55,6 +55,7 @@
     "invalid_option": "无效选项",
     "invalid_path": "无效路径",
     "invalid_utf_8_input": "无效的 UTF-8 输入",
+    "lifecycle_request_failed": "关机或重启请求失败：{arg0}",
     "line_too_long": "行过长",
     "maximum_nested_shell_depth_exceeded": "超出 shell 最大嵌套深度",
     "missing_file_name_after_redirect_in": "输入重定向后缺少文件名",
