@@ -9,7 +9,7 @@ license = "Apache-2.0"
 name = "c_demo"
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
-abi_application = { package = "xila-abi-application", git = "https://github.com/xila-project/core", branch = "main" }
+abi_application = { workspace = true }
 executable.workspace = true
 
 [build-dependencies]
