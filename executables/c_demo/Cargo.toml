@@ -1,0 +1,16 @@
+[package]
+name = "xila-c-demo"
+version = "0.1.0"
+edition = "2024"
+description = "Built-in native C ABI demonstration"
+license = "Apache-2.0"
+
+[lib]
+name = "c_demo"
+
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
+abi_application = { package = "xila-abi-application", git = "https://github.com/xila-project/core", branch = "main" }
+executable.workspace = true
+
+[build-dependencies]
+cc = "1"
