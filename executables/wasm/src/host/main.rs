@@ -334,6 +334,7 @@ async fn main_inner(
             data.wasi.files.insert(
                 3,
                 FileSystemItem::Directory(DirectoryVariant {
+                    confinement_root: None,
                     directory: dir,
                     path: xila::file_system::PathOwned::root(),
                 }),

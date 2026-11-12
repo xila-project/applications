@@ -219,6 +219,7 @@ pub fn vfs_error(err: xila::virtual_file_system::Error) -> Error {
         // Nonblocking devices report transient contention or a full queue as
         // `RessourceBusy`; guests must be able to retry it as EAGAIN.
         Vfs::FileSystem(Fs::RessourceBusy) => Error::Again,
+        Vfs::PathEscapesRoot => Error::Notcapable,
         Vfs::PermissionDenied => Error::Access,
         Vfs::NotADirectory => Error::Notdir,
         Vfs::InvalidPath => Error::Inval,
