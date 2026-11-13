@@ -2173,7 +2173,7 @@ dependencies = [
 
 [[package]]
 name = "xila-calculator"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "critical-section",
  "embedded-i18n",
@@ -2187,7 +2187,7 @@ dependencies = [
 
 [[package]]
 name = "xila-clock"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "embedded-i18n",
  "xila-audio",
@@ -2240,7 +2240,7 @@ dependencies = [
 
 [[package]]
 name = "xila-digits"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "embedded-i18n",
  "xila-device",
@@ -2500,7 +2500,7 @@ dependencies = [
 
 [[package]]
 name = "xila-pixel-painter"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "embedded-i18n",
  "xila-wasm",
@@ -2543,7 +2543,7 @@ dependencies = [
 
 [[package]]
 name = "xila-synth"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "nanoaudio",
  "nanoaudio-synth",
@@ -2622,7 +2622,7 @@ dependencies = [
 
 [[package]]
 name = "xila-text-editor"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "embedded-i18n",
  "xila-wasm",
@@ -2698,7 +2698,7 @@ version = "0.1.0"
 
 [[package]]
 name = "xila-weather"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "critical-section",
  "embedded-i18n",

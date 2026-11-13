@@ -1,6 +1,6 @@
 [package]
 name = "xila-clock"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "A bounded Clock application for Xila's WebAssembly runtime."
 license = "GPL-2.0-only"
