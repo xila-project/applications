@@ -147,11 +147,12 @@ fn looping_guest(
             pending: None,
             wasi: WasiContext {
                 files: Default::default(),
+                rights: Default::default(),
                 next_fd: 3,
                 arguments: vec![],
                 environment: vec![],
                 task,
-                prestats: vec![],
+                prestats: Default::default(),
                 exit_code: None,
             },
         },
