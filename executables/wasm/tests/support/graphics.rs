@@ -55,11 +55,18 @@ impl DirectBaseOperations for HeadlessDevice {
     }
 }
 
+/// The process-wide graphics manager. LVGL is a single global instance that
+/// can be initialized once per process, so every test of a binary shares one
+/// manager; `#[task::test]` already runs those tests one at a time.
 pub async fn manager() -> &'static graphics::Manager {
+    static MANAGER: std::sync::OnceLock<&'static graphics::Manager> = std::sync::OnceLock::new();
+    if let Some(manager) = MANAGER.get() {
+        return manager;
+    }
     let time = Box::leak(Box::new(
         xila::time::Manager::new(&testing::TimeDevice).unwrap(),
     ));
-    Box::leak(Box::new(
+    let manager: &'static graphics::Manager = Box::leak(Box::new(
         graphics::initialize(
             time,
             &HeadlessDevice,
@@ -69,7 +76,8 @@ pub async fn manager() -> &'static graphics::Manager {
             false,
         )
         .await,
-    ))
+    ));
+    MANAGER.get_or_init(|| manager)
 }
 
 #[allow(dead_code)] // Shared by the adapter suite, not the direct-core suite.
