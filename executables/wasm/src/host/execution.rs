@@ -72,6 +72,17 @@ pub(crate) fn monotonic_now(
         .map_err(|_| wasmi::Error::new("clock overflow"))
 }
 
+/// Whether this execution must stop: its own control token, a termination or
+/// interrupt signal sent to its task, or the legacy native-runner broadcast.
+async fn stop_requested(store: &Store<GlobalStore>) -> bool {
+    if store.data().control.is_stopped() || super::shutdown_requested() {
+        return true;
+    }
+    let manager = store.data().context.task_manager;
+    let task = manager.get_current_task_identifier().await;
+    xila::lifecycle::tasks::termination_requested(manager, task).await
+}
+
 pub async fn run(
     store: &mut Store<GlobalStore>,
     start: TypedFunc<(), ()>,
@@ -80,14 +91,14 @@ pub async fn run(
     store.set_fuel(instruction_limit.get() as u64)?;
     let mut call = start.call_resumable(&mut *store, ())?;
     loop {
-        if super::shutdown_requested() {
+        if stop_requested(store).await {
             return Err(Error::Interrupted);
         }
         call = match call {
             TypedResumableCall::Finished(()) => return Ok(()),
             TypedResumableCall::OutOfFuel(call) => {
                 xila::task::yield_now().await;
-                if super::shutdown_requested() {
+                if stop_requested(store).await {
                     return Err(Error::Interrupted);
                 }
                 // A single bulk operation may require more than one normal quantum.
@@ -111,7 +122,7 @@ pub async fn run(
                         PendingCall::ClockPoll { poll, memory } => {
                             let required = poll.required_clocks();
                             loop {
-                                if super::shutdown_requested() {
+                                if stop_requested(store).await {
                                     return Err(Error::Interrupted);
                                 }
                                 let now = match clock_now(context, required) {

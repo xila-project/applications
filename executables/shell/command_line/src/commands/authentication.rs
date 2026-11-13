@@ -10,12 +10,9 @@ impl Shell {
         buffer.clear();
         let mut byte = [0u8; 1];
         loop {
-            let count = self
-                .standard
-                .input()
-                .read(&mut byte)
-                .await
-                .map_err(Error::FailedToReadFile)?;
+            let Some(count) = self.read_input_byte(&mut byte).await? else {
+                return Ok(false);
+            };
             if count == 0 {
                 return Ok(false);
             }

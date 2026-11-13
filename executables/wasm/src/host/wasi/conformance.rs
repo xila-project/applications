@@ -168,6 +168,7 @@ impl Guest {
         let mut store = Store::new(
             &engine,
             GlobalStore {
+                control: Default::default(),
                 context,
                 #[cfg(feature = "graphics")]
                 graphics: crate::host::graphics::GraphicsState::new(None),

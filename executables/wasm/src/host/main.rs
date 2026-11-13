@@ -125,8 +125,18 @@ struct WasmArguments<'a> {
 }
 
 pub async fn main(
+    standard: Standard<'static>,
+    arguments: Vec<String>,
+) -> core::result::Result<(), NonZeroUsize> {
+    execute_with_control(standard, arguments, Default::default()).await
+}
+
+/// Run one guest with an independently owned stop handle. Join this future
+/// before replacing its module or reclaiming its VFS and graphics resources.
+pub async fn execute_with_control(
     mut standard: Standard<'static>,
     arguments: Vec<String>,
+    control: alloc::sync::Arc<super::ExecutionControl>,
 ) -> core::result::Result<(), NonZeroUsize> {
     let (runtime_arguments, guest_arguments) = split_guest_arguments(&arguments);
     let arguments = match WasmArguments::from_args(runtime_arguments.iter().map(|s| s.as_str())) {
@@ -145,6 +155,7 @@ pub async fn main(
         standard.duplicate().await.unwrap(),
         arguments,
         guest_arguments.to_vec(),
+        control,
     )
     .await
     {
@@ -197,6 +208,7 @@ async fn main_inner(
     standard: Standard<'static>,
     arguments: WasmArguments<'_>,
     guest_arguments: Vec<String>,
+    control: alloc::sync::Arc<super::ExecutionControl>,
 ) -> Result<()> {
     let context = standard.context;
     let WasmArguments {
@@ -272,6 +284,7 @@ async fn main_inner(
     let mut store = Store::new(
         &engine,
         GlobalStore {
+            control,
             context,
             pending: None,
             #[cfg(feature = "graphics")]

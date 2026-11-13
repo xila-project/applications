@@ -90,7 +90,13 @@ impl Shell {
     }
 
     pub async fn main(&mut self) -> Result<(), NonZeroUsize> {
+        let task_manager = self.context.task_manager;
+        let shell_task = task_manager.get_current_task_identifier().await;
         while self.running {
+            // Leave the session cooperatively when the supervisor asks.
+            if xila::lifecycle::tasks::termination_requested(task_manager, shell_task).await {
+                break;
+            }
             self.layout.run().await;
 
             if let Some(login) = &mut self.login {

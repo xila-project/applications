@@ -28,6 +28,8 @@ pub use error::*;
 
 const SCRIPT_DEPTH_VARIABLE: &str = "XILA_SHELL_DEPTH";
 const MAX_SHELL_DEPTH: usize = 4;
+/// Bound on how long a blocked read delays noticing a termination request.
+const SIGNAL_POLL_INTERVAL: core::time::Duration = core::time::Duration::from_millis(100);
 
 pub struct Shell {
     context: &'static executable::ExecutableContext,
@@ -149,6 +151,30 @@ impl Shell {
             .write(self.standard.error(), format_args!("{error}\n"))
             .await;
     }
+    /// Read one input byte, or `None` once this task was asked to terminate.
+    ///
+    /// Task signals have no wakeup yet, so a pending read is raced against a
+    /// bounded sleep and the signal is checked between attempts. Dropping a
+    /// pending device read is cancellation safe under the VFS I/O contract.
+    async fn read_input_byte(&mut self, byte: &mut [u8; 1]) -> Result<Option<usize>> {
+        use embassy_futures::select::{Either, select};
+        let manager = self.context.task_manager;
+        loop {
+            if xila::lifecycle::tasks::termination_requested(manager, self.task).await {
+                return Ok(None);
+            }
+            match select(
+                self.standard.input().read(byte),
+                xila::task::Manager::sleep(SIGNAL_POLL_INTERVAL),
+            )
+            .await
+            {
+                Either::First(result) => return result.map(Some).map_err(Error::FailedToReadFile),
+                Either::Second(()) => {}
+            }
+        }
+    }
+
     async fn main_interactive(&mut self) -> Result<()> {
         let mut input = Vec::with_capacity(64);
         while self.running {
@@ -164,12 +190,10 @@ impl Shell {
             let mut end_of_input = false;
             loop {
                 let mut byte = [0u8; 1];
-                let count = self
-                    .standard
-                    .input()
-                    .read(&mut byte)
-                    .await
-                    .map_err(Error::FailedToReadFile)?;
+                let Some(count) = self.read_input_byte(&mut byte).await? else {
+                    self.running = false;
+                    return Ok(());
+                };
                 if count == 0 {
                     end_of_input = true;
                     break;

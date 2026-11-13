@@ -5,7 +5,7 @@ use alloc::fmt;
 #[cfg(feature = "network")]
 use xila::network;
 use xila::virtual_file_system;
-use xila::{authentication, internationalization::t, task};
+use xila::{authentication, internationalization::t, lifecycle, task};
 
 pub type Result<T, E = Error<'static>> = core::result::Result<T, E>;
 
@@ -58,6 +58,7 @@ pub enum Error<'a> {
     FailedToRename(virtual_file_system::Error),
     FailedToCreateSymbolicLink(virtual_file_system::Error),
     FailedToReadSymbolicLink(virtual_file_system::Error),
+    Lifecycle(lifecycle::Error),
 }
 
 impl<A: getargs::Argument> From<getargs::Error<A>> for Error<'_> {
@@ -128,6 +129,13 @@ impl Display for Error<'_> {
                     formatter,
                     "{}",
                     t!("errors.failed_to_read_symbolic_link", arg0 = error)
+                )
+            }
+            Error::Lifecycle(error) => {
+                write!(
+                    formatter,
+                    "{}",
+                    t!("errors.lifecycle_request_failed", arg0 = error)
                 )
             }
             Error::AuthenticationFailed(error) => {

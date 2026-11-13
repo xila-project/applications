@@ -22,6 +22,7 @@ mod ln;
 mod mv;
 #[cfg(feature = "network")]
 mod ping;
+mod power;
 mod print_working_directory;
 mod realpath;
 mod sleep;
@@ -107,6 +108,8 @@ pub enum UserCommandKind {
     True,
     False,
     Exit,
+    Poweroff,
+    Reboot,
     ChangeDirectory,
     Echo,
     List,
@@ -160,6 +163,16 @@ const BUILTINS: &[(&str, UserCommandKind, &str)] = &[
         "Usage: false\nReturn status 1 without output.",
     ),
     ("exit", UserCommandKind::Exit, exit::ExitArguments::HELP),
+    (
+        "poweroff",
+        UserCommandKind::Poweroff,
+        power::PoweroffArguments::HELP,
+    ),
+    (
+        "reboot",
+        UserCommandKind::Reboot,
+        power::RebootArguments::HELP,
+    ),
     (
         "cd",
         UserCommandKind::ChangeDirectory,
@@ -295,6 +308,12 @@ where
     let result = match kind {
         UserCommandKind::True => Ok(()),
         UserCommandKind::False => Err(crate::Error::ExitStatus(core::num::NonZeroUsize::MIN)),
+        UserCommandKind::Poweroff => {
+            power::execute(context, options, xila::lifecycle::Action::PowerOff).await
+        }
+        UserCommandKind::Reboot => {
+            power::execute(context, options, xila::lifecycle::Action::Restart).await
+        }
         UserCommandKind::Exit => ExitCommand.execute(context, options, paths).await,
         UserCommandKind::ChangeDirectory => {
             ChangeDirectoryCommand

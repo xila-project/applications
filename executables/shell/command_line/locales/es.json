@@ -56,6 +56,7 @@
     "invalid_option": "Opción no válida",
     "invalid_path": "Ruta no válida",
     "invalid_utf_8_input": "Entrada UTF-8 no válida",
+    "lifecycle_request_failed": "La solicitud de apagado o reinicio falló: {arg0}",
     "line_too_long": "Línea demasiado larga",
     "maximum_nested_shell_depth_exceeded": "Se excedió la profundidad máxima de anidamiento del shell",
     "missing_file_name_after_redirect_in": "Falta el nombre de archivo después de la redirección de entrada",

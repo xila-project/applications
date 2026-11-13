@@ -56,6 +56,7 @@
     "invalid_option": "Opção inválida",
     "invalid_path": "Caminho inválido",
     "invalid_utf_8_input": "Entrada UTF-8 inválida",
+    "lifecycle_request_failed": "A solicitação de desligamento ou reinicialização falhou: {arg0}",
     "line_too_long": "Linha longa demais",
     "maximum_nested_shell_depth_exceeded": "Profundidade máxima de aninhamento do shell excedida",
     "missing_file_name_after_redirect_in": "Nome do arquivo ausente após o redirecionamento de entrada",

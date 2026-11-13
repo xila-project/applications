@@ -56,6 +56,7 @@
     "invalid_option": "Ungültige Option",
     "invalid_path": "Ungültiger Pfad",
     "invalid_utf_8_input": "Ungültige UTF-8-Eingabe",
+    "lifecycle_request_failed": "Anfrage zum Herunterfahren oder Neustarten fehlgeschlagen: {arg0}",
     "line_too_long": "Zeile ist zu lang",
     "maximum_nested_shell_depth_exceeded": "Maximale Verschachtelungstiefe der Shell überschritten",
     "missing_file_name_after_redirect_in": "Dateiname nach Eingabeumleitung fehlt",

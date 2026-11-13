@@ -161,6 +161,7 @@ mod tests {
         let mut store = Store::new(
             &engine,
             GlobalStore {
+                control: Default::default(),
                 context,
                 pending: None,
                 wasi: crate::host::wasi::WasiContext {

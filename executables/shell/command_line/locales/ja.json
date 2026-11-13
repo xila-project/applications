@@ -56,6 +56,7 @@
     "invalid_option": "無効なオプション",
     "invalid_path": "無効なパス",
     "invalid_utf_8_input": "無効な UTF-8 入力",
+    "lifecycle_request_failed": "シャットダウンまたは再起動の要求に失敗しました: {arg0}",
     "line_too_long": "行が長すぎます",
     "maximum_nested_shell_depth_exceeded": "シェルの最大ネスト深度を超えました",
     "missing_file_name_after_redirect_in": "入力リダイレクトの後にファイル名がありません",
