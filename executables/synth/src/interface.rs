@@ -364,7 +364,7 @@ impl Interface {
                 if code == EVENT_CLOSE_REQUESTED {
                     self.audio = None;
                     unsafe {
-                        object_delete(u16::try_from(self.window as usize).map_err(|_| -1)?)?;
+                        object_delete(u32::try_from(self.window as usize).map_err(|_| -1)?)?;
                     }
                     return Ok(());
                 }

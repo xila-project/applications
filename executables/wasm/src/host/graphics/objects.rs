@@ -6,33 +6,55 @@ use super::{
     },
 };
 use crate::host::translation::WasmUsize;
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
-use core::{cell::Cell, ptr::NonNull};
-use xila::graphics::{Manager, Window, lvgl};
+use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
+use core::{cell::UnsafeCell, ptr::NonNull};
+use xila::graphics::{
+    Manager, Window, lvgl,
+    lvgl_rust::{self as safe, WidgetExt},
+};
 
-pub const MAX_OBJECTS: usize = 256;
 pub const MAX_GRID_TRACKS_PER_VM: usize = 512;
 
-/// Shared callback data never aliases the registry's mutable entries. LVGL holds
-/// one Rc until DELETE, and the registry holds another until VM teardown.
-struct Notification {
-    live: Cell<*mut lvgl::lv_obj_t>,
-    root: Option<Rc<Notification>>,
-}
+// Accessed only under Manager's process-wide graphics lock. Boxes keep these
+// addresses stable when GraphicsState moves. The observer never calls LVGL.
+struct Owners(UnsafeCell<[*mut Side; safe::Owner::MAX as usize + 1]>);
+unsafe impl Sync for Owners {}
+static OWNERS: Owners = Owners(UnsafeCell::new(
+    [core::ptr::null_mut(); safe::Owner::MAX as usize + 1],
+));
 
-unsafe extern "C" fn deleted(event: *mut lvgl::lv_event_t) {
-    let data = unsafe { lvgl::lv_event_get_user_data(event) };
-    let notification = unsafe { Rc::from_raw(data.cast::<Notification>()) };
-    let pointer = notification.live.replace(core::ptr::null_mut());
-    if let Some(root) = &notification.root {
-        let window = root.live.get();
-        // The manager lock serializes deletion; a root's DELETE callback clears
-        // its live pointer before it or its queue can be destroyed.
-        if let Some(mut window) = unsafe { Window::from_raw(window) } {
-            unsafe { window.as_mut().discard_events_for_target(pointer) };
+fn freed(event: safe::Freed) {
+    let Some(owner) = event.owner() else { return };
+    // SAFETY: the graphics lock serializes owner registration, callbacks and drop.
+    let side = unsafe { (*OWNERS.0.get())[owner.get() as usize].as_mut() };
+    if let Some(side) = side {
+        // The OBJ_ID hook runs at the END of the destructor, after LVGL has
+        // finished reading maps, grid tracks and widget buffers.
+        if let Some(entry) = side.entries.remove(&event.handle().into_raw()) {
+            side.widget_options_bytes -= usize::from(entry.option_bytes);
+            if let Some(resource) = entry.resource {
+                match &resource {
+                    Resource::Grid(grid) => side.grid_tracks -= grid.track_count(),
+                    Resource::Canvas(canvas) => side.canvas_pixels -= canvas.len(),
+                    Resource::GridWith { grid, inner } => {
+                        side.grid_tracks -= grid.track_count();
+                        if let Resource::Canvas(canvas) = &**inner {
+                            side.canvas_pixels -= canvas.len();
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
     }
-    // Release LVGL's callback ownership exactly once, on deletion.
+}
+
+#[derive(Default)]
+struct Side {
+    entries: BTreeMap<u32, Entry>,
+    grid_tracks: usize,
+    widget_options_bytes: usize,
+    canvas_pixels: usize,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -69,40 +91,116 @@ pub(crate) enum Kind {
     Card,
 }
 
+struct ChartSeries {
+    series: [Option<NonNull<lvgl::lv_chart_series_t>>; 8],
+    count: u8,
+}
+
+enum Resource {
+    Map(#[allow(dead_code)] ButtonMap),
+    Grid(GridTracks),
+    Canvas(IndexedCanvas),
+    Calendar(#[allow(dead_code)] Vec<lvgl::lv_calendar_date_t>),
+    Line(#[allow(dead_code)] Vec<lvgl::lv_point_precise_t>),
+    Chart(Box<ChartSeries>),
+    GridWith {
+        grid: GridTracks,
+        inner: Box<Resource>,
+    },
+}
+
+#[derive(Default)]
 struct Entry {
-    notification: Rc<Notification>,
-    kind: Kind,
+    kind: Option<Kind>,
     tile_position: Option<(u8, u8)>,
-    map: Option<ButtonMap>,
-    canvas: Option<Vec<IndexedCanvas>>,
-    grid: Option<GridTracks>,
     option_bytes: u16,
-    widget: Option<Box<WidgetResource>>,
+    resource: Option<Resource>,
 }
 
-enum WidgetResource {
-    Calendar {
-        highlights: Option<Vec<lvgl::lv_calendar_date_t>>,
-        charged_bytes: u16,
-    },
-    Chart {
-        series: [Option<NonNull<lvgl::lv_chart_series_t>>; 8],
-        series_count: u8,
-    },
-    Line {
-        points: Option<Vec<lvgl::lv_point_precise_t>>,
-        charged_bytes: u16,
-    },
-}
+impl Entry {
+    fn grid(&self) -> Option<&GridTracks> {
+        match self.resource.as_ref()? {
+            Resource::Grid(grid) | Resource::GridWith { grid, .. } => Some(grid),
+            _ => None,
+        }
+    }
 
-#[cfg(test)]
-const _: () = assert!(core::mem::size_of::<Entry>() <= 192);
+    fn set_grid(&mut self, tracks: GridTracks) {
+        match self.resource.take() {
+            None | Some(Resource::Grid(_)) => {
+                self.resource = Some(Resource::Grid(tracks));
+            }
+            Some(Resource::GridWith { inner, .. }) => {
+                self.resource = Some(Resource::GridWith {
+                    grid: tracks,
+                    inner,
+                });
+            }
+            Some(other) => {
+                self.resource = Some(Resource::GridWith {
+                    grid: tracks,
+                    inner: Box::new(other),
+                });
+            }
+        }
+    }
+
+    fn inner_resource(&self) -> Option<&Resource> {
+        match self.resource.as_ref()? {
+            Resource::Grid(_) => None,
+            Resource::GridWith { inner, .. } => Some(inner),
+            other => Some(other),
+        }
+    }
+
+    fn inner_resource_mut(&mut self) -> Option<&mut Resource> {
+        match self.resource.as_mut()? {
+            Resource::Grid(_) => None,
+            Resource::GridWith { inner, .. } => Some(inner),
+            other => Some(other),
+        }
+    }
+
+    fn set_inner_resource(&mut self, resource: Resource) {
+        match self.resource.take() {
+            Some(Resource::Grid(grid)) => {
+                self.resource = Some(Resource::GridWith {
+                    grid,
+                    inner: Box::new(resource),
+                });
+            }
+            Some(Resource::GridWith { grid, .. }) => {
+                self.resource = Some(Resource::GridWith {
+                    grid,
+                    inner: Box::new(resource),
+                });
+            }
+            _ => {
+                self.resource = Some(resource);
+            }
+        }
+    }
+
+    fn take_inner_resource(&mut self) -> Option<Resource> {
+        match self.resource.take() {
+            None => None,
+            Some(Resource::Grid(grid)) => {
+                self.resource = Some(Resource::Grid(grid));
+                None
+            }
+            Some(Resource::GridWith { grid, inner }) => {
+                self.resource = Some(Resource::Grid(grid));
+                Some(*inner)
+            }
+            Some(other) => Some(other),
+        }
+    }
+}
 
 pub struct GraphicsState {
     pub(crate) manager: Option<&'static Manager>,
-    entries: Vec<Entry>,
-    grid_tracks: usize,
-    widget_options_bytes: usize,
+    owner: Option<safe::Owner>,
+    side: Option<Box<UnsafeCell<Side>>>,
     /// Trusted native context, refreshed from GlobalStore at the VM boundary.
     pub(crate) file_system: Option<(
         &'static xila::virtual_file_system::VirtualFileSystem,
@@ -114,9 +212,8 @@ impl GraphicsState {
     pub fn new(manager: Option<&'static Manager>) -> Self {
         Self {
             manager,
-            entries: Vec::new(),
-            grid_tracks: 0,
-            widget_options_bytes: 0,
+            owner: None,
+            side: None,
             file_system: None,
         }
     }
@@ -133,70 +230,109 @@ impl GraphicsState {
         state
     }
 
+    pub(crate) fn initialize(&mut self, lv: &mut safe::Lvgl) -> Result<()> {
+        if self.owner.is_some() {
+            return Ok(());
+        }
+        // SAFETY: called only inside the manager session.
+        let owners = unsafe { &mut *OWNERS.0.get() };
+        let index = (1..owners.len())
+            .find(|&i| owners[i].is_null())
+            .ok_or(GraphicsError::ResourceLimit)?;
+        let side = Box::new(UnsafeCell::new(Side::default()));
+        owners[index] = side.get();
+        self.owner = safe::Owner::new(index as u8);
+        self.side = Some(side);
+        lv.set_free_observer(Some(freed));
+        Ok(())
+    }
+
     pub(crate) fn ensure_capacity(&self) -> Result<()> {
-        if self.entries.len() >= MAX_OBJECTS {
-            Err(GraphicsError::ResourceLimit)
-        } else {
-            Ok(())
-        }
+        self.owner.map(|_| ()).ok_or(GraphicsError::ResourceLimit)
     }
 
-    /// Caller holds the manager lock after any native deletion has returned.
-    /// DELETE callbacks only invalidate: LVGL can still read maps while tearing
-    /// down an object, so release retained buffers here, not in the callback.
-    pub(crate) fn reap_deleted_maps(&mut self) {
-        let mut deleted_grid_tracks = 0;
-        let mut deleted_option_bytes = 0;
-        for entry in &mut self.entries {
-            if entry.notification.live.get().is_null() {
-                entry.map = None;
-                entry.canvas = None;
-                deleted_grid_tracks += entry.grid.take().map_or(0, |grid| grid.track_count());
-                deleted_option_bytes += core::mem::replace(&mut entry.option_bytes, 0) as usize;
-                if let Some(resource) = entry.widget.take() {
-                    deleted_option_bytes += match *resource {
-                        WidgetResource::Calendar { charged_bytes, .. }
-                        | WidgetResource::Line { charged_bytes, .. } => usize::from(charged_bytes),
-                        WidgetResource::Chart { .. } => 0,
-                    };
-                }
-            }
-        }
-        self.grid_tracks = self.grid_tracks.saturating_sub(deleted_grid_tracks);
-        self.widget_options_bytes = self
-            .widget_options_bytes
-            .saturating_sub(deleted_option_bytes);
+    fn side(&self) -> &Side {
+        // SAFETY: dispatcher holds the graphics lock; no borrow spans deletion.
+        unsafe { &*self.side.as_ref().expect("initialized graphics").get() }
     }
 
-    fn entry(&self, handle: WasmUsize) -> Result<&Entry> {
-        let index = usize::try_from(handle)
-            .ok()
-            .and_then(|id| id.checked_sub(1))
-            .ok_or(GraphicsError::InvalidHandle)?;
-        let entry = self
-            .entries
-            .get(index)
-            .ok_or(GraphicsError::InvalidHandle)?;
-        if entry.notification.live.get().is_null() {
-            return Err(GraphicsError::InvalidHandle);
+    fn side_mut(&mut self) -> &mut Side {
+        // SAFETY: as above. UnsafeCell permits the free observer to access the
+        // stable allocation when no host resource borrow is outstanding.
+        unsafe { &mut *self.side.as_ref().expect("initialized graphics").get() }
+    }
+
+    fn lv(&self) -> &safe::Lvgl {
+        // SAFETY: all dispatcher helpers run inside the manager's session.
+        unsafe { safe::Lvgl::assume() }
+    }
+
+    #[allow(clippy::useless_conversion)]
+    fn raw(handle: WasmUsize) -> Result<u32> {
+        u32::try_from(handle).map_err(|_| GraphicsError::InvalidHandle)
+    }
+
+    fn resolve_raw(&self, handle: WasmUsize) -> Result<(u32, *mut lvgl::lv_obj_t)> {
+        let owner = self.owner.ok_or(GraphicsError::InvalidHandle)?;
+        let raw = Self::raw(handle)?;
+        let object = self
+            .lv()
+            .resolve_for::<safe::Obj>(raw, owner)
+            .map_err(|_| GraphicsError::InvalidHandle)?;
+        Ok((raw, object.as_ptr()))
+    }
+
+    fn kind_of(&self, raw: u32, pointer: *mut lvgl::lv_obj_t) -> Result<Kind> {
+        if let Some(kind) = self.side().entries.get(&raw).and_then(|e| e.kind) {
+            return Ok(kind);
         }
-        Ok(entry)
+        // Exact classes preserve distinctions such as Slider versus Bar and
+        // Keyboard versus ButtonMatrix. Alias kinds live only in the side table.
+        let class = unsafe { lvgl::lv_obj_get_class(pointer) };
+        if core::ptr::eq(class, xila::graphics::get_window_class()) {
+            return Ok(Kind::Window);
+        }
+        if core::ptr::eq(class, xila::graphics::get_file_picker_class()) {
+            return Ok(Kind::FilePicker);
+        }
+        macro_rules! classes {
+            ($($kind:ident => $class:ident),* $(,)?) => { $(
+                if core::ptr::eq(class, &raw const lvgl::$class) { return Ok(Kind::$kind); }
+            )* };
+        }
+        classes! {
+            Object => lv_obj_class, Label => lv_label_class, Button => lv_button_class,
+            ButtonMatrix => lv_buttonmatrix_class, Checkbox => lv_checkbox_class,
+            TabView => lv_tabview_class, Textarea => lv_textarea_class, Keyboard => lv_keyboard_class,
+            Arc => lv_arc_class, Bar => lv_bar_class, Slider => lv_slider_class,
+            Switch => lv_switch_class, Spinner => lv_spinner_class, Dropdown => lv_dropdown_class,
+            Roller => lv_roller_class, Led => lv_led_class, Calendar => lv_calendar_class,
+            Spinbox => lv_spinbox_class, Chart => lv_chart_class, Line => lv_line_class,
+            List => lv_list_class, Tileview => lv_tileview_class,
+        }
+        Err(GraphicsError::InvalidHandle)
     }
 
     pub(crate) fn object(
         &self,
         handle: WasmUsize,
-        kind: Option<Kind>,
+        expected: Option<Kind>,
     ) -> Result<*mut lvgl::lv_obj_t> {
-        let entry = self.entry(handle)?;
-        if kind.is_some_and(|kind| entry.kind != kind) {
+        let (raw, pointer) = self.resolve_raw(handle)?;
+        if let Some(expected) = expected
+            && self.kind_of(raw, pointer)? != expected
+        {
             return Err(GraphicsError::InvalidHandle);
         }
-        Ok(entry.notification.live.get())
+        Ok(pointer)
     }
 
-    pub(crate) fn kind(&self, handle: WasmUsize) -> Result<Kind> {
-        Ok(self.entry(handle)?.kind)
+    pub(crate) fn object_with_kind(
+        &self,
+        handle: WasmUsize,
+    ) -> Result<(*mut lvgl::lv_obj_t, Kind)> {
+        let (raw, pointer) = self.resolve_raw(handle)?;
+        Ok((pointer, self.kind_of(raw, pointer)?))
     }
 
     pub(crate) fn is_child_of(
@@ -217,142 +353,149 @@ impl GraphicsState {
         row: u8,
     ) -> Result<bool> {
         let view_pointer = self.object(view, Some(Kind::Tileview))?;
-        Ok(self.entries.iter().any(|entry| {
-            !entry.notification.live.get().is_null()
-                && entry.kind == Kind::Tile
+        Ok(self.side().entries.iter().any(|(&raw, entry)| {
+            entry.kind == Some(Kind::Tile)
                 && entry.tile_position == Some((column, row))
-                && unsafe { lvgl::lv_obj_get_parent(entry.notification.live.get()) } == view_pointer
+                && self
+                    .object(raw as WasmUsize, None)
+                    .is_ok_and(|p| unsafe { lvgl::lv_obj_get_parent(p) } == view_pointer)
         }))
     }
 
     pub(crate) fn set_tile_position(
         &mut self,
-        tile_handle: WasmUsize,
+        handle: WasmUsize,
         position: (u8, u8),
     ) -> Result<()> {
-        let index = usize::try_from(tile_handle)
-            .ok()
-            .and_then(|id| id.checked_sub(1))
-            .ok_or(GraphicsError::InvalidHandle)?;
-        let tile = self
+        let raw = self.resolve_raw(handle)?.0;
+        self.side_mut()
             .entries
-            .get_mut(index)
-            .ok_or(GraphicsError::InvalidHandle)?;
-        if tile.notification.live.get().is_null() || tile.kind != Kind::Tile {
-            return Err(GraphicsError::InvalidHandle);
-        }
-        tile.tile_position = Some(position);
+            .entry(raw)
+            .or_default()
+            .tile_position = Some(position);
         Ok(())
     }
 
-    pub(crate) fn handle_for(&self, pointer: *mut lvgl::lv_obj_t) -> WasmUsize {
-        if pointer.is_null() {
+    pub(crate) fn event_handle_for(
+        &self,
+        root: *mut lvgl::lv_obj_t,
+        target: *mut lvgl::lv_obj_t,
+    ) -> WasmUsize {
+        // Native children without handles can also appear in events and can
+        // die without notifying our observer. Validate by address comparison
+        // in the live tree, never by dereferencing a queued target pointer.
+        struct Search {
+            target: *mut lvgl::lv_obj_t,
+            found: bool,
+        }
+        unsafe extern "C" fn visit(
+            obj: *mut lvgl::lv_obj_t,
+            data: *mut core::ffi::c_void,
+        ) -> lvgl::lv_obj_tree_walk_res_t {
+            let search = unsafe { &mut *data.cast::<Search>() };
+            if obj == search.target {
+                search.found = true;
+                lvgl::lv_obj_tree_walk_res_t_LV_OBJ_TREE_WALK_END
+            } else {
+                lvgl::lv_obj_tree_walk_res_t_LV_OBJ_TREE_WALK_NEXT
+            }
+        }
+        if target.is_null() {
             return 0;
         }
-        self.entries
-            .iter()
-            .position(|entry| entry.notification.live.get() == pointer)
-            .map_or(0, |index| (index + 1) as WasmUsize)
+        let mut search = Search {
+            target,
+            found: false,
+        };
+        unsafe { lvgl::lv_obj_tree_walk(root, Some(visit), (&mut search as *mut Search).cast()) };
+        if search.found {
+            self.handle_for(target)
+        } else {
+            0
+        }
     }
 
-    /// Caller holds the manager lock and owns a newly created native object.
+    pub(crate) fn handle_for(&self, pointer: *mut lvgl::lv_obj_t) -> WasmUsize {
+        let Some(non_null) = NonNull::new(pointer) else {
+            return 0;
+        };
+        let obj = unsafe { safe::Obj::from_raw(self.lv(), non_null) };
+        obj.find_handle()
+            .filter(|h| h.owner() == self.owner)
+            .map_or(0, |h| h.into_raw() as WasmUsize)
+    }
+
     pub(crate) fn insert(
         &mut self,
         pointer: *mut lvgl::lv_obj_t,
         kind: Kind,
-        parent: Option<WasmUsize>,
+        _parent: Option<WasmUsize>,
     ) -> Result<WasmUsize> {
-        NonNull::new(pointer).ok_or(GraphicsError::NativeFailure)?;
-        let root = parent
-            .map(|handle| {
-                let parent = self.entry(handle)?;
-                Ok(parent
-                    .notification
-                    .root
-                    .as_ref()
-                    .unwrap_or(&parent.notification)
-                    .clone())
-            })
-            .transpose()?;
-        let notification = Rc::new(Notification {
-            live: Cell::new(pointer),
-            root,
-        });
-        // This is the capability's birth boundary. Queued events predate its
-        // registration and may refer to an unregistered object's recycled
-        // address. Preserve their codes, but never grant them this new handle.
-        let window = notification
-            .root
-            .as_ref()
-            .map_or(pointer, |root| root.live.get());
-        if let Some(mut window) = unsafe { Window::from_raw(window) } {
-            unsafe { window.as_mut().clear_event_targets_for(pointer) };
-        }
-        let callback = Rc::into_raw(notification.clone());
-        let descriptor = unsafe {
-            lvgl::lv_obj_add_event_cb(
-                pointer,
-                Some(deleted),
-                lvgl::lv_event_code_t_LV_EVENT_DELETE,
-                callback as *mut _,
-            )
-        };
-        if descriptor.is_null() {
-            unsafe {
-                drop(Rc::from_raw(callback));
-                lvgl::lv_obj_delete(pointer);
+        let pointer = NonNull::new(pointer).ok_or(GraphicsError::NativeFailure)?;
+        // Clear pre-registration event targets at the capability birth boundary,
+        // including a recycled native address. Shared screens are never tagged.
+        let mut root = pointer.as_ptr();
+        while !root.is_null() {
+            if let Some(mut window) = unsafe { Window::from_raw(root) } {
+                unsafe { window.as_mut().clear_event_targets_for(pointer.as_ptr()) };
+                break;
             }
-            return Err(GraphicsError::NativeFailure);
+            root = unsafe { lvgl::lv_obj_get_parent(root) };
         }
-        self.entries.push(Entry {
-            notification,
+        let obj = unsafe { safe::Obj::from_raw(self.lv(), pointer) };
+        let owner = self.owner.ok_or(GraphicsError::ResourceLimit)?;
+        let handle = match obj.handle_for(owner) {
+            Ok(h) => h.into_raw(),
+            Err(_) => {
+                unsafe { lvgl::lv_obj_delete(pointer.as_ptr()) };
+                return Err(GraphicsError::ResourceLimit);
+            }
+        };
+        if matches!(
             kind,
-            tile_position: None,
-            map: None,
-            canvas: None,
-            grid: None,
-            option_bytes: 0,
-            widget: None,
-        });
-        Ok(self.entries.len() as WasmUsize)
+            Kind::IndexedCanvas
+                | Kind::ListText
+                | Kind::ListButton
+                | Kind::Tile
+                | Kind::Badge
+                | Kind::Card
+        ) {
+            self.side_mut().entries.entry(handle).or_default().kind = Some(kind);
+        }
+        Ok(handle as WasmUsize)
     }
 
     pub(crate) fn set_map(&mut self, handle: WasmUsize, map: ButtonMap) {
-        // Install first; LVGL may access the previous map during replacement.
-        let entry = &mut self.entries[handle as usize - 1];
-        unsafe { lvgl::lv_buttonmatrix_set_map(entry.notification.live.get(), map.as_ptr()) };
-        entry.map = Some(map);
+        let (raw, pointer) = self.resolve_raw(handle).expect("validated matrix");
+        unsafe { lvgl::lv_buttonmatrix_set_map(pointer, map.as_ptr()) };
+        self.side_mut()
+            .entries
+            .entry(raw)
+            .or_default()
+            .set_inner_resource(Resource::Map(map));
     }
 
     pub(crate) fn set_grid_tracks(&mut self, handle: WasmUsize, tracks: GridTracks) -> Result<()> {
-        let index = usize::try_from(handle)
-            .ok()
-            .and_then(|id| id.checked_sub(1))
-            .ok_or(GraphicsError::InvalidHandle)?;
-        let entry = self
+        let (raw, pointer) = self.resolve_raw(handle)?;
+        let previous = self
+            .side()
             .entries
-            .get_mut(index)
-            .ok_or(GraphicsError::InvalidHandle)?;
-        let previous = entry.grid.as_ref().map_or(0, GridTracks::track_count);
-        let used = self
-            .grid_tracks
-            .checked_sub(previous)
-            .and_then(|used| used.checked_add(tracks.track_count()))
-            .ok_or(GraphicsError::ResourceLimit)?;
+            .get(&raw)
+            .and_then(Entry::grid)
+            .map_or(0, GridTracks::track_count);
+        let used = self.side().grid_tracks - previous + tracks.track_count();
         if used > MAX_GRID_TRACKS_PER_VM {
             return Err(GraphicsError::ResourceLimit);
         }
-        let object = entry.notification.live.get();
-        if object.is_null() {
-            return Err(GraphicsError::InvalidHandle);
-        }
-        // LVGL switches descriptors synchronously; the old host allocation is
-        // dropped only after this call returns.
         unsafe {
-            lvgl::lv_obj_set_grid_dsc_array(object, tracks.columns_ptr(), tracks.rows_ptr());
-        }
-        entry.grid = Some(tracks);
-        self.grid_tracks = used;
+            lvgl::lv_obj_set_grid_dsc_array(pointer, tracks.columns_ptr(), tracks.rows_ptr())
+        };
+        self.side_mut()
+            .entries
+            .entry(raw)
+            .or_default()
+            .set_grid(tracks);
+        self.side_mut().grid_tracks = used;
         Ok(())
     }
 
@@ -364,12 +507,13 @@ impl GraphicsState {
         if new_bytes > MAX_WIDGET_OPTIONS_BYTES_PER_VM {
             return Err(GraphicsError::ResourceLimit);
         }
-        let entry = self.entry(handle)?;
-        updated_widget_options_usage(
-            self.widget_options_bytes,
-            entry.option_bytes as usize,
-            new_bytes,
-        )?;
+        let raw = self.resolve_raw(handle)?.0;
+        let previous = self
+            .side()
+            .entries
+            .get(&raw)
+            .map_or(0, |entry| usize::from(entry.option_bytes));
+        updated_widget_options_usage(self.side().widget_options_bytes, previous, new_bytes)?;
         Ok(())
     }
 
@@ -377,7 +521,7 @@ impl GraphicsState {
         if new_bytes > MAX_WIDGET_OPTIONS_BYTES_PER_VM {
             return Err(GraphicsError::ResourceLimit);
         }
-        updated_widget_options_usage(self.widget_options_bytes, 0, new_bytes)?;
+        updated_widget_options_usage(self.side().widget_options_bytes, 0, new_bytes)?;
         Ok(())
     }
 
@@ -389,19 +533,17 @@ impl GraphicsState {
         if new_bytes > MAX_WIDGET_OPTIONS_BYTES_PER_VM {
             return Err(GraphicsError::ResourceLimit);
         }
-        let index = usize::try_from(handle)
-            .ok()
-            .and_then(|id| id.checked_sub(1))
-            .ok_or(GraphicsError::InvalidHandle)?;
-        let entry = self
+        let raw = self.resolve_raw(handle)?.0;
+        let previous = self
+            .side()
             .entries
-            .get_mut(index)
-            .ok_or(GraphicsError::InvalidHandle)?;
-        let previous = entry.option_bytes as usize;
+            .get(&raw)
+            .map_or(0, |entry| usize::from(entry.option_bytes));
         let charge = previous.max(new_bytes);
-        let used = updated_widget_options_usage(self.widget_options_bytes, previous, new_bytes)?;
-        entry.option_bytes = charge as u16;
-        self.widget_options_bytes = used;
+        let used =
+            updated_widget_options_usage(self.side().widget_options_bytes, previous, new_bytes)?;
+        self.side_mut().entries.entry(raw).or_default().option_bytes = charge as u16;
+        self.side_mut().widget_options_bytes = used;
         Ok(())
     }
 
@@ -420,58 +562,62 @@ impl GraphicsState {
         if new_bytes > MAX_WIDGET_OPTIONS_BYTES_PER_VM {
             return Err(GraphicsError::ResourceLimit);
         }
-        let index = usize::try_from(handle)
-            .ok()
-            .and_then(|id| id.checked_sub(1))
-            .ok_or(GraphicsError::InvalidHandle)?;
-        let entry = self
-            .entries
-            .get(index)
-            .ok_or(GraphicsError::InvalidHandle)?;
-        if entry.notification.live.get().is_null() || entry.kind != Kind::Calendar {
+        let (raw, pointer) = self.resolve_raw(handle)?;
+        if self.kind_of(raw, pointer)? != Kind::Calendar {
             return Err(GraphicsError::InvalidHandle);
         }
-        let previous = match entry.widget.as_deref() {
-            None => 0,
-            Some(WidgetResource::Calendar { charged_bytes, .. }) => usize::from(*charged_bytes),
-            Some(_) => return Err(GraphicsError::InvalidHandle),
-        };
-        let charge = previous.max(new_bytes);
-        let used = updated_widget_options_usage(self.widget_options_bytes, previous, new_bytes)?;
-        let pointer = if dates.is_empty() {
+        let previous = self
+            .side()
+            .entries
+            .get(&raw)
+            .map_or(0, |entry| usize::from(entry.option_bytes));
+        let charge =
+            u16::try_from(previous.max(new_bytes)).map_err(|_| GraphicsError::ResourceLimit)?;
+        let used =
+            updated_widget_options_usage(self.side().widget_options_bytes, previous, new_bytes)?;
+        let dates_pointer = if dates.is_empty() {
             core::ptr::null_mut()
         } else {
             dates.as_mut_ptr()
         };
-        let entry = &mut self.entries[index];
-        let replacement = if dates.is_empty() { None } else { Some(dates) };
-        let resource = entry.widget.get_or_insert_with(|| {
-            Box::new(WidgetResource::Calendar {
-                highlights: None,
-                charged_bytes: 0,
-            })
-        });
-        let WidgetResource::Calendar {
-            highlights,
-            charged_bytes,
-        } = &mut **resource
-        else {
-            return Err(GraphicsError::InvalidHandle);
+        let side = self.side_mut();
+        let entry = side.entries.entry(raw).or_default();
+        let old = if dates.is_empty() {
+            match entry.take_inner_resource() {
+                Some(Resource::Calendar(old)) => Some(old),
+                Some(other) => {
+                    entry.set_inner_resource(other);
+                    None
+                }
+                None => None,
+            }
+        } else {
+            match entry.inner_resource_mut() {
+                Some(Resource::Calendar(existing)) => Some(core::mem::replace(existing, dates)),
+                _ => {
+                    entry.set_inner_resource(Resource::Calendar(dates));
+                    None
+                }
+            }
         };
-        let old = core::mem::replace(highlights, replacement);
-        *charged_bytes = u16::try_from(charge).map_err(|_| GraphicsError::ResourceLimit)?;
-        self.widget_options_bytes = used;
-        Ok((pointer, old))
+        entry.option_bytes = charge;
+        side.widget_options_bytes = used;
+        Ok((dates_pointer, old))
     }
 
     pub(crate) fn chart_series_count(&self, handle: WasmUsize) -> Result<usize> {
-        let entry = self.entry(handle)?;
-        if entry.kind != Kind::Chart {
+        let (raw, pointer) = self.resolve_raw(handle)?;
+        if self.kind_of(raw, pointer)? != Kind::Chart {
             return Err(GraphicsError::InvalidHandle);
         }
-        match entry.widget.as_deref() {
+        match self
+            .side()
+            .entries
+            .get(&raw)
+            .and_then(Entry::inner_resource)
+        {
             None => Ok(0),
-            Some(WidgetResource::Chart { series_count, .. }) => Ok(usize::from(*series_count)),
+            Some(Resource::Chart(chart)) => Ok(usize::from(chart.count)),
             Some(_) => Err(GraphicsError::InvalidHandle),
         }
     }
@@ -481,39 +627,26 @@ impl GraphicsState {
         handle: WasmUsize,
         series_pointer: NonNull<lvgl::lv_chart_series_t>,
     ) -> Result<u32> {
-        let index = usize::try_from(handle)
-            .ok()
-            .and_then(|id| id.checked_sub(1))
-            .ok_or(GraphicsError::InvalidHandle)?;
-        let entry = self
-            .entries
-            .get_mut(index)
-            .ok_or(GraphicsError::InvalidHandle)?;
-        if entry.notification.live.get().is_null() {
+        let (raw, pointer) = self.resolve_raw(handle)?;
+        if self.kind_of(raw, pointer)? != Kind::Chart {
             return Err(GraphicsError::InvalidHandle);
         }
-        if entry.kind != Kind::Chart {
-            return Err(GraphicsError::InvalidHandle);
-        }
-        let resource = entry.widget.get_or_insert_with(|| {
-            Box::new(WidgetResource::Chart {
+        let entry = self.side_mut().entries.entry(raw).or_default();
+        if entry.inner_resource().is_none() {
+            entry.set_inner_resource(Resource::Chart(Box::new(ChartSeries {
                 series: [None; 8],
-                series_count: 0,
-            })
-        });
-        let WidgetResource::Chart {
-            series,
-            series_count,
-        } = &mut **resource
-        else {
+                count: 0,
+            })));
+        }
+        let Some(Resource::Chart(chart)) = entry.inner_resource_mut() else {
             return Err(GraphicsError::InvalidHandle);
         };
-        let slot = usize::from(*series_count);
-        if slot >= series.len() {
+        let slot = usize::from(chart.count);
+        if slot >= chart.series.len() {
             return Err(GraphicsError::ResourceLimit);
         }
-        series[slot] = Some(series_pointer);
-        *series_count += 1;
+        chart.series[slot] = Some(series_pointer);
+        chart.count += 1;
         u32::try_from(slot).map_err(|_| GraphicsError::ResourceLimit)
     }
 
@@ -522,13 +655,19 @@ impl GraphicsState {
         handle: WasmUsize,
         slot: WasmUsize,
     ) -> Result<NonNull<lvgl::lv_chart_series_t>> {
-        let entry = self.entry(handle)?;
-        if entry.kind != Kind::Chart {
+        let (raw, pointer) = self.resolve_raw(handle)?;
+        if self.kind_of(raw, pointer)? != Kind::Chart {
             return Err(GraphicsError::InvalidHandle);
         }
         let index = usize::try_from(slot).map_err(|_| GraphicsError::InvalidHandle)?;
-        match entry.widget.as_deref() {
-            Some(WidgetResource::Chart { series, .. }) => series
+        match self
+            .side()
+            .entries
+            .get(&raw)
+            .and_then(Entry::inner_resource)
+        {
+            Some(Resource::Chart(chart)) => chart
+                .series
                 .get(index)
                 .copied()
                 .flatten()
@@ -552,97 +691,114 @@ impl GraphicsState {
         if new_bytes > MAX_WIDGET_OPTIONS_BYTES_PER_VM {
             return Err(GraphicsError::ResourceLimit);
         }
-        let index = usize::try_from(handle)
-            .ok()
-            .and_then(|id| id.checked_sub(1))
-            .ok_or(GraphicsError::InvalidHandle)?;
-        let entry = self
-            .entries
-            .get(index)
-            .ok_or(GraphicsError::InvalidHandle)?;
-        if entry.notification.live.get().is_null() || entry.kind != Kind::Line {
+        let (raw, pointer) = self.resolve_raw(handle)?;
+        if self.kind_of(raw, pointer)? != Kind::Line {
             return Err(GraphicsError::InvalidHandle);
         }
-        let previous = match entry.widget.as_deref() {
-            None => 0,
-            Some(WidgetResource::Line { charged_bytes, .. }) => usize::from(*charged_bytes),
-            Some(_) => return Err(GraphicsError::InvalidHandle),
-        };
-        let charge = previous.max(new_bytes);
-        let used = updated_widget_options_usage(self.widget_options_bytes, previous, new_bytes)?;
-        let pointer = if points.is_empty() {
+        let previous = self
+            .side()
+            .entries
+            .get(&raw)
+            .map_or(0, |entry| usize::from(entry.option_bytes));
+        let charge =
+            u16::try_from(previous.max(new_bytes)).map_err(|_| GraphicsError::ResourceLimit)?;
+        let used =
+            updated_widget_options_usage(self.side().widget_options_bytes, previous, new_bytes)?;
+        let points_pointer = if points.is_empty() {
             core::ptr::null()
         } else {
             points.as_ptr()
         };
-        let charge = u16::try_from(charge).map_err(|_| GraphicsError::ResourceLimit)?;
-        let entry = &mut self.entries[index];
-        let replacement = if points.is_empty() {
-            None
+        let side = self.side_mut();
+        let entry = side.entries.entry(raw).or_default();
+        let old = if points.is_empty() {
+            match entry.take_inner_resource() {
+                Some(Resource::Line(old)) => Some(old),
+                Some(other) => {
+                    entry.set_inner_resource(other);
+                    None
+                }
+                None => None,
+            }
         } else {
-            Some(points)
+            match entry.inner_resource_mut() {
+                Some(Resource::Line(existing)) => Some(core::mem::replace(existing, points)),
+                _ => {
+                    entry.set_inner_resource(Resource::Line(points));
+                    None
+                }
+            }
         };
-        let resource = entry.widget.get_or_insert_with(|| {
-            Box::new(WidgetResource::Line {
-                points: None,
-                charged_bytes: 0,
-            })
-        });
-        let WidgetResource::Line {
-            points,
-            charged_bytes,
-        } = &mut **resource
-        else {
-            return Err(GraphicsError::InvalidHandle);
-        };
-        let old = core::mem::replace(points, replacement);
-        *charged_bytes = charge;
-        self.widget_options_bytes = used;
-        Ok((pointer, old))
+        entry.option_bytes = charge;
+        side.widget_options_bytes = used;
+        Ok((points_pointer, old))
+    }
+
+    pub(crate) fn validate_canvas_pixels(&self, width: usize, height: usize) -> Result<()> {
+        let length = width
+            .checked_mul(height)
+            .ok_or(GraphicsError::InvalidValue)?;
+        if width == 0 || height == 0 || length > MAX_CANVAS_PIXELS {
+            return Err(GraphicsError::InvalidValue);
+        }
+        if self.side().canvas_pixels + length > MAX_CANVAS_PIXELS {
+            return Err(GraphicsError::ResourceLimit);
+        }
+        Ok(())
     }
 
     pub(crate) fn install_canvas(
         &mut self,
         handle: WasmUsize,
-        mut canvas: Vec<IndexedCanvas>,
+        mut canvas: IndexedCanvas,
     ) -> Result<()> {
-        let used: usize = self
-            .entries
-            .iter()
-            .filter_map(|entry| entry.canvas.as_ref())
-            .map(|canvas| canvas[0].pixels.len())
-            .sum();
-        if used + canvas[0].pixels.len() > MAX_CANVAS_PIXELS {
+        let length = canvas.len();
+        if self.side().canvas_pixels + length > MAX_CANVAS_PIXELS {
             return Err(GraphicsError::ResourceLimit);
         }
-        let entry = &mut self.entries[handle as usize - 1];
-        unsafe {
-            IndexedCanvas::attach(canvas.as_mut_ptr(), entry.notification.live.get())?;
+        let (raw, pointer) = self.resolve_raw(handle)?;
+        if self.kind_of(raw, pointer)? != Kind::IndexedCanvas {
+            return Err(GraphicsError::InvalidHandle);
         }
-        entry.canvas = Some(canvas);
+        unsafe {
+            canvas.attach(pointer)?;
+        }
+        let side = self.side_mut();
+        side.entries
+            .entry(raw)
+            .or_default()
+            .set_inner_resource(Resource::Canvas(canvas));
+        side.canvas_pixels += length;
         Ok(())
     }
 
     pub(crate) fn canvas_mut(&mut self, handle: WasmUsize) -> &mut IndexedCanvas {
-        &mut self.entries[handle as usize - 1]
-            .canvas
-            .as_mut()
-            .expect("canvas kind checked")[0]
+        let raw = self.resolve_raw(handle).expect("live canvas").0;
+        let entry = self
+            .side_mut()
+            .entries
+            .get_mut(&raw)
+            .expect("canvas entry present");
+        match entry.inner_resource_mut() {
+            Some(Resource::Canvas(canvas)) => canvas,
+            _ => panic!("canvas kind checked"),
+        }
     }
 }
 
 impl Drop for GraphicsState {
     fn drop(&mut self) {
-        let Some(manager) = self.manager else { return };
-        let _lock = manager.synchronous_lock();
-        for entry in &self.entries {
-            if entry.notification.root.is_none() {
-                let pointer = entry.notification.live.get();
-                if !pointer.is_null() {
-                    unsafe { lvgl::lv_obj_delete(pointer) };
-                }
+        let (Some(manager), Some(owner)) = (self.manager, self.owner) else {
+            return;
+        };
+        let _ = manager.with_lvgl_sync(|lv| {
+            lv.delete_owner(owner);
+            // Private window roots ensure structural deletion cannot leave a
+            // retained resource attached to an untracked shared object.
+            unsafe {
+                (*OWNERS.0.get())[owner.get() as usize] = core::ptr::null_mut();
             }
-        }
-        // Retained maps and notifications are freed only after native deletion.
+            Ok(())
+        });
     }
 }

@@ -72,7 +72,7 @@ pub fn run() -> wasm::Result<()> {
                 }
                 if !ui.dirty || ui.confirm_close == Some(ui.revision) {
                     unsafe {
-                        object_delete(u16::try_from(ui.window as usize).map_err(|_| -1)?)?;
+                        object_delete(u32::try_from(ui.window as usize).map_err(|_| -1)?)?;
                     }
                     return Ok(());
                 }

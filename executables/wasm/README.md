@@ -154,19 +154,30 @@ cargo test -p xila-wasm --features graphics,xila/graphics_rendering_xrgb8888 \
   and checked borrowed guest memory. They do not use Wasmi types or global
   graphics-manager lookups. The thin `graphics/wasmi.rs` adapter alone handles
   imports, exports, memory/store borrowing, and context capability checks.
-- Object handles are local to the VM. Deleted handles are never reused during
-  execution. Native deletion notifications invalidate handles and remove stale
-  queued event targets. Teardown deletes owned windows and their children using
-  the same context-provided manager and lock, including on traps.
-  Registration clears matching pre-existing queued targets to null before
-  issuing a new handle, so native address reuse cannot grant an old unknown
-  event a new capability. Event codes are preserved.
-- LVGL copies label strings synchronously. Button-map strings and the native
-  pointer table are copied into stable VM-owned storage because LVGL retains
-  them. Guest memory growth/mutation does not invalidate the map. A replacement
-  switches LVGL to the new map before releasing the old map.
-  Deleted widgets' maps are reclaimed after native deletion returns (or on the
-  next dispatch for external deletions); only small handle tombstones persist.
+- Object handles are 32-bit `lvgl-rust` generational handles (16-bit slot +
+  16-bit generation) bound to a per-VM `Owner` (`1..=Owner::MAX`, 15
+  concurrent graphical VMs by default; an excess VM fails graphics
+  initialization with `GraphicsError::ResourceLimit`). Slots are reused across
+  deletions with incremented generations, removing tombstones and the old
+  256-handle lifetime cap while rejecting stale or cross-VM handles. Guest
+  handle typedefs (`ObjectHandle`, `LvObject`) and `object_delete(u32)` are
+  widened to 32 bits while preserving all call IDs.
+- One global `set_free_observer` reclaims retained side-table entries
+  immediately when LVGL finishes object destruction (including cascading and
+  external deletes), without per-object `DELETE` callbacks or `Rc` wrappers.
+  VM teardown calls `delete_owner` under the graphics manager lock to delete
+  owned windows and their subtrees, including on traps. Registration clears
+  matching pre-existing queued targets to null before issuing a new handle, so
+  native address reuse cannot grant an old unknown event a new capability.
+  Event codes are preserved.
+- Text setters validate NUL termination (and UTF-8 where required) directly in
+  guest memory and pass pointers to LVGL's synchronous copying setters with
+  zero host allocations. Button maps (one packed allocation for pointer table
+  plus strings), grid tracks, calendar highlights, line points, chart series,
+  indexed canvases (one packed allocation), and alias kinds live in a sparse
+  per-VM side table keyed by raw handle; plain widgets add zero host
+  side-table entries. A map or grid replacement switches LVGL to the new
+  buffer before releasing the old one.
 
 Enable the optional `graphics` feature for host bindings. Select the Xila
 rendering feature appropriate to the platform (e.g.
@@ -203,12 +214,14 @@ unsupported. Chart supports bounded series slots and copied values; Line accepts
 bounded points copied into host-owned memory because LVGL retains the point
 array pointer. List supports copied text sections/buttons with safe child
 handles, and Tileview supports bounded tile creation and active-tile navigation.
-List text is UTF-8 validated and copied before native calls; the guest never
-passes icon, tile, or series pointers to LVGL.
+List text is UTF-8 validated in guest memory and passed to LVGL's copying
+calls without a host allocation; the guest never passes icon, tile, or series
+pointers to LVGL.
 The shadcn-themed slice adds Badge and Card helpers, Button variants, and Input
 error states by calling the shared `lvgl_theme_shadcn` theme APIs.
 
-- 256 issued object handles per execution, including subsequently deleted ones.
+- Up to 15 concurrent live graphical VMs (`lvgl_rust::Owner::MAX`); object slots
+  are dynamically grown in non-moving doubling chunks and reused after deletion.
 - 64 map entries including the sentinel; 1024 bytes per NUL-terminated string.
 - 8192 retained map-string bytes per widget, including the native sentinel.
 - 1024 option-string bytes/64 entries per Dropdown or Roller, with an 8192-byte

@@ -8,7 +8,7 @@ use super::{
     objects::Kind,
 };
 use crate::host::translation::{GuestMemory, GuestPointer, GuestSlice, WasmUsize};
-use alloc::{ffi::CString, vec::Vec};
+use alloc::vec::Vec;
 use core::{ffi::CStr, ptr::NonNull};
 use xila::graphics::{Color, Window, lvgl};
 
@@ -191,11 +191,10 @@ pub(super) fn dispatch_chart_set_values(
             pointer,
             WasmUsize::try_from(count).map_err(|_| GraphicsError::InvalidMemory)?,
         ))
-        .ok_or(GraphicsError::InvalidMemory)?
-        .collect::<Vec<_>>();
-    for (index, value) in values.iter().enumerate() {
+        .ok_or(GraphicsError::InvalidMemory)?;
+    for (index, value) in values.enumerate() {
         let index = u32::try_from(index).map_err(|_| GraphicsError::InvalidValue)?;
-        unsafe { lvgl::lv_chart_set_series_value_by_id(chart, series.as_ptr(), index, *value) };
+        unsafe { lvgl::lv_chart_set_series_value_by_id(chart, series.as_ptr(), index, value) };
     }
     Ok(())
 }
@@ -269,10 +268,10 @@ pub(super) fn dispatch_list_add_text(
     if unsafe { lvgl::lv_obj_get_child_count(list) } >= 64 {
         return Err(GraphicsError::ResourceLimit);
     }
-    let text = read_utf8_c_string(memory, text_pointer)?;
-    let text_bytes = text.len() + 1;
+    let text = read_c_string(memory, text_pointer)?;
+    text.to_str().map_err(|_| GraphicsError::InvalidValue)?;
+    let text_bytes = text.to_bytes_with_nul().len();
     state.validate_new_widget_options_size(text_bytes)?;
-    let text = CString::new(text.as_bytes()).map_err(|_| GraphicsError::InvalidValue)?;
     state.ensure_capacity()?;
     let pointer = unsafe { lvgl::lv_list_add_text(list, text.as_ptr()) };
     let handle = state.insert(pointer, Kind::ListText, Some(list_handle))?;
@@ -293,10 +292,10 @@ pub(super) fn dispatch_list_add_text_button(
     if unsafe { lvgl::lv_obj_get_child_count(list) } >= 64 {
         return Err(GraphicsError::ResourceLimit);
     }
-    let text = read_utf8_c_string(memory, text_pointer)?;
-    let text_bytes = text.len() + 1;
+    let text = read_c_string(memory, text_pointer)?;
+    text.to_str().map_err(|_| GraphicsError::InvalidValue)?;
+    let text_bytes = text.to_bytes_with_nul().len();
     state.validate_new_widget_options_size(text_bytes)?;
-    let text = CString::new(text.as_bytes()).map_err(|_| GraphicsError::InvalidValue)?;
     state.ensure_capacity()?;
     let pointer = unsafe { lvgl::lv_list_add_button(list, core::ptr::null(), text.as_ptr()) };
     let handle = state.insert(pointer, Kind::ListButton, Some(list_handle))?;
@@ -318,10 +317,10 @@ pub(super) fn dispatch_list_set_button_text(
     if unsafe { lvgl::lv_obj_get_parent(button) } != list {
         return Err(GraphicsError::InvalidHandle);
     }
-    let text = read_utf8_c_string(memory, text_pointer)?;
-    let text_bytes = text.len() + 1;
+    let text = read_c_string(memory, text_pointer)?;
+    text.to_str().map_err(|_| GraphicsError::InvalidValue)?;
+    let text_bytes = text.to_bytes_with_nul().len();
     state.validate_widget_options_size(button_handle, text_bytes)?;
-    let text = CString::new(text.as_bytes()).map_err(|_| GraphicsError::InvalidValue)?;
     unsafe { lvgl::lv_list_set_button_text(list, button, text.as_ptr()) };
     state.commit_widget_options_size(button_handle, text_bytes)
 }
@@ -401,10 +400,10 @@ pub(super) fn dispatch_theme_variant(
     if variant > lvgl::lv_theme_shadcn_variant_t_LV_THEME_SHADCN_VARIANT_DESTRUCTIVE {
         return Err(GraphicsError::InvalidValue);
     }
-    if !matches!(state.kind(handle)?, Kind::Button | Kind::Badge) {
+    let (object, kind) = state.object_with_kind(handle)?;
+    if !matches!(kind, Kind::Button | Kind::Badge) {
         return Err(GraphicsError::InvalidHandle);
     }
-    let object = state.object(handle, None)?;
     unsafe { lvgl::lv_theme_shadcn_set_variant(object, variant) };
     Ok(())
 }
@@ -418,13 +417,13 @@ pub(super) fn dispatch_theme_error(
     if error > 1 {
         return Err(GraphicsError::InvalidValue);
     }
+    let (object, kind) = state.object_with_kind(handle)?;
     if !matches!(
-        state.kind(handle)?,
+        kind,
         Kind::Textarea | Kind::Spinbox | Kind::Dropdown | Kind::Roller
     ) {
         return Err(GraphicsError::InvalidHandle);
     }
-    let object = state.object(handle, None)?;
     unsafe { lvgl::lv_theme_shadcn_set_error(object, error != 0) };
     Ok(())
 }
@@ -440,17 +439,17 @@ pub(super) fn dispatch_badge_create(
         return Err(GraphicsError::InvalidValue);
     }
     let parent = state.object(parent_handle, None)?;
-    let text = read_utf8_c_string(memory, text_pointer)?;
-    let text_bytes = text.len() + 1;
+    let text = read_c_string(memory, text_pointer)?;
+    text.to_str().map_err(|_| GraphicsError::InvalidValue)?;
+    let text_bytes = text.to_bytes_with_nul().len();
     state.validate_new_widget_options_size(text_bytes)?;
-    let text = CString::new(text.as_bytes()).map_err(|_| GraphicsError::InvalidValue)?;
     state.ensure_capacity()?;
     let badge = unsafe { lvgl::lv_label_create(parent) };
+    let handle = state.insert(badge, Kind::Badge, Some(parent_handle))?;
     unsafe {
         lvgl::lv_label_set_text(badge, text.as_ptr());
         lvgl::lv_theme_shadcn_set_variant(badge, variant);
     }
-    let handle = state.insert(badge, Kind::Badge, Some(parent_handle))?;
     state.commit_widget_options_size(handle, text_bytes)?;
     memory
         .write(GuestPointer::new(call.result), handle)
@@ -467,8 +466,8 @@ pub(super) fn dispatch_card_create(
     let parent = state.object(parent_handle, None)?;
     state.ensure_capacity()?;
     let card = unsafe { lvgl::lv_obj_create(parent) };
-    unsafe { xila::graphics::theme::set_surface(card, xila::graphics::theme::Surface::Card) };
     let handle = state.insert(card, Kind::Card, Some(parent_handle))?;
+    unsafe { xila::graphics::theme::set_surface(card, xila::graphics::theme::Surface::Card) };
     memory
         .write(GuestPointer::new(call.result), handle)
         .expect("validated result");
@@ -550,8 +549,23 @@ pub fn dispatch(
                 .ok_or(GraphicsError::InvalidMemory)?;
         }
     }
-    let _lock = manager.synchronous_lock();
-    state.reap_deleted_maps();
+    manager
+        .with_lvgl_sync(|lv| {
+            Ok(state
+                .initialize(lv)
+                .and_then(|()| dispatch_locked(state, memory, call, function)))
+        })
+        .map_err(|_| GraphicsError::NativeFailure)?
+}
+
+#[allow(clippy::useless_conversion)]
+fn dispatch_locked(
+    state: &mut GraphicsState,
+    memory: &mut GuestMemory<'_>,
+    call: GraphicsCall,
+    function: Function,
+) -> Result<()> {
+    let manager = state.manager.ok_or(GraphicsError::Unavailable)?;
     if super::dispatch_generated(state, memory, &call, function)? {
         return Ok(());
     }
@@ -566,9 +580,7 @@ pub fn dispatch(
                 2 => xila::graphics::FilePickerMode::Directory,
                 _ => return Err(GraphicsError::InvalidValue),
             };
-            let initial = read_c_string(memory, c)?
-                .to_str()
-                .map_err(|_| GraphicsError::InvalidValue)?;
+            let initial = read_utf8_c_string(memory, c)?;
             let (vfs, task) = state.file_system.ok_or(GraphicsError::Unavailable)?;
             let picker =
                 unsafe { xila::graphics::FilePicker::new(parent, vfs, task, mode, initial) }
@@ -591,9 +603,7 @@ pub fn dispatch(
                 2 => xila::graphics::FilePickerMode::Directory,
                 _ => return Err(GraphicsError::InvalidValue),
             };
-            let initial = read_c_string(memory, c)?
-                .to_str()
-                .map_err(|_| GraphicsError::InvalidValue)?;
+            let initial = read_utf8_c_string(memory, c)?;
             unsafe { (*picker).reset(mode, initial) }.map_err(|error| match error {
                 xila::graphics::Error::InvalidParameter => GraphicsError::InvalidValue,
                 _ => GraphicsError::NativeFailure,
@@ -882,13 +892,13 @@ pub fn dispatch(
             unsafe { lvgl::lv_spinbox_decrement(spinbox) };
         }
         Function::RangeSetRange => {
-            let object = state.object(a, None)?;
+            let (object, kind) = state.object_with_kind(a)?;
             let minimum = signed_word(b)?;
             let maximum = signed_word(c)?;
             if minimum >= maximum || minimum < -MAX_RANGE_VALUE || maximum > MAX_RANGE_VALUE {
                 return Err(GraphicsError::InvalidValue);
             }
-            match state.kind(a)? {
+            match kind {
                 Kind::Arc => unsafe { lvgl::lv_arc_set_range(object, minimum, maximum) },
                 Kind::Bar => unsafe { lvgl::lv_bar_set_range(object, minimum, maximum) },
                 Kind::Slider => unsafe { lvgl::lv_slider_set_range(object, minimum, maximum) },
@@ -896,12 +906,12 @@ pub fn dispatch(
             }
         }
         Function::RangeSetValue => {
-            let object = state.object(a, None)?;
+            let (object, kind) = state.object_with_kind(a)?;
             let value = signed_word(b)?;
             if !(-MAX_RANGE_VALUE..=MAX_RANGE_VALUE).contains(&value) || c > 1 {
                 return Err(GraphicsError::InvalidValue);
             }
-            match state.kind(a)? {
+            match kind {
                 Kind::Arc => {
                     if c != 0 {
                         return Err(GraphicsError::InvalidValue);
@@ -933,8 +943,8 @@ pub fn dispatch(
             }
         }
         Function::RangeGetValue => {
-            let object = state.object(a, None)?;
-            let value = match state.kind(a)? {
+            let (object, kind) = state.object_with_kind(a)?;
+            let value = match kind {
                 Kind::Arc => unsafe { lvgl::lv_arc_get_value(object) },
                 Kind::Bar => unsafe { lvgl::lv_bar_get_value(object) },
                 Kind::Slider => unsafe { lvgl::lv_slider_get_value(object) },
@@ -945,8 +955,8 @@ pub fn dispatch(
                 .expect("validated result");
         }
         Function::RangeGetStartValue => {
-            let object = state.object(a, None)?;
-            let value = match state.kind(a)? {
+            let (object, kind) = state.object_with_kind(a)?;
+            let value = match kind {
                 Kind::Bar => unsafe { lvgl::lv_bar_get_start_value(object) },
                 Kind::Slider => unsafe { lvgl::lv_slider_get_left_value(object) },
                 _ => return Err(GraphicsError::InvalidHandle),
@@ -956,11 +966,11 @@ pub fn dispatch(
                 .expect("validated result");
         }
         Function::RangeSetMode => {
-            let object = state.object(a, None)?;
+            let (object, kind) = state.object_with_kind(a)?;
             if b > 2 {
                 return Err(GraphicsError::InvalidValue);
             }
-            match state.kind(a)? {
+            match kind {
                 Kind::Arc => unsafe { lvgl::lv_arc_set_mode(object, b as _) },
                 Kind::Bar => unsafe { lvgl::lv_bar_set_mode(object, b as _) },
                 Kind::Slider => unsafe { lvgl::lv_slider_set_mode(object, b as _) },
@@ -968,11 +978,11 @@ pub fn dispatch(
             }
         }
         Function::RangeSetOrientation => {
-            let object = state.object(a, None)?;
+            let (object, kind) = state.object_with_kind(a)?;
             if b > 2 {
                 return Err(GraphicsError::InvalidValue);
             }
-            match state.kind(a)? {
+            match kind {
                 Kind::Bar => unsafe { lvgl::lv_bar_set_orientation(object, b as _) },
                 Kind::Slider => unsafe { lvgl::lv_slider_set_orientation(object, b as _) },
                 Kind::Switch => unsafe { lvgl::lv_switch_set_orientation(object, b as _) },
@@ -1340,7 +1350,6 @@ pub fn dispatch(
         }
         Function::ObjectDelete => {
             unsafe { lvgl::lv_obj_delete(state.object(a, None)?) };
-            state.reap_deleted_maps();
         }
         Function::WindowSetIcon => {
             let pointer = state.object(a, Some(Kind::Window))?;
@@ -1395,7 +1404,7 @@ pub fn dispatch(
             let (code, target) = event.map_or((0, 0), |event| {
                 (
                     super::events::guest_code(event.code),
-                    state.handle_for(event.target),
+                    state.event_handle_for(pointer, event.target),
                 )
             });
             memory
@@ -1410,6 +1419,7 @@ pub fn dispatch(
             let parent = state.object(a, None)?;
             let width = u16::try_from(b).map_err(|_| GraphicsError::InvalidValue)?;
             let height = u16::try_from(c).map_err(|_| GraphicsError::InvalidValue)?;
+            state.validate_canvas_pixels(width as usize, height as usize)?;
             let canvas = super::canvas::IndexedCanvas::new(width as usize, height as usize)?;
             let object = unsafe { lvgl::lv_obj_create(parent) };
             let handle = state.insert(object, Kind::IndexedCanvas, Some(a))?;
@@ -1417,7 +1427,6 @@ pub fn dispatch(
                 unsafe {
                     lvgl::lv_obj_delete(object);
                 }
-                state.reap_deleted_maps();
                 return Err(error);
             }
             memory

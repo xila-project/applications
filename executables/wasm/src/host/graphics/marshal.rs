@@ -51,11 +51,9 @@ pub fn validate_style_selector(selector: u32) -> Result<()> {
 
 /// Stable host-owned LVGL grid descriptors. LVGL retains both pointers until
 /// the grid layout is replaced or its object is deleted.
+/// Layout: `[columns_len, columns..., rows...]`.
 #[derive(Debug, PartialEq, Eq)]
-pub struct GridTracks {
-    tracks: Vec<i32>,
-    columns_len: usize,
-}
+pub struct GridTracks(Vec<i32>);
 
 impl GridTracks {
     pub fn decode(
@@ -99,37 +97,39 @@ impl GridTracks {
 
         let (columns, columns_len) = scan_axis(memory, columns, template_last, content)?;
         let (rows, rows_len) = scan_axis(memory, rows, template_last, content)?;
-        let mut tracks = Vec::with_capacity(columns_len + rows_len);
+        let mut tracks = Vec::with_capacity(1 + columns_len + rows_len);
+        tracks.push(columns_len as i32);
         tracks.extend_from_slice(&columns[..columns_len]);
         tracks.extend_from_slice(&rows[..rows_len]);
-        Ok(Self {
-            tracks,
-            columns_len,
-        })
+        Ok(Self(tracks))
+    }
+
+    fn columns_len(&self) -> usize {
+        self.0[0] as usize
     }
 
     #[cfg(test)]
     #[allow(dead_code)]
     pub fn columns(&self) -> &[i32] {
-        &self.tracks[..self.columns_len]
+        &self.0[1..1 + self.columns_len()]
     }
 
     #[cfg(test)]
     #[allow(dead_code)]
     pub fn rows(&self) -> &[i32] {
-        &self.tracks[self.columns_len..]
+        &self.0[1 + self.columns_len()..]
     }
 
     pub fn track_count(&self) -> usize {
-        self.tracks.len()
+        self.0.len() - 1
     }
 
     pub fn columns_ptr(&self) -> *const i32 {
-        self.tracks.as_ptr()
+        self.0.as_ptr().wrapping_add(1)
     }
 
     pub fn rows_ptr(&self) -> *const i32 {
-        self.tracks.as_ptr().wrapping_add(self.columns_len)
+        self.0.as_ptr().wrapping_add(1 + self.columns_len())
     }
 }
 
@@ -191,13 +191,10 @@ fn read_c_string_with_limit<'a>(
     Err(GraphicsError::ResourceLimit)
 }
 
-/// LVGL retains this table and its strings. Both allocations have stable addresses;
-/// moving the wrapper or growing/mutating guest memory cannot invalidate them.
+/// One aligned allocation: native pointer array followed by NUL-terminated
+/// strings. Moving the Vec owner never moves or retags its allocation.
 pub struct ButtonMap {
-    // Vec owns allocations through raw pointers: unlike Box, moving the owner
-    // does not uniquely retag the pointee and invalidate these cached pointers.
-    _strings: Vec<u8>,
-    pointers: Vec<*const c_char>,
+    storage: Vec<usize>,
 }
 
 impl ButtonMap {
@@ -235,25 +232,30 @@ impl ButtonMap {
         }
 
         // All guest input is validated before allocating retained native storage.
-        let mut strings = Vec::with_capacity(total);
-        for range in &ranges[..count] {
-            strings.extend_from_slice(memory.bytes(*range).expect("validated map range"));
+        let pointer_bytes = (count + 1) * core::mem::size_of::<usize>();
+        let words = (pointer_bytes + total).div_ceil(core::mem::size_of::<usize>());
+        let mut storage = alloc::vec![0usize; words];
+        let base = storage.as_mut_ptr().cast::<u8>();
+        let pointers = base.cast::<*const c_char>();
+        let mut start = pointer_bytes;
+        for (index, range) in ranges[..count].iter().enumerate() {
+            let text = memory.bytes(*range).expect("validated map range");
+            // SAFETY: allocation includes the pointer prefix and all validated
+            // strings; regions do not overlap and the prefix is pointer-aligned.
+            unsafe {
+                pointers.add(index).write(base.add(start).cast());
+                core::ptr::copy_nonoverlapping(text.as_ptr(), base.add(start), text.len());
+            }
+            start += text.len();
         }
-        strings.push(0);
-        let mut pointers = Vec::with_capacity(count + 1);
-        let mut start = 0;
-        for range in &ranges[..count] {
-            pointers.push(strings[start..].as_ptr().cast());
-            start += range.size as usize;
+        // The zero-filled final byte is the native empty-string sentinel.
+        unsafe {
+            pointers.add(count).write(base.add(start).cast());
         }
-        pointers.push(strings[start..].as_ptr().cast());
-        Ok(Self {
-            _strings: strings,
-            pointers,
-        })
+        Ok(Self { storage })
     }
 
     pub fn as_ptr(&self) -> *const *const c_char {
-        self.pointers.as_ptr()
+        self.storage.as_ptr().cast()
     }
 }

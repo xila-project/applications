@@ -2042,7 +2042,7 @@ async fn checked_graphics_core_owns_objects_maps_and_events() {
         1,
     )
     .unwrap();
-    assert!(handle(&memory) > matrix); // Deleted IDs are never reused.
+    assert_ne!(handle(&memory), matrix); // Handles are opaque and generational.
     {
         let _lock = manager.synchronous_lock();
         unsafe {
@@ -2082,7 +2082,8 @@ async fn checked_graphics_core_owns_objects_maps_and_events() {
         ),
         Err(GraphicsError::InvalidHandle)
     );
-    for _ in 5..256 {
+    // Repeated creation/deletion no longer consumes a lifetime issuance limit.
+    for _ in 0..600 {
         call(
             &mut state,
             &mut memory,
@@ -2091,17 +2092,26 @@ async fn checked_graphics_core_owns_objects_maps_and_events() {
             1,
         )
         .unwrap();
-    }
-    assert_eq!(
+        let object = handle(&memory);
         call(
             &mut state,
             &mut memory,
-            Function::ObjectCreate,
-            &[window],
-            1
-        ),
-        Err(GraphicsError::ResourceLimit)
-    );
+            Function::ObjectDelete,
+            &[object],
+            0,
+        )
+        .unwrap();
+        assert_eq!(
+            call(
+                &mut state,
+                &mut memory,
+                Function::ObjectDelete,
+                &[object],
+                0
+            ),
+            Err(GraphicsError::InvalidHandle)
+        );
+    }
     drop(state);
     assert_eq!(manager.get_window_count().await.unwrap(), 0);
     // Unknown native targets have no registry DELETE callback. Reusing their

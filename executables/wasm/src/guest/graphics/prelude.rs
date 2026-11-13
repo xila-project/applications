@@ -253,8 +253,8 @@ pub enum StyleStateCmp {
 }
 
 pub type StyleSelector = u32;
-pub type ObjectHandle = u16;
-pub type LvObject = u16;
+pub type ObjectHandle = u32;
+pub type LvObject = u32;
 pub type Part = u32;
 
 #[repr(C)]
