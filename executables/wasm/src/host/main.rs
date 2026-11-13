@@ -6,7 +6,7 @@ use alloc::{
 };
 use core::fmt::Write;
 use getargs_derive::GetArgs;
-use wasmi::{Caller, CompilationMode, Config, Engine, Linker, Module, Store};
+use wasmi::{Caller, Engine, Linker, Module, Store};
 use xila::{
     executable::{ExecutableContext, Standard},
     file_system::{Kind, Path},
@@ -256,14 +256,7 @@ async fn main_inner(
             .await?;
     }
 
-    let mut configuration = Config::default();
-    configuration.consume_fuel(true);
-    // Wasmi 2.0.0 cannot resume fuel exhaustion during lazy callee translation
-    // (https://github.com/wasmi-labs/wasmi/pull/2032). Compile
-    // before execution so even small scheduling slices can make progress.
-    configuration.compilation_mode(CompilationMode::Eager);
-
-    let engine = Engine::new(&configuration);
+    let engine = Engine::new(&super::engine::configuration());
 
     let buffer = read_file(path, context).await?;
 
@@ -285,6 +278,7 @@ async fn main_inner(
             graphics: super::graphics::GraphicsState::new(context.graphics_manager),
             wasi: WasiContext {
                 files: alloc::collections::BTreeMap::new(),
+                rights: Default::default(),
                 next_fd: 3,
                 arguments: {
                     let mut arguments = alloc::vec![path.to_string()];
@@ -304,7 +298,7 @@ async fn main_inner(
                     })
                     .collect(),
                 task,
-                prestats: Vec::new(),
+                prestats: Default::default(),
                 exit_code: None,
             },
         },
@@ -340,9 +334,12 @@ async fn main_inner(
                 }),
             );
             data.wasi.next_fd = 4;
-            data.wasi.prestats.push(Prestat {
-                name: b"/".to_vec(),
-            });
+            data.wasi.prestats.insert(
+                3,
+                Prestat {
+                    name: b"/".to_vec(),
+                },
+            );
         }
     }
 

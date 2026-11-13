@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 use wasmi::Caller;
-use xila::file_system::Position;
+use xila::file_system::{Position, StateFlags};
 
 use crate::{
     define_wasi_module,
@@ -11,6 +11,7 @@ use crate::{
             Error,
             context::{FileSystemItem, FileVariant},
             error::{WasiResult, vfs_error, wrap_function},
+            rights::right,
             types::{Fdstat, Filestat, Prestat as PrestatAbi, PrestatDir},
         },
     },
@@ -41,6 +42,7 @@ define_wasi_module! {
 
     fn fd_read(caller: Caller<GlobalStore>, fd: i32, iovs: WasmUsize, iovs_len: WasmUsize, nread_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
+            caller.data().wasi.require_rights(fd, right::FD_READ)?;
             let mut caller = caller;
             let memory = get_memory(&caller).ok_or(Error::Fault)?;
             let (vectors, nread_offset) = {
@@ -84,6 +86,7 @@ define_wasi_module! {
 
     fn fd_write(caller: Caller<GlobalStore>, fd: i32, iovs: WasmUsize, iovs_len: WasmUsize, nwritten_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
+            caller.data().wasi.require_rights(fd, right::FD_WRITE)?;
             let mut caller = caller;
             let memory = get_memory(&caller).ok_or(Error::Fault)?;
             let (buffers, nwritten_offset) = {
@@ -177,6 +180,8 @@ define_wasi_module! {
         wrap_function!({
             let mut caller = caller;
             let item = caller.data_mut().wasi.pop_file_system_item(fd as u32).ok_or(Error::Badf)?;
+            caller.data_mut().wasi.rights.remove(&(fd as u32));
+            caller.data_mut().wasi.prestats.remove(&(fd as u32));
             let vfs = caller.data().context.virtual_file_system;
             match item {
                 FileSystemItem::File(file) | FileSystemItem::StandardInput(file) | FileSystemItem::StandardOutput(file) | FileSystemItem::StandardError(file) => file.file.close(vfs).map_err(vfs_error)?,
@@ -188,6 +193,9 @@ define_wasi_module! {
 
     fn fd_seek(caller: Caller<GlobalStore>, fd: i32, offset: i64, whence: i32, newoffset_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
+            // Learning the current position (`lseek(fd, 0, SEEK_CUR)`) needs only FD_TELL.
+            let tell_only = offset == 0 && whence == 1;
+            caller.data().wasi.require_rights(fd, if tell_only { right::FD_TELL } else { right::FD_SEEK })?;
             let mut caller = caller;
             let memory = get_memory(&caller).ok_or(Error::Fault)?;
             let position = match whence { 0 if offset >= 0 => Position::Start(offset as u64), 0 => Err(Error::Inval)?, 1 => Position::Current(offset), 2 => Position::End(offset), _ => Err(Error::Inval)? };
@@ -206,15 +214,23 @@ define_wasi_module! {
         wrap_function!({
             let mut caller = caller;
             let memory = get_memory(&caller).ok_or(Error::Fault)?;
-            let filetype = caller.data_mut().wasi.get_file_system_item(fd as u32).ok_or(Error::Badf)?.file_type();
+            let (rights_base, rights_inheriting) = caller.data().wasi.rights_of(fd as u32);
+            let item = caller.data_mut().wasi.get_file_system_item(fd as u32).ok_or(Error::Badf)?;
+            let filetype = item.file_type();
+            let state = match item.as_synchronous_file_mut() {
+                Some(file) => file.get_state().map_err(vfs_error)?,
+                None => StateFlags::empty(),
+            };
+            let flags = (if state.contains(StateFlags::Append) { 1 } else { 0 }) | (if state.contains(StateFlags::NonBlocking) { 4 } else { 0 });
             borrow_memory(&memory, &mut caller).write(GuestPointer::new(stat_ptr),
-                Fdstat { filetype, flags: 0, rights_base: u64::MAX, rights_inheriting: u64::MAX }).ok_or(Error::Fault)?;
+                Fdstat { filetype, flags, rights_base, rights_inheriting }).ok_or(Error::Fault)?;
             Ok(())
         })
     }
 
     fn fd_filestat_get(caller: Caller<GlobalStore>, fd: i32, stat_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
+            caller.data().wasi.require_rights(fd, right::FD_FILESTAT_GET)?;
             let mut caller = caller;
             let memory = get_memory(&caller).ok_or(Error::Fault)?;
             let (filetype, metadata) = {
@@ -235,7 +251,7 @@ define_wasi_module! {
     fn fd_prestat_get(caller: Caller<GlobalStore>, fd: i32, prestat_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
             let mut caller = caller;
-            let name_len = u32::try_from(caller.data().wasi.prestats.get(fd.saturating_sub(3) as usize).filter(|_| fd >= 3).ok_or(Error::Badf)?.name.len()).map_err(|_| Error::Overflow)?;
+            let name_len = u32::try_from(caller.data().wasi.prestats.get(&(fd as u32)).ok_or(Error::Badf)?.name.len()).map_err(|_| Error::Overflow)?;
             let memory = get_memory(&caller).ok_or(Error::Fault)?;
             borrow_memory(&memory, &mut caller).write(GuestPointer::new(prestat_ptr),
                 PrestatAbi { tag: 0, dir: PrestatDir { pr_name_len: name_len } }).ok_or(Error::Fault)?;
@@ -245,7 +261,7 @@ define_wasi_module! {
 
     fn fd_prestat_dir_name(caller: Caller<GlobalStore>, fd: i32, path_ptr: WasmUsize, path_len: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
-            let name = caller.data().wasi.prestats.get(fd.saturating_sub(3) as usize).filter(|_| fd >= 3).ok_or(Error::Badf)?.name.clone();
+            let name = caller.data().wasi.prestats.get(&(fd as u32)).ok_or(Error::Badf)?.name.clone();
             if name.len() > path_len as usize { return Err(Error::Nametoolong.into()); }
             let mut caller = caller;
             let memory = get_memory(&caller).ok_or(Error::Fault)?;
@@ -397,11 +413,12 @@ mod tests {
         let module = Module::new(&engine, &wasm[..]).unwrap();
         let mut wasi = crate::host::wasi::WasiContext {
             files: Default::default(),
+            rights: Default::default(),
             next_fd: 7,
             arguments: vec![],
             environment: vec![],
             task,
-            prestats: vec![],
+            prestats: Default::default(),
             exit_code: None,
         };
         wasi.files
@@ -450,7 +467,7 @@ mod tests {
         assert_eq!(
             run.call(&mut store, (6, CONTROL.raw() as i32, 32, 4, 48, 4))
                 .unwrap(),
-            29
+            8
         );
         assert_eq!(CONTROL_CALLS.load(Ordering::SeqCst), 1);
         assert_eq!(&memory.data(&store)[48..52], &43u32.to_le_bytes());
@@ -511,7 +528,7 @@ mod tests {
         assert_eq!(
             run.call(&mut store, (4, unsupported, 32, 4, 48, 4))
                 .unwrap(),
-            29
+            58
         );
         assert_eq!(CONTROL_CALLS.load(Ordering::SeqCst), 2);
         assert_eq!(&memory.data(&store)[48..52], &43u32.to_le_bytes());

@@ -7,10 +7,71 @@ event variants into that contract. Graphics call IDs and state/style definitions
 still follow the bundled LVGL API, so changes to those interfaces may require
 rebuilding the host and guest applications together.
 
-Wasmi 2 runs with default features disabled for `no_std` hosts. Both the runtime
-and translation test harness explicitly enable validation, memory64 support,
-and automatic dispatch, which falls back to portable dispatch when required by
-the target or optimization level.
+Wasmi 2 runs with default features disabled for `no_std` hosts. The runtime and
+the translation test harness enable validation and automatic dispatch, which
+falls back to portable dispatch when required by the target or optimization
+level. Wasmi's memory64 support is only built for the `memory_64` configuration
+(`memory_64 = ["wasmi?/memory64"]`); the translation test harness enables it
+for both widths because it exercises both.
+
+## WebAssembly features
+
+`src/host/engine.rs` writes the validated feature set out explicitly, so a
+Wasmi upgrade cannot change what guests may use. `rustc` (1.82+) and
+`clang` (`--target=wasm32-wasip1`, default CPU) both emit exactly bulk memory,
+multi-value, mutable globals, non-trapping float-to-int, reference types and
+sign extension for this target; the guests of this repository add no
+`target-feature` flags.
+
+| Proposal | State | Reason |
+|---|---|---|
+| Mutable globals, sign extension, non-trapping float-to-int, multi-value, bulk memory, reference types | enabled | Default output of the Rust and C toolchains |
+| Tail calls, extended constants | enabled | No cost; opt-in for guest toolchains (`+tail-call`, `-mcpu=lime1`) |
+| memory64 | `memory_64` builds only | The host ABI has one address width; other builds reject memory64 modules at validation |
+| Multi-memory | disabled | The host ABI and pointer translation address the single exported `memory` |
+| SIMD, relaxed SIMD | disabled (not built) | No guest needs it; enabling Wasmi's `simd` feature grows the host by about 420 KiB (+29 %) |
+| Custom page sizes, wide arithmetic | disabled | No toolchain emits them |
+| Threads and atomics | unsupported by Wasmi | |
+
+Disabling Wasmi's memory64 support in `memory_32` builds saves about 2 KiB.
+
+## WASI Preview 1
+
+All 46 `wasi_snapshot_preview1` functions are provided (plus the Xila-specific
+`fd_control`), so any guest that links against the Preview 1 libc loads. Every
+path operation resolves beneath its preopened directory using Core's
+`*_beneath` VFS operations: `..` and absolute symlink targets are
+`ENOTCAPABLE`, and a directory opened by a guest keeps its preopen as its
+confinement root.
+
+| Import | Behavior |
+|---|---|
+| `fd_pread`, `fd_pwrite` | Read or write at an offset without using or moving the cursor; guest buffers are used directly (no allocation) and validated before any byte moves; a failure after progress reports the partial count. Standard streams are `ESPIPE`, directories `EISDIR`, wrong access mode `EBADF` |
+| `fd_tell` | Current cursor; `ESPIPE` for standard streams |
+| `fd_sync`, `fd_datasync` | Flush the file (a directory has nothing to flush) |
+| `fd_advise` | Validates the advice (`EINVAL` outside 0–5) and succeeds: there is no page cache |
+| `fd_allocate` | Like `posix_fallocate`: grows to `offset + len`, never shrinks, `len == 0` is `EINVAL`, overflow `EFBIG`, read-only `EBADF` |
+| `fd_filestat_set_size` | Truncates or zero-extends a writable file |
+| `fd_filestat_set_times`, `path_filestat_set_times` | `ATIM`/`MTIM`/`*_NOW` with the Preview 1 invalid combinations as `EINVAL`; `lookupflags` `SYMLINK_FOLLOW`; Xila stores whole seconds, so nanoseconds are truncated; `*_NOW` uses the realtime clock |
+| `fd_fdstat_set_flags` | Replaces the status flags: append and nonblocking are honored, `DSYNC`/`RSYNC`/`SYNC` are `ENOTSUP`, unknown bits `EINVAL` |
+| `fd_fdstat_set_rights` | See Rights below |
+| `fd_renumber` | Atomically moves `fd` onto `to` and closes the old `to`. Both must be open (`EBADF`): the environment offers no `dup2`. Rights, the preopen name and the confinement root move with the descriptor |
+| `path_rename` | `rename_beneath` across two directory descriptors; renaming the base directory is `EBUSY`; a directory beneath itself is `EINVAL`; across mounts `EXDEV` |
+| `path_remove_directory` | Only empty directories (`ENOTEMPTY`, `ENOTDIR` for files and links, `EINVAL` for `.`) |
+| `path_link` | Hard links: neither the VFS backends nor LittleFS have them, so after confinement and existence checks a valid request is `ENOTSUP` (a directory source is `EPERM`, an existing target `EEXIST`, other mounts `EXDEV`) |
+| `proc_raise` | Default dispositions, since Preview 1 cannot install handlers: `chld`, `cont`, `urg`, `winch` return; `stop`/`tstp`/`ttin`/`ttou` are `ENOTSUP` (no job control); every other signal ends the guest like `proc_exit(128 + signal)`; numbers outside 1–30 are `EINVAL` |
+| `sock_accept`, `sock_recv`, `sock_send`, `sock_shutdown` | Preview 1 only operates on pre-opened sockets and Xila pre-opens none: `EBADF` for a closed descriptor, `ENOTSOCK` for any open one. Wiring a socket variant to Core's network subsystem is future work |
+
+### Rights
+
+Descriptors hold every right unless a reduction was made, either by the guest
+(`fd_fdstat_set_rights`, which can only remove rights) or by `path_open`
+through a directory whose inheriting rights are reduced (the requested rights
+must then be a subset, else `ENOTCAPABLE`). Reductions are recorded per
+descriptor only when made, reported by `fd_fdstat_get` and enforced by every
+descriptor and path function. Rights requested through an unreduced directory
+are not recorded and only select the access mode. Rights are not the
+confinement mechanism: the preopen and Xila's permissions are.
 
 `--instruction-limit` supplies the fuel budget for each cooperative execution
 slice. Wasmi 2 meters input Wasm operators instead of its internal bytecode, so

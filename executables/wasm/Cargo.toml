@@ -7,7 +7,6 @@ build = "build/main.rs"
 [dependencies]
 wasmi = { version = "2.0.0", default-features = false, features = [
   "validate",
-  "memory64",
   "auto-dispatch",
   "prefer-btree-collections",
   "extra-checks",
@@ -30,7 +29,8 @@ host = [
 ]
 default = ["host", "memory_32"]
 memory_32 = []
-memory_64 = []
+# 64-bit guest addresses: the engine's memory64 support is only built for it.
+memory_64 = ["wasmi?/memory64"]
 graphics = [
   "xila?/graphics",
   "dep:graphics_bindgen",

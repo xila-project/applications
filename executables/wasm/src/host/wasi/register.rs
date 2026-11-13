@@ -12,5 +12,8 @@ pub fn add_wasi_to_linker(linker: &mut Linker<GlobalStore>) -> Result<()> {
     crate::host::wasi::poll::add_to_linker(linker)?;
     crate::host::wasi::directory::add_to_linker(linker)?;
     crate::host::wasi::path::add_to_linker(linker)?;
+    crate::host::wasi::descriptor::add_to_linker(linker)?;
+    crate::host::wasi::offset::add_to_linker(linker)?;
+    crate::host::wasi::socket::add_to_linker(linker)?;
     Ok(())
 }

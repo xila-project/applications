@@ -1,13 +1,69 @@
 use wasmi::Caller;
+use xila::file_system::Time;
 
 use crate::{
     define_wasi_module,
     host::{
         store::GlobalStore,
         translation::{GuestPointer, WasmUsize, borrow_memory, get_memory},
-        wasi::error::WasiResult,
+        wasi::{Error, error::WasiResult},
     },
 };
+
+/// `fstflags` bits of `fd_filestat_set_times` and `path_filestat_set_times`.
+mod fstflags {
+    pub const ATIM: u32 = 1 << 0;
+    pub const ATIM_NOW: u32 = 1 << 1;
+    pub const MTIM: u32 = 1 << 2;
+    pub const MTIM_NOW: u32 = 1 << 3;
+}
+
+/// Decode the timestamps a guest asks to set.
+///
+/// Unknown bits and the contradictory pairs `ATIM|ATIM_NOW` and
+/// `MTIM|MTIM_NOW` are `EINVAL`. A field whose flags are clear is left alone
+/// (`None`). Xila stores whole seconds, so nanoseconds are truncated. `now` is
+/// only called when a `*_NOW` flag needs it, and then once.
+pub(super) fn requested_times(
+    atim: u64,
+    mtim: u64,
+    flags: i32,
+    now: impl FnOnce() -> Result<u64, Error>,
+) -> Result<(Option<Time>, Option<Time>), Error> {
+    const NANOSECONDS: u64 = 1_000_000_000;
+    let flags = flags as u32;
+    let known = fstflags::ATIM | fstflags::ATIM_NOW | fstflags::MTIM | fstflags::MTIM_NOW;
+    if flags & !known != 0
+        || flags & (fstflags::ATIM | fstflags::ATIM_NOW) == fstflags::ATIM | fstflags::ATIM_NOW
+        || flags & (fstflags::MTIM | fstflags::MTIM_NOW) == fstflags::MTIM | fstflags::MTIM_NOW
+    {
+        return Err(Error::Inval);
+    }
+    let current = if flags & (fstflags::ATIM_NOW | fstflags::MTIM_NOW) != 0 {
+        Some(Time::new(now()? / NANOSECONDS))
+    } else {
+        None
+    };
+    let pick = |explicit: u32, now_flag: u32, value: u64| {
+        if flags & now_flag != 0 {
+            current
+        } else if flags & explicit != 0 {
+            Some(Time::new(value / NANOSECONDS))
+        } else {
+            None
+        }
+    };
+    Ok((
+        pick(fstflags::ATIM, fstflags::ATIM_NOW, atim),
+        pick(fstflags::MTIM, fstflags::MTIM_NOW, mtim),
+    ))
+}
+
+/// The realtime clock in nanoseconds, for `*_NOW` timestamp requests.
+pub(super) fn realtime_nanoseconds(caller: &Caller<'_, GlobalStore>) -> Result<u64, Error> {
+    crate::host::execution::clock_value(caller.data().context.time_manager, 0)
+        .map_err(|_| Error::Io)
+}
 
 define_wasi_module! {
     module: "wasi_snapshot_preview1";
@@ -109,11 +165,12 @@ mod tests {
                 pending: None,
                 wasi: crate::host::wasi::WasiContext {
                     files: Default::default(),
+                    rights: Default::default(),
                     next_fd: 3,
                     arguments: vec![],
                     environment: vec![],
                     task: task_manager.get_current_task_identifier().await,
-                    prestats: vec![],
+                    prestats: Default::default(),
                     exit_code: None,
                 },
                 #[cfg(feature = "graphics")]
@@ -162,6 +219,60 @@ mod tests {
         assert_eq!(
             &memory.data(&store)[8..16],
             &(time_manager.monotonic_resolution().as_nanos() as u64).to_le_bytes()
+        );
+    }
+}
+
+#[cfg(test)]
+mod fstflags_tests {
+    use super::*;
+
+    fn times(atim: u64, mtim: u64, flags: i32) -> Result<(Option<Time>, Option<Time>), Error> {
+        requested_times(atim, mtim, flags, || Ok(42_000_000_000))
+    }
+
+    #[test]
+    fn untouched_fields_stay_none() {
+        assert_eq!(times(1, 2, 0), Ok((None, None)));
+    }
+
+    #[test]
+    fn explicit_times_are_truncated_to_seconds() {
+        assert_eq!(
+            times(5_999_999_999, 7_000_000_001, 1 | 4),
+            Ok((Some(Time::new(5)), Some(Time::new(7))))
+        );
+        assert_eq!(times(5_000_000_000, 7, 1), Ok((Some(Time::new(5)), None)));
+        assert_eq!(times(5, 7_000_000_000, 4), Ok((None, Some(Time::new(7)))));
+    }
+
+    #[test]
+    fn now_flags_use_the_clock_once_and_ignore_the_explicit_value() {
+        let mut calls = 0;
+        let result = requested_times(1, 2, 2 | 8, || {
+            calls += 1;
+            Ok(42_500_000_000)
+        });
+        assert_eq!(result, Ok((Some(Time::new(42)), Some(Time::new(42)))));
+        assert_eq!(calls, 1);
+        assert_eq!(times(9, 9, 2), Ok((Some(Time::new(42)), None)));
+        assert_eq!(times(9, 9, 8), Ok((None, Some(Time::new(42)))));
+    }
+
+    #[test]
+    fn contradictory_or_unknown_flags_are_invalid_and_never_read_the_clock() {
+        for flags in [1 | 2, 4 | 8, 1 | 2 | 4 | 8, 16, 1 << 31, -1] {
+            let result = requested_times(1, 2, flags, || panic!("clock read"));
+            assert_eq!(result, Err(Error::Inval), "flags {flags:#x}");
+        }
+    }
+
+    #[test]
+    fn a_clock_failure_is_reported_only_when_a_now_flag_needs_it() {
+        assert_eq!(requested_times(1, 2, 2, || Err(Error::Io)), Err(Error::Io));
+        assert_eq!(
+            requested_times(1, 2, 1, || Err(Error::Io)),
+            Ok((Some(Time::new(0)), None))
         );
     }
 }
