@@ -110,7 +110,7 @@ define_wasi_module! {
     }
 }
 
-#[cfg(all(test, feature = "memory_32"))]
+#[cfg(test)]
 mod tests {
     extern crate std;
     use super::*;
@@ -151,12 +151,20 @@ mod tests {
         let engine = Engine::new(&config);
         let mut linker = Linker::new(&engine);
         crate::host::wasi::register::add_wasi_to_linker(&mut linker).unwrap();
-        let bytes = wat::parse_str(r#"(module
-            (import "wasi_snapshot_preview1" "clock_time_get" (func $time (param i32 i64 i32) (result i32)))
-            (import "wasi_snapshot_preview1" "clock_res_get" (func $res (param i32 i32) (result i32)))
+        let word = if cfg!(feature = "memory_64") {
+            "i64"
+        } else {
+            "i32"
+        };
+        let bytes = wat::parse_str(alloc::format!(
+            r#"(module
+            (import "wasi_snapshot_preview1" "clock_time_get" (func $time (param i32 i64 {word}) (result i32)))
+            (import "wasi_snapshot_preview1" "clock_res_get" (func $res (param i32 {word}) (result i32)))
             (memory (export "memory") 1)
-            (func (export "time") (param i32) (result i32) local.get 0 i64.const 0 i32.const 8 call $time)
-            (func (export "res") (param i32) (result i32) local.get 0 i32.const 8 call $res))"#).unwrap();
+            (func (export "time") (param i32) (result i32) local.get 0 i64.const 0 {word}.const 8 call $time)
+            (func (export "res") (param i32) (result i32) local.get 0 {word}.const 8 call $res))"#
+        ))
+        .unwrap();
         let module = Module::new(&engine, &bytes[..]).unwrap();
         let mut store = Store::new(
             &engine,
