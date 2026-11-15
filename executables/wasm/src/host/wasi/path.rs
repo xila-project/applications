@@ -335,7 +335,7 @@ define_wasi_module! {
         })
     }
 
-    fn path_open(caller: Caller<GlobalStore>, fd: i32, _dirflags: i32, path_ptr: WasmUsize, path_len: WasmUsize, oflags: i32, rights_base: i64, rights_inheriting: i64, fdflags: i32, opened_fd_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
+    fn path_open(caller: Caller<GlobalStore>, fd: i32, dirflags: i32, path_ptr: WasmUsize, path_len: WasmUsize, oflags: i32, rights_base: i64, rights_inheriting: i64, fdflags: i32, opened_fd_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
         wrap_function!({
             let wasi = &caller.data().wasi;
             wasi.require_rights(fd, right::PATH_OPEN)?;
@@ -350,6 +350,7 @@ define_wasi_module! {
             if reduced && (rights_base as u64 | rights_inheriting as u64) & !wasi.rights_of(fd as u32).1 != 0 {
                 return Err(Error::Notcapable.into());
             }
+            let follow = follow_symlinks(dirflags)?;
             let mut caller = caller;
             let path_bytes = copy_guest_path(&mut caller, path_ptr, path_len)?;
             let (task_id, directory, root) = base_path(&caller, fd)?;
@@ -364,11 +365,25 @@ define_wasi_module! {
             let create = if oflags & 1 != 0 { Some(if oflags & 4 != 0 { CreateFlags::CREATE_EXCLUSIVE } else if oflags & 8 != 0 { CreateFlags::CREATE_TRUNCATE } else { CreateFlags::Create }) } else { None };
             let state = if fdflags & 1 != 0 { Some(StateFlags::Append) } else { None };
             let vfs = caller.data().context.virtual_file_system;
+            let confined_relative = guest_relative(&root, &absolute_path)?;
+            if !follow {
+                match task::block_on(vfs.get_statistics_beneath(task_id, &confined_relative, false, &root)) {
+                    Ok(statistics) if statistics.kind == Kind::SymbolicLink => {
+                        if oflags & 2 != 0 || oflags & 1 == 0 || oflags & 4 == 0 {
+                            return Err(Error::Loop.into());
+                        }
+                    }
+                    Ok(_) => {}
+                    Err(xila::virtual_file_system::Error::FileSystem(xila::file_system::Error::NotFound))
+                        if oflags & 1 != 0 => {}
+                    Err(error) => return Err(vfs_error(error).into()),
+                }
+            }
             let item = if oflags & 2 != 0 {
-                let directory_handle = task::block_on(vfs.open_directory_beneath(task_id, &guest_relative(&root, &absolute_path)?, &root)).map(|dir| dir.into_synchronous_directory()).map_err(vfs_error)?;
+                let directory_handle = task::block_on(vfs.open_directory_beneath(task_id, &confined_relative, &root)).map(|dir| dir.into_synchronous_directory()).map_err(vfs_error)?;
                 FileSystemItem::Directory(DirectoryVariant { confinement_root: Some(root), directory: directory_handle, path: absolute_path })
             } else {
-                let file = task::block_on(vfs.open_beneath(&guest_relative(&root, &absolute_path)?, Flags::new(access, create, state), task_id, &root)).map(|file| file.into_synchronous_file()).map_err(vfs_error)?;
+                let file = task::block_on(vfs.open_beneath(&confined_relative, Flags::new(access, create, state), task_id, &root)).map(|file| file.into_synchronous_file()).map_err(vfs_error)?;
                 FileSystemItem::File(FileVariant { file })
             };
             let new_fd = caller.data_mut().wasi.insert_file_system_item(item).ok_or(Error::Mfile)?;
@@ -577,6 +592,218 @@ mod tests {
             vfs.get_link_statistics_for_task(task, &"/sandbox/new")
                 .await
                 .is_err()
+        );
+    }
+
+    #[xila::task::test(task_path = xila::task)]
+    async fn path_open_honors_symlink_follow() {
+        use super::*;
+        use crate::host::wasi::{DirectoryVariant, FileSystemItem, WasiContext};
+        use alloc::{boxed::Box, vec};
+        use wasmi::{Engine, Linker, Module, Store};
+
+        let task_manager = xila::task::test_manager();
+        let users_manager = Box::leak(Box::new(xila::users::Manager::new()));
+        let time_manager = Box::leak(Box::new(
+            xila::time::Manager::new(&testing::TimeDevice).unwrap(),
+        ));
+        let device = xila::file_system::MemoryDevice::<512>::new_static(1024 * 512);
+        let fs = xila::little_fs::FileSystem::new_format(device, 256).unwrap();
+        let vfs = Box::leak(Box::new(
+            xila::virtual_file_system::initialize(task_manager, users_manager, time_manager, fs)
+                .unwrap(),
+        ));
+        let task = task_manager.get_current_task_identifier().await;
+        for path in ["/sandbox", "/sandbox/sub", "/secret"] {
+            vfs.create_directory(task, &path).await.unwrap();
+        }
+        xila::virtual_file_system::File::write_to_path(vfs, task, "/sandbox/sub/data", b"hello")
+            .await
+            .unwrap();
+        xila::virtual_file_system::File::write_to_path(vfs, task, "/secret/data", b"secret")
+            .await
+            .unwrap();
+        for (target, link) in [
+            ("sub/data", "/sandbox/file_link"),
+            ("sub", "/sandbox/dir_link"),
+            ("missing_target", "/sandbox/dangling"),
+            ("/secret", "/sandbox/escape_dir"),
+            ("/secret/data", "/sandbox/escape_file"),
+        ] {
+            vfs.create_symlink(task, Path::new(target), Path::new(link))
+                .await
+                .unwrap();
+        }
+        let context = Box::leak(Box::new(xila::executable::ExecutableContext {
+            task_manager,
+            users_manager,
+            virtual_file_system: vfs,
+            graphics_manager: None,
+            network_manager: None,
+            time_manager,
+        }));
+        let mut wasi = WasiContext {
+            files: Default::default(),
+            rights: Default::default(),
+            next_fd: 4,
+            arguments: vec![],
+            environment: vec![],
+            task,
+            prestats: Default::default(),
+            exit_code: None,
+        };
+        wasi.files.insert(
+            3,
+            FileSystemItem::Directory(DirectoryVariant {
+                confinement_root: None,
+                path: PathOwned::try_from("/sandbox").unwrap(),
+                directory: xila::virtual_file_system::SynchronousDirectory::open(
+                    vfs, task, "/sandbox",
+                )
+                .unwrap(),
+            }),
+        );
+        let engine = Engine::default();
+        let mut linker = Linker::new(&engine);
+        crate::host::wasi::register::add_wasi_to_linker(&mut linker).unwrap();
+        let word = if cfg!(feature = "memory_64") {
+            "i64"
+        } else {
+            "i32"
+        };
+        let bytes = wat::parse_str(alloc::format!(
+            r#"(module
+                (import "wasi_snapshot_preview1" "path_open"
+                    (func $open (param i32 i32 {word} {word} i32 i64 i64 i32 {word}) (result i32)))
+                (import "wasi_snapshot_preview1" "fd_read"
+                    (func $read (param i32 {word} {word} {word}) (result i32)))
+                (memory (export "memory") 1)
+                (func (export "open") (param i32 {word} {word} i32) (result i32)
+                    i32.const 3 local.get 0 local.get 1 local.get 2 local.get 3
+                    i64.const 2 i64.const 0 i32.const 0 {word}.const 256 call $open)
+                (func (export "read_opened") (param {word} {word}) (result i32)
+                    i32.const 256 i32.load
+                    local.get 0 local.get 1 {word}.const 384 call $read)
+            )"#
+        ))
+        .unwrap();
+        let module = Module::new(&engine, &bytes[..]).unwrap();
+        let mut store = Store::new(
+            &engine,
+            GlobalStore {
+                control: Default::default(),
+                context,
+                #[cfg(feature = "graphics")]
+                graphics: crate::host::graphics::GraphicsState::new(None),
+                pending: None,
+                wasi,
+            },
+        );
+        let instance = linker.instantiate_and_start(&mut store, &module).unwrap();
+        let memory = instance.get_memory(&store, "memory").unwrap();
+        let open = instance
+            .get_typed_func::<(i32, WasmUsize, WasmUsize, i32), i32>(&store, "open")
+            .unwrap();
+        let read_opened = instance
+            .get_typed_func::<(WasmUsize, WasmUsize), i32>(&store, "read_opened")
+            .unwrap();
+
+        let write_path = |store: &mut Store<GlobalStore>, path: &str| -> (WasmUsize, WasmUsize) {
+            let offset = 1024usize;
+            memory.data_mut(store)[offset..offset + path.len()].copy_from_slice(path.as_bytes());
+            (offset as WasmUsize, path.len() as WasmUsize)
+        };
+
+        // Final symlink to a file: ELOOP without SYMLINK_FOLLOW, succeeds with it.
+        let (ptr, len) = write_path(&mut store, "file_link");
+        assert_eq!(
+            open.call(&mut store, (0, ptr, len, 0)).unwrap(),
+            Error::Loop as i32
+        );
+        assert_eq!(
+            open.call(&mut store, (0, ptr, len, 1)).unwrap(),
+            Error::Loop as i32
+        );
+        assert_eq!(
+            open.call(&mut store, (0, ptr, len, 1 | 4)).unwrap(),
+            Error::Exist as i32
+        );
+        assert_eq!(open.call(&mut store, (1, ptr, len, 0)).unwrap(), 0);
+        let word_bytes = core::mem::size_of::<WasmUsize>();
+        memory.data_mut(&mut store)[512..512 + word_bytes]
+            .copy_from_slice(&(640 as WasmUsize).to_le_bytes());
+        memory.data_mut(&mut store)[512 + word_bytes..512 + 2 * word_bytes]
+            .copy_from_slice(&(16 as WasmUsize).to_le_bytes());
+        assert_eq!(read_opened.call(&mut store, (512, 1)).unwrap(), 0);
+        assert_eq!(&memory.data(&store)[640..645], b"hello");
+
+        // Final symlink to a directory: ELOOP without SYMLINK_FOLLOW, succeeds with it.
+        let (ptr, len) = write_path(&mut store, "dir_link");
+        assert_eq!(
+            open.call(&mut store, (0, ptr, len, 2)).unwrap(),
+            Error::Loop as i32
+        );
+        assert_eq!(
+            open.call(&mut store, (0, ptr, len, 0)).unwrap(),
+            Error::Loop as i32
+        );
+        assert_eq!(
+            open.call(&mut store, (0, ptr, len, 1 | 2 | 4)).unwrap(),
+            Error::Loop as i32
+        );
+        assert_eq!(open.call(&mut store, (1, ptr, len, 2)).unwrap(), 0);
+
+        // Non-final directory symlink is still followed even without SYMLINK_FOLLOW.
+        let (ptr, len) = write_path(&mut store, "dir_link/data");
+        assert_eq!(open.call(&mut store, (0, ptr, len, 0)).unwrap(), 0);
+        assert_eq!(read_opened.call(&mut store, (512, 1)).unwrap(), 0);
+        assert_eq!(&memory.data(&store)[640..645], b"hello");
+
+        // Dangling symlink: ELOOP without SYMLINK_FOLLOW, ENOENT with it.
+        let (ptr, len) = write_path(&mut store, "dangling");
+        assert_eq!(
+            open.call(&mut store, (0, ptr, len, 0)).unwrap(),
+            Error::Loop as i32
+        );
+        assert_eq!(
+            open.call(&mut store, (0, ptr, len, 1)).unwrap(),
+            Error::Loop as i32
+        );
+        assert_eq!(
+            open.call(&mut store, (0, ptr, len, 1 | 4)).unwrap(),
+            Error::Exist as i32
+        );
+        assert_eq!(
+            open.call(&mut store, (1, ptr, len, 0)).unwrap(),
+            Error::Noent as i32
+        );
+        assert!(
+            vfs.get_link_statistics_for_task(task, &"/sandbox/missing_target")
+                .await
+                .is_err()
+        );
+
+        // Confinement beneath the preopen holds for both final and non-final escaping symlinks.
+        let (ptr, len) = write_path(&mut store, "escape_file");
+        assert_eq!(
+            open.call(&mut store, (0, ptr, len, 0)).unwrap(),
+            Error::Loop as i32
+        );
+        assert_eq!(
+            open.call(&mut store, (1, ptr, len, 0)).unwrap(),
+            Error::Notcapable as i32
+        );
+        let (ptr, len) = write_path(&mut store, "escape_dir/data");
+        assert_eq!(
+            open.call(&mut store, (0, ptr, len, 0)).unwrap(),
+            Error::Notcapable as i32
+        );
+
+        // Invalid dirflags.
+        let (ptr, len) = write_path(&mut store, "sub/data");
+        assert_eq!(
+            open.call(&mut store, (2, ptr, len, 0)).unwrap(),
+            Error::Inval as i32
         );
     }
 }
