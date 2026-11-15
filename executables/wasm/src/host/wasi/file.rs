@@ -398,17 +398,22 @@ mod tests {
         let engine = Engine::new(&config);
         let mut linker = Linker::new(&engine);
         crate::host::wasi::register::add_wasi_to_linker(&mut linker).unwrap();
-        let wasm = wat::parse_str(
+        let word = if cfg!(feature = "memory_64") {
+            "i64"
+        } else {
+            "i32"
+        };
+        let wasm = wat::parse_str(alloc::format!(
             r#"(module
                 (import "wasi_snapshot_preview1" "fd_control"
-                    (func $control (param i32 i32 i32 i32 i32 i32) (result i32)))
+                    (func $control (param i32 i32 {word} {word} {word} {word}) (result i32)))
                 (memory (export "memory") 1)
-                (func (export "run") (param i32 i32 i32 i32 i32 i32) (result i32)
+                (func (export "run") (param i32 i32 {word} {word} {word} {word}) (result i32)
                     i32.const 32 i32.const 42 i32.store
                     local.get 0 local.get 1 local.get 2 local.get 3 local.get 4 local.get 5
                     call $control)
             )"#,
-        )
+        ))
         .unwrap();
         let module = Module::new(&engine, &wasm[..]).unwrap();
         let mut wasi = crate::host::wasi::WasiContext {
@@ -451,7 +456,9 @@ mod tests {
         store.set_fuel(10_000).unwrap();
         let instance = linker.instantiate_and_start(&mut store, &module).unwrap();
         let run = instance
-            .get_typed_func::<(i32, i32, i32, i32, i32, i32), i32>(&store, "run")
+            .get_typed_func::<(i32, i32, WasmUsize, WasmUsize, WasmUsize, WasmUsize), i32>(
+                &store, "run",
+            )
             .unwrap();
         CONTROL_CALLS.store(0, Ordering::SeqCst);
         assert_eq!(
