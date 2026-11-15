@@ -893,9 +893,19 @@ impl Drop for GraphicsState {
             unregister_side(self.side.take());
             Ok(())
         });
-        if self.side.is_some() {
+        if let Some(side) = self.side.take() {
+            // No session (re-entrant drop or LVGL gone): the VM's objects may
+            // still be alive and LVGL may still read their maps, grid tracks or
+            // canvas buffers when it deletes them. Stop observing, and leak the
+            // side table rather than free memory LVGL can still reach.
             let _lock = manager.synchronous_lock();
-            unregister_side(self.side.take());
+            let target = side.get();
+            // SAFETY: graphics lock held.
+            let sides = unsafe { &mut *SIDES.0.get() };
+            if let Some(position) = sides.iter().position(|&pointer| pointer == target) {
+                sides.swap_remove(position);
+            }
+            Box::leak(side);
         }
     }
 }
