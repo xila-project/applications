@@ -1,6 +1,6 @@
-use alloc::vec::Vec;
 use wasmi::Caller;
-use xila::file_system::{Position, StateFlags};
+use xila::file_system::{AccessFlags, ControlCommandIdentifier, Position, StateFlags};
+use xila::shared::AnyByLayout;
 
 use crate::{
     define_wasi_module,
@@ -10,13 +10,16 @@ use crate::{
         wasi::{
             Error,
             context::{FileSystemItem, FileVariant},
-            error::{WasiResult, vfs_error, wrap_function},
+            error::{CombinedError, WasiResult, status, vfs_error, wrap_function},
             rights::right,
             types::{Fdstat, Filestat, Prestat as PrestatAbi, PrestatDir},
         },
     },
 };
-use xila::{file_system::ControlCommandIdentifier, shared::AnyByLayout};
+
+/// Stack-cached iovec entries to avoid re-reading guest memory (or observing
+/// guest-buffer overwrites) in the common case without heap allocation.
+const INLINE_IOVECS: usize = 16;
 
 /// Maximum input or output payload size accepted by the generic descriptor control ABI.
 const MAX_CONTROL_PAYLOAD: usize = 256;
@@ -37,85 +40,113 @@ fn spans_overlap(
     Some(first_start < second_end && second_start < first_end)
 }
 
+/// Shared body of `fd_read` and `fd_write`.
+///
+/// Validates the output pointer, the iovec table, and every iovec buffer
+/// before moving any byte, then reads or writes straight into or out of guest
+/// memory with zero host allocation. Stops on the first short transfer; an
+/// error after bytes have already moved returns the transferred count.
+fn transfer(
+    caller: Caller<'_, GlobalStore>,
+    fd: i32,
+    iovs: WasmUsize,
+    count: WasmUsize,
+    output: WasmUsize,
+    write: bool,
+) -> Result<(), CombinedError> {
+    let needed = if write {
+        right::FD_WRITE
+    } else {
+        right::FD_READ
+    };
+    caller.data().wasi.require_rights(fd, needed)?;
+    let mut caller = caller;
+    let memory = get_memory(&caller).ok_or(Error::Fault)?;
+    let table = GuestSlice::<WasiVector>::new(iovs, count);
+    let mut snapshot = [WasiVector::new(0, 0); INLINE_IOVECS];
+    let count_usize = usize::try_from(count).map_err(|_| Error::Fault)?;
+    {
+        let guest = borrow_memory(&memory, &mut caller);
+        guest
+            .validate_pointer(GuestPointer::<WasmUsize>::new(output))
+            .ok_or(Error::Fault)?;
+        let values = guest.values(table).ok_or(Error::Fault)?;
+        for (index, vector) in values.enumerate() {
+            guest
+                .validate_slice(GuestSlice::<u8>::new(vector.buffer, vector.length))
+                .ok_or(Error::Fault)?;
+            if index < INLINE_IOVECS {
+                snapshot[index] = vector;
+            }
+        }
+    }
+    let needed_access = if write {
+        AccessFlags::Write
+    } else {
+        AccessFlags::Read
+    };
+    let file = caller.data_mut().wasi.file(fd)?;
+    if !file
+        .get_access()
+        .map_err(vfs_error)?
+        .contains(needed_access)
+    {
+        return Err(Error::Badf.into());
+    }
+
+    let mut total = 0u64;
+    for index in 0..count_usize {
+        let vector = if let Some(&vector) = snapshot.get(index) {
+            vector
+        } else {
+            let entry = table
+                .pointer_at(WasmUsize::try_from(index).map_err(|_| Error::Fault)?)
+                .ok_or(Error::Fault)?;
+            borrow_memory(&memory, &mut caller)
+                .read(entry)
+                .ok_or(Error::Fault)?
+        };
+        let start = usize::try_from(vector.buffer).map_err(|_| Error::Fault)?;
+        let length = usize::try_from(vector.length).map_err(|_| Error::Fault)?;
+        let end = start.checked_add(length).ok_or(Error::Fault)?;
+        if start == end {
+            continue;
+        }
+        let (bytes, state) = memory.data_and_store_mut(&mut caller);
+        let file = state.wasi.file(fd)?;
+        let moved = if write {
+            file.write(bytes.get(start..end).ok_or(Error::Fault)?)
+        } else {
+            file.read(bytes.get_mut(start..end).ok_or(Error::Fault)?)
+        };
+        let moved = match moved {
+            Ok(moved) => moved,
+            Err(_) if total > 0 => break,
+            Err(error) => return Err(vfs_error(error).into()),
+        };
+        total = total.checked_add(moved as u64).ok_or(Error::Overflow)?;
+        if moved < length {
+            break;
+        }
+    }
+    borrow_memory(&memory, &mut caller)
+        .write(
+            GuestPointer::new(output),
+            WasmUsize::try_from(total).map_err(|_| Error::Overflow)?,
+        )
+        .ok_or(Error::Fault)?;
+    Ok(())
+}
+
 define_wasi_module! {
     module: "wasi_snapshot_preview1";
 
     fn fd_read(caller: Caller<GlobalStore>, fd: i32, iovs: WasmUsize, iovs_len: WasmUsize, nread_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
-        wrap_function!({
-            caller.data().wasi.require_rights(fd, right::FD_READ)?;
-            let mut caller = caller;
-            let memory = get_memory(&caller).ok_or(Error::Fault)?;
-            let (vectors, nread_offset) = {
-                let guest = borrow_memory(&memory, &mut caller);
-                guest.validate_pointer(GuestPointer::<WasmUsize>::new(nread_ptr)).ok_or(Error::Fault)?;
-                let vectors = guest.values(GuestSlice::<WasiVector>::new(iovs, iovs_len)).ok_or(Error::Fault)?;
-                (vectors.collect::<Vec<_>>(), nread_ptr)
-            };
-            for vector in &vectors {
-                borrow_memory(&memory, &mut caller)
-                    .validate_slice(GuestSlice::<u8>::new(vector.buffer, vector.length)).ok_or(Error::Fault)?;
-            }
-            let mut buffers = Vec::with_capacity(vectors.len());
-            let mut total = 0usize;
-            for vector in &vectors {
-                let length = usize::try_from(vector.length).map_err(|_| Error::Fault)?;
-                let mut buffer = alloc::vec![0; length];
-                let is_directory = caller.data().wasi.is_directory(fd as u32);
-                let read = match caller.data_mut().wasi.get_synchronous_file(fd as u32) {
-                    Some(file) => file.read(&mut buffer).map_err(vfs_error)?,
-                    None if is_directory => return Err(Error::Isdir.into()),
-                    None => return Err(Error::Badf.into()),
-                };
-                buffer.truncate(read);
-                total = total.checked_add(read).ok_or(Error::Overflow)?;
-                buffers.push((vector.buffer, buffer));
-                if read < length { break; }
-            }
-            {
-                let mut guest = borrow_memory(&memory, &mut caller);
-                for (offset, buffer) in &buffers {
-                    guest.bytes_mut(GuestSlice::new(*offset, buffer.len() as WasmUsize))
-                        .ok_or(Error::Fault)?.copy_from_slice(buffer);
-                }
-                guest.write(GuestPointer::new(nread_offset), WasmUsize::try_from(total).map_err(|_| Error::Overflow)?)
-                    .ok_or(Error::Fault)?;
-            }
-            Ok(())
-        })
+        status(transfer(caller, fd, iovs, iovs_len, nread_ptr, false))
     }
 
     fn fd_write(caller: Caller<GlobalStore>, fd: i32, iovs: WasmUsize, iovs_len: WasmUsize, nwritten_ptr: WasmUsize) -> Result<WasiResult, wasmi::Error> {
-        wrap_function!({
-            caller.data().wasi.require_rights(fd, right::FD_WRITE)?;
-            let mut caller = caller;
-            let memory = get_memory(&caller).ok_or(Error::Fault)?;
-            let (buffers, nwritten_offset) = {
-                let guest = borrow_memory(&memory, &mut caller);
-                guest.validate_pointer(GuestPointer::<WasmUsize>::new(nwritten_ptr)).ok_or(Error::Fault)?;
-                let vectors = guest.values(GuestSlice::<WasiVector>::new(iovs, iovs_len)).ok_or(Error::Fault)?;
-                let mut buffers: Vec<Vec<u8>> = Vec::new();
-                for vector in vectors {
-                    let source = guest.bytes(GuestSlice::new(vector.buffer, vector.length)).ok_or(Error::Fault)?;
-                    buffers.push(source.to_vec());
-                }
-                (buffers, nwritten_ptr)
-            };
-            let mut total = 0usize;
-            for buffer in buffers {
-                let is_directory = caller.data().wasi.is_directory(fd as u32);
-                let written = match caller.data_mut().wasi.get_synchronous_file(fd as u32) {
-                    Some(file) => file.write(&buffer).map_err(vfs_error)?,
-                    None if is_directory => return Err(Error::Isdir.into()),
-                    None => return Err(Error::Badf.into()),
-                };
-                total = total.checked_add(written).ok_or(Error::Overflow)?;
-                if written < buffer.len() { break; }
-            }
-            borrow_memory(&memory, &mut caller)
-                .write(GuestPointer::new(nwritten_offset), WasmUsize::try_from(total).map_err(|_| Error::Overflow)?)
-                .ok_or(Error::Fault)?;
-            Ok(())
-        })
+        status(transfer(caller, fd, iovs, iovs_len, nwritten_ptr, true))
     }
 
     fn fd_control(caller: Caller<GlobalStore>, fd: i32, command: u32, input_ptr: WasmUsize, input_len: WasmUsize, output_ptr: WasmUsize, output_len: WasmUsize) -> Result<WasiResult, wasmi::Error> {
@@ -545,5 +576,643 @@ mod tests {
     #[test]
     fn raw_command_word_preserves_identifier_bits() {
         assert_eq!(ControlCommandIdentifier::from_raw(CONTROL.raw()), CONTROL);
+    }
+
+    struct StreamState {
+        read_data: alloc::vec::Vec<u8>,
+        read_offset: usize,
+        read_chunk: usize,
+        read_calls: usize,
+        fail_read_on_call: usize,
+        written: alloc::vec::Vec<u8>,
+        write_chunk: usize,
+        write_calls: usize,
+        fail_write_on_call: usize,
+    }
+
+    struct StreamDevice(&'static std::sync::Mutex<StreamState>);
+
+    impl MountOperations for StreamDevice {}
+    impl DirectCharacterDevice for StreamDevice {}
+
+    impl DirectBaseOperations for StreamDevice {
+        fn read(
+            &self,
+            _cx: &mut core::task::Context<'_>,
+            buffer: &mut [u8],
+            _: Size,
+        ) -> core::task::Poll<file_system::Result<usize>> {
+            xila::file_system::ready(|| {
+                let mut state = self.0.lock().unwrap();
+                state.read_calls += 1;
+                if state.read_calls == state.fail_read_on_call {
+                    return Err(file_system::Error::InputOutput);
+                }
+                let remaining = state.read_data.len().saturating_sub(state.read_offset);
+                let count = buffer.len().min(state.read_chunk).min(remaining);
+                let start = state.read_offset;
+                buffer[..count].copy_from_slice(&state.read_data[start..start + count]);
+                state.read_offset += count;
+                Ok(count)
+            })
+        }
+
+        fn write(
+            &self,
+            _cx: &mut core::task::Context<'_>,
+            buffer: &[u8],
+            _: Size,
+        ) -> core::task::Poll<file_system::Result<usize>> {
+            xila::file_system::ready(|| {
+                let mut state = self.0.lock().unwrap();
+                state.write_calls += 1;
+                if state.write_calls == state.fail_write_on_call {
+                    return Err(file_system::Error::InputOutput);
+                }
+                let count = buffer.len().min(state.write_chunk);
+                state.written.extend_from_slice(&buffer[..count]);
+                Ok(count)
+            })
+        }
+    }
+
+    #[xila::task::test(task_path = xila::task)]
+    async fn fd_read_and_fd_write_vectored_io_semantics() {
+        let task_manager = xila::task::test_manager();
+        let users_manager = Box::leak(Box::new(xila::users::Manager::new()));
+        let time_manager = Box::leak(Box::new(
+            xila::time::Manager::new(&testing::TimeDevice).unwrap(),
+        ));
+        let memory_device = xila::file_system::MemoryDevice::<512>::new_static(1024 * 512);
+        let filesystem = xila::little_fs::FileSystem::new_format(memory_device, 256).unwrap();
+        let vfs = Box::leak(Box::new(
+            xila::virtual_file_system::initialize(
+                task_manager,
+                users_manager,
+                time_manager,
+                filesystem,
+            )
+            .unwrap(),
+        ));
+        let task = task_manager.get_current_task_identifier().await;
+        xila::virtual_file_system::create_default_hierarchy(vfs, task)
+            .await
+            .unwrap();
+        let context = Box::leak(Box::new(xila::executable::ExecutableContext {
+            task_manager,
+            users_manager,
+            virtual_file_system: vfs,
+            graphics_manager: None,
+            network_manager: None,
+            time_manager,
+        }));
+
+        let stream_state: &'static std::sync::Mutex<StreamState> =
+            Box::leak(Box::new(std::sync::Mutex::new(StreamState {
+                read_data: vec![],
+                read_offset: 0,
+                read_chunk: usize::MAX,
+                read_calls: 0,
+                fail_read_on_call: 0,
+                written: vec![],
+                write_chunk: usize::MAX,
+                write_calls: 0,
+                fail_write_on_call: 0,
+            })));
+        vfs.mount_character_device(task, Path::from_str("/stream"), StreamDevice(stream_state))
+            .await
+            .unwrap();
+
+        let rw_file = SynchronousFile::open(
+            vfs,
+            task,
+            Path::from_str("/data.bin"),
+            Flags::new(
+                AccessFlags::READ_WRITE,
+                Some(xila::file_system::CreateFlags::CREATE_TRUNCATE),
+                None,
+            ),
+        )
+        .unwrap();
+        let ro_file = SynchronousFile::open(
+            vfs,
+            task,
+            Path::from_str("/data.bin"),
+            Flags::new(AccessFlags::Read, None, None),
+        )
+        .unwrap();
+        let wo_file = SynchronousFile::open(
+            vfs,
+            task,
+            Path::from_str("/data.bin"),
+            Flags::new(AccessFlags::Write, None, None),
+        )
+        .unwrap();
+        let stdin_file = SynchronousFile::open(
+            vfs,
+            task,
+            Path::from_str("/stream"),
+            Flags::new(AccessFlags::Read, None, None),
+        )
+        .unwrap();
+        let stdout_file = SynchronousFile::open(
+            vfs,
+            task,
+            Path::from_str("/stream"),
+            Flags::new(AccessFlags::Write, None, None),
+        )
+        .unwrap();
+        let stream_rw = SynchronousFile::open(
+            vfs,
+            task,
+            Path::from_str("/stream"),
+            Flags::new(AccessFlags::READ_WRITE, None, None),
+        )
+        .unwrap();
+        let directory = SynchronousDirectory::open(vfs, task, Path::from_str("/")).unwrap();
+
+        let engine = Engine::default();
+        let mut linker = Linker::new(&engine);
+        crate::host::wasi::register::add_wasi_to_linker(&mut linker).unwrap();
+        let word = if cfg!(feature = "memory_64") {
+            "i64"
+        } else {
+            "i32"
+        };
+        let wasm = wat::parse_str(alloc::format!(
+            r#"(module
+                (import "wasi_snapshot_preview1" "fd_read"
+                    (func $read (param i32 {word} {word} {word}) (result i32)))
+                (import "wasi_snapshot_preview1" "fd_write"
+                    (func $write (param i32 {word} {word} {word}) (result i32)))
+                (import "wasi_snapshot_preview1" "fd_seek"
+                    (func $seek (param i32 i64 i32 {word}) (result i32)))
+                (memory (export "memory") 1)
+                (func (export "read") (param i32 {word} {word} {word}) (result i32)
+                    local.get 0 local.get 1 local.get 2 local.get 3 call $read)
+                (func (export "write") (param i32 {word} {word} {word}) (result i32)
+                    local.get 0 local.get 1 local.get 2 local.get 3 call $write)
+                (func (export "seek") (param i32 i64 i32 {word}) (result i32)
+                    local.get 0 local.get 1 local.get 2 local.get 3 call $seek)
+            )"#
+        ))
+        .unwrap();
+        let module = Module::new(&engine, &wasm[..]).unwrap();
+
+        let mut wasi = crate::host::wasi::WasiContext {
+            files: Default::default(),
+            rights: Default::default(),
+            next_fd: 9,
+            arguments: vec![],
+            environment: vec![],
+            task,
+            prestats: Default::default(),
+            exit_code: None,
+        };
+        wasi.files.insert(
+            0,
+            FileSystemItem::StandardInput(FileVariant { file: stdin_file }),
+        );
+        wasi.files.insert(
+            1,
+            FileSystemItem::StandardOutput(FileVariant { file: stdout_file }),
+        );
+        wasi.files
+            .insert(3, FileSystemItem::File(FileVariant { file: rw_file }));
+        wasi.files
+            .insert(4, FileSystemItem::File(FileVariant { file: ro_file }));
+        wasi.files
+            .insert(5, FileSystemItem::File(FileVariant { file: wo_file }));
+        wasi.files
+            .insert(6, FileSystemItem::File(FileVariant { file: stream_rw }));
+        wasi.files.insert(
+            7,
+            FileSystemItem::Directory(crate::host::wasi::context::DirectoryVariant {
+                confinement_root: None,
+                path: PathOwned::root(),
+                directory,
+            }),
+        );
+
+        let mut store = Store::new(
+            &engine,
+            GlobalStore {
+                control: Default::default(),
+                context,
+                pending: None,
+                wasi,
+                #[cfg(feature = "graphics")]
+                graphics: crate::host::graphics::GraphicsState::new(context.graphics_manager),
+            },
+        );
+        let instance = linker.instantiate_and_start(&mut store, &module).unwrap();
+        let memory = instance.get_memory(&store, "memory").unwrap();
+        let read_fn = instance
+            .get_typed_func::<(i32, WasmUsize, WasmUsize, WasmUsize), i32>(&store, "read")
+            .unwrap();
+        let write_fn = instance
+            .get_typed_func::<(i32, WasmUsize, WasmUsize, WasmUsize), i32>(&store, "write")
+            .unwrap();
+        let seek_fn = instance
+            .get_typed_func::<(i32, i64, i32, WasmUsize), i32>(&store, "seek")
+            .unwrap();
+
+        let word_bytes = core::mem::size_of::<WasmUsize>();
+        let put_iovecs =
+            |store: &mut Store<GlobalStore>, table: usize, entries: &[(usize, usize)]| {
+                let bytes = memory.data_mut(store);
+                for (index, (buf, len)) in entries.iter().enumerate() {
+                    let at = table + index * 2 * word_bytes;
+                    bytes[at..at + word_bytes].copy_from_slice(&(*buf as WasmUsize).to_le_bytes());
+                    bytes[at + word_bytes..at + 2 * word_bytes]
+                        .copy_from_slice(&(*len as WasmUsize).to_le_bytes());
+                }
+            };
+        let read_usize = |store: &Store<GlobalStore>, offset: usize| -> usize {
+            let mut raw = [0u8; core::mem::size_of::<WasmUsize>()];
+            raw.copy_from_slice(&memory.data(store)[offset..offset + word_bytes]);
+            WasmUsize::from_le_bytes(raw) as usize
+        };
+
+        const TABLE: usize = 512;
+        const OUT: usize = 256;
+        const SEEK_OUT: usize = 288;
+
+        // 1. Multi-iovec write + zero-length iovecs mixed in, then multi-iovec read.
+        memory.data_mut(&mut store)[2000..2003].copy_from_slice(b"hel");
+        memory.data_mut(&mut store)[2100..2103].copy_from_slice(b"lo ");
+        memory.data_mut(&mut store)[2200..2205].copy_from_slice(b"world");
+        put_iovecs(
+            &mut store,
+            TABLE,
+            &[(0, 0), (2000, 3), (100, 0), (2100, 3), (2200, 5), (300, 0)],
+        );
+        assert_eq!(
+            write_fn
+                .call(&mut store, (3, TABLE as WasmUsize, 6, OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        assert_eq!(read_usize(&store, OUT), 11);
+        assert_eq!(
+            seek_fn
+                .call(&mut store, (3, 0, 0, SEEK_OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+
+        memory.data_mut(&mut store)[3000..3020].fill(0);
+        put_iovecs(
+            &mut store,
+            TABLE,
+            &[(0, 0), (3000, 2), (3010, 0), (3004, 4), (3010, 8)],
+        );
+        assert_eq!(
+            read_fn
+                .call(&mut store, (3, TABLE as WasmUsize, 5, OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        assert_eq!(read_usize(&store, OUT), 11);
+        assert_eq!(&memory.data(&store)[3000..3002], b"he");
+        assert_eq!(&memory.data(&store)[3004..3008], b"llo ");
+        assert_eq!(&memory.data(&store)[3010..3018], b"world\0\0\0");
+
+        // 2. More than INLINE_IOVECS (20 entries) write and read.
+        let mut many_entries = vec![];
+        for i in 0..20usize {
+            let addr = 4000 + i * 4;
+            memory.data_mut(&mut store)[addr] = b'a' + i as u8;
+            many_entries.push((addr, 1));
+        }
+        assert_eq!(
+            seek_fn
+                .call(&mut store, (3, 0, 0, SEEK_OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        put_iovecs(&mut store, TABLE, &many_entries);
+        assert_eq!(
+            write_fn
+                .call(&mut store, (3, TABLE as WasmUsize, 20, OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        assert_eq!(read_usize(&store, OUT), 20);
+        assert_eq!(
+            seek_fn
+                .call(&mut store, (3, 0, 0, SEEK_OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        let mut read_many_entries = vec![];
+        for i in 0..20usize {
+            let addr = 5000 + i * 4;
+            memory.data_mut(&mut store)[addr] = 0;
+            read_many_entries.push((addr, 1));
+        }
+        put_iovecs(&mut store, TABLE, &read_many_entries);
+        assert_eq!(
+            read_fn
+                .call(&mut store, (3, TABLE as WasmUsize, 20, OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        assert_eq!(read_usize(&store, OUT), 20);
+        for i in 0..20usize {
+            assert_eq!(memory.data(&store)[5000 + i * 4], b'a' + i as u8);
+        }
+
+        // 3. Zero-length iovec table (including null iovs pointer) and all-empty iovecs.
+        {
+            let mut st = stream_state.lock().unwrap();
+            st.read_calls = 0;
+            st.write_calls = 0;
+        }
+        assert_eq!(
+            read_fn
+                .call(&mut store, (6, 0, 0, OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        assert_eq!(read_usize(&store, OUT), 0);
+        assert_eq!(
+            write_fn
+                .call(&mut store, (6, 0, 0, OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        assert_eq!(read_usize(&store, OUT), 0);
+        put_iovecs(&mut store, TABLE, &[(100, 0), (200, 0)]);
+        assert_eq!(
+            read_fn
+                .call(&mut store, (6, TABLE as WasmUsize, 2, OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        assert_eq!(
+            write_fn
+                .call(&mut store, (6, TABLE as WasmUsize, 2, OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        {
+            let st = stream_state.lock().unwrap();
+            assert_eq!(st.read_calls, 0);
+            assert_eq!(st.write_calls, 0);
+        }
+
+        // 4. Short transfers stop at the first short buffer; stdin and stdout work.
+        {
+            let mut st = stream_state.lock().unwrap();
+            st.read_data = b"ABCDEFGH".to_vec();
+            st.read_offset = 0;
+            st.read_chunk = 3;
+            st.read_calls = 0;
+            st.fail_read_on_call = 0;
+            st.written.clear();
+            st.write_chunk = 3;
+            st.write_calls = 0;
+            st.fail_write_on_call = 0;
+        }
+        memory.data_mut(&mut store)[6000..6012].fill(0);
+        put_iovecs(&mut store, TABLE, &[(6000, 4), (6004, 4), (6008, 4)]);
+        assert_eq!(
+            read_fn
+                .call(&mut store, (0, TABLE as WasmUsize, 3, OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        assert_eq!(read_usize(&store, OUT), 3);
+        assert_eq!(&memory.data(&store)[6000..6012], b"ABC\0\0\0\0\0\0\0\0\0");
+        assert_eq!(stream_state.lock().unwrap().read_calls, 1);
+
+        memory.data_mut(&mut store)[6100..6104].copy_from_slice(b"1234");
+        memory.data_mut(&mut store)[6200..6204].copy_from_slice(b"5678");
+        put_iovecs(&mut store, TABLE, &[(6100, 4), (6200, 4)]);
+        assert_eq!(
+            write_fn
+                .call(&mut store, (1, TABLE as WasmUsize, 2, OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        assert_eq!(read_usize(&store, OUT), 3);
+        {
+            let st = stream_state.lock().unwrap();
+            assert_eq!(st.write_calls, 1);
+            assert_eq!(st.written, b"123");
+        }
+
+        // 5. Partial progress before an error reports transferred count; immediate error reports errno.
+        {
+            let mut st = stream_state.lock().unwrap();
+            st.read_data = b"XYZWUV".to_vec();
+            st.read_offset = 0;
+            st.read_chunk = usize::MAX;
+            st.read_calls = 0;
+            st.fail_read_on_call = 2;
+            st.written.clear();
+            st.write_chunk = usize::MAX;
+            st.write_calls = 0;
+            st.fail_write_on_call = 2;
+        }
+        memory.data_mut(&mut store)[6000..6008].fill(0);
+        put_iovecs(&mut store, TABLE, &[(6000, 4), (6004, 4)]);
+        assert_eq!(
+            read_fn
+                .call(&mut store, (6, TABLE as WasmUsize, 2, OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        assert_eq!(read_usize(&store, OUT), 4);
+        assert_eq!(&memory.data(&store)[6000..6008], b"XYZW\0\0\0\0");
+        // Next read hits fail_read_on_call == 2 again if reset to 1: immediate failure returns EIO.
+        {
+            let mut st = stream_state.lock().unwrap();
+            st.read_calls = 0;
+            st.fail_read_on_call = 1;
+        }
+        assert_eq!(
+            read_fn
+                .call(&mut store, (6, TABLE as WasmUsize, 1, OUT as WasmUsize))
+                .unwrap(),
+            Error::Io as i32
+        );
+
+        put_iovecs(&mut store, TABLE, &[(6100, 4), (6200, 4)]);
+        assert_eq!(
+            write_fn
+                .call(&mut store, (6, TABLE as WasmUsize, 2, OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        assert_eq!(read_usize(&store, OUT), 4);
+        assert_eq!(stream_state.lock().unwrap().written, b"1234");
+        {
+            let mut st = stream_state.lock().unwrap();
+            st.write_calls = 0;
+            st.fail_write_on_call = 1;
+        }
+        assert_eq!(
+            write_fn
+                .call(&mut store, (6, TABLE as WasmUsize, 1, OUT as WasmUsize))
+                .unwrap(),
+            Error::Io as i32
+        );
+
+        // 6. Self-overwriting iovec table during fd_read uses the upfront snapshot.
+        {
+            let mut st = stream_state.lock().unwrap();
+            st.read_data = alloc::vec![0xAA; 2 * 2 * word_bytes + 4];
+            st.read_offset = 0;
+            st.read_chunk = usize::MAX;
+            st.read_calls = 0;
+            st.fail_read_on_call = 0;
+        }
+        let table_bytes = 2 * 2 * word_bytes;
+        memory.data_mut(&mut store)[6300..6304].fill(0);
+        put_iovecs(&mut store, TABLE, &[(TABLE, table_bytes), (6300, 4)]);
+        assert_eq!(
+            read_fn
+                .call(&mut store, (6, TABLE as WasmUsize, 2, OUT as WasmUsize))
+                .unwrap(),
+            0
+        );
+        assert_eq!(read_usize(&store, OUT), table_bytes + 4);
+        assert!(
+            memory.data(&store)[TABLE..TABLE + table_bytes]
+                .iter()
+                .all(|&b| b == 0xAA)
+        );
+        assert_eq!(&memory.data(&store)[6300..6304], &[0xAA; 4]);
+
+        // 7. Out-of-bounds and overflowing iovecs/output pointers fail with EFAULT before moving any byte.
+        {
+            let mut st = stream_state.lock().unwrap();
+            st.read_data = b"NEVER_TOUCHED".to_vec();
+            st.read_offset = 0;
+            st.read_calls = 0;
+            st.fail_read_on_call = 0;
+            st.written.clear();
+            st.write_calls = 0;
+            st.fail_write_on_call = 0;
+        }
+        // Invalid output pointers.
+        put_iovecs(&mut store, TABLE, &[(6100, 4)]);
+        for bad_out in [0usize, 65_536, 65_535] {
+            assert_eq!(
+                read_fn
+                    .call(&mut store, (6, TABLE as WasmUsize, 1, bad_out as WasmUsize))
+                    .unwrap(),
+                Error::Fault as i32
+            );
+            assert_eq!(
+                write_fn
+                    .call(&mut store, (6, TABLE as WasmUsize, 1, bad_out as WasmUsize))
+                    .unwrap(),
+                Error::Fault as i32
+            );
+        }
+        // Invalid iovec tables.
+        for (bad_table, bad_count) in [
+            (0 as WasmUsize, 1 as WasmUsize),
+            (65_536 - word_bytes as WasmUsize, 1),
+            (TABLE as WasmUsize, WasmUsize::MAX),
+        ] {
+            assert_eq!(
+                read_fn
+                    .call(&mut store, (6, bad_table, bad_count, OUT as WasmUsize))
+                    .unwrap(),
+                Error::Fault as i32
+            );
+            assert_eq!(
+                write_fn
+                    .call(&mut store, (6, bad_table, bad_count, OUT as WasmUsize))
+                    .unwrap(),
+                Error::Fault as i32
+            );
+        }
+        // Second iovec buffer out of bounds / null / overflowing: first iovec must not transfer.
+        for (bad_buf, bad_len) in [
+            (0 as WasmUsize, 4 as WasmUsize),
+            (65_536, 4),
+            (65_534, 4),
+            (100, WasmUsize::MAX),
+        ] {
+            let bytes = memory.data_mut(&mut store);
+            bytes[TABLE..TABLE + word_bytes].copy_from_slice(&(6100 as WasmUsize).to_le_bytes());
+            bytes[TABLE + word_bytes..TABLE + 2 * word_bytes]
+                .copy_from_slice(&(4 as WasmUsize).to_le_bytes());
+            bytes[TABLE + 2 * word_bytes..TABLE + 3 * word_bytes]
+                .copy_from_slice(&bad_buf.to_le_bytes());
+            bytes[TABLE + 3 * word_bytes..TABLE + 4 * word_bytes]
+                .copy_from_slice(&bad_len.to_le_bytes());
+
+            assert_eq!(
+                read_fn
+                    .call(&mut store, (6, TABLE as WasmUsize, 2, OUT as WasmUsize))
+                    .unwrap(),
+                Error::Fault as i32
+            );
+            assert_eq!(
+                write_fn
+                    .call(&mut store, (6, TABLE as WasmUsize, 2, OUT as WasmUsize))
+                    .unwrap(),
+                Error::Fault as i32
+            );
+        }
+        {
+            let st = stream_state.lock().unwrap();
+            assert_eq!(st.read_calls, 0);
+            assert_eq!(st.write_calls, 0);
+            assert!(st.written.is_empty());
+        }
+
+        // 8. Descriptor kind and access errors (including with iovs_len == 0).
+        put_iovecs(&mut store, TABLE, &[(6100, 4)]);
+        for count in [0 as WasmUsize, 1] {
+            assert_eq!(
+                read_fn
+                    .call(
+                        &mut store,
+                        (-1, TABLE as WasmUsize, count, OUT as WasmUsize)
+                    )
+                    .unwrap(),
+                Error::Badf as i32
+            );
+            assert_eq!(
+                read_fn
+                    .call(
+                        &mut store,
+                        (99, TABLE as WasmUsize, count, OUT as WasmUsize)
+                    )
+                    .unwrap(),
+                Error::Badf as i32
+            );
+            assert_eq!(
+                read_fn
+                    .call(&mut store, (7, TABLE as WasmUsize, count, OUT as WasmUsize))
+                    .unwrap(),
+                Error::Isdir as i32
+            );
+            assert_eq!(
+                write_fn
+                    .call(&mut store, (7, TABLE as WasmUsize, count, OUT as WasmUsize))
+                    .unwrap(),
+                Error::Isdir as i32
+            );
+            assert_eq!(
+                write_fn
+                    .call(&mut store, (4, TABLE as WasmUsize, count, OUT as WasmUsize))
+                    .unwrap(),
+                Error::Badf as i32
+            );
+            assert_eq!(
+                read_fn
+                    .call(&mut store, (5, TABLE as WasmUsize, count, OUT as WasmUsize))
+                    .unwrap(),
+                Error::Badf as i32
+            );
+        }
     }
 }
