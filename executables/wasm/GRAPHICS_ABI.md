@@ -11,7 +11,7 @@ This document tracks the guest-facing LVGL ABI, not the browser display backend.
 | Host-dispatched calls | 133 after Grid/Flex, local style/font, range, selection, LED, Calendar, Spinbox, Chart, Line, List, Tileview, and shadcn theme additions; unsupported IDs return `GraphicsError::Unsupported` |
 | Widget families with usable constructors | Button, Buttonmatrix, Checkbox, Label, Tabview, Textarea, Keyboard, Calendar, Spinbox, Chart, Line; Xila Window/Object/IndexedCanvas are extra abstractions |
 | ABI IDs | Legacy calls are alphabetically numbered from discovered signatures; Xila extensions use append-only IDs starting at `0xf000` (Grid `grid_fr` is `0xf006`) |
-| Object registry | Per-VM `lvgl_rust::Owner` (`1..=15` concurrent VMs) with 32-bit generational handles (`Handle::into_raw()`), slot reuse across deletions, O(1) `find_handle()` reverse lookup, and sparse `BTreeMap<u32, Entry>` side table only for retained resources and alias kinds |
+| Object registry | Per-VM sorted `Vec<u32>` handle table (no fixed VM cap) over `lvgl_rust` 32-bit generational handles (`Handle::into_raw()`, 16-bit slot + 16-bit generation, 65,536 reuse generations), O(1) `find_handle()` reverse lookup filtered by VM table, and sparse `BTreeMap<u32, Entry>` side table only for retained resources and alias kinds |
 | Per-object adapter allocation | Zero host allocations for plain widgets (no `Rc`, no per-object LVGL delete callbacks); one global `set_free_observer` reclaims side-table resources on deletion |
 | Events | Native queue initial capacity 10 is not a hard bound; key is recorded natively but not returned by the current guest pop calls |
 | Images | LV_USE_IMAGE is enabled, but surveyed LVGL FS adapters and optional PNG/JPEG/GIF decoders are disabled; an image constructor alone would not provide VFS-backed loading |
@@ -64,7 +64,7 @@ Dropdown/Roller receive newline-separated guest options synchronously; LVGL's dy
 1. **Fundamental geometry/layout (in progress):** expose safe position/size/align and flex/grid operations; add host/guest ABI tests and document the API.
 2. **ABI manifest and inventory:** derive guest exposure and host dispatch metadata from one declared support list; generate deterministic per-symbol classifications and compatibility fingerprint/capability inquiry while preserving legacy IDs.
 3. **Theme, styles and fonts:** validated local style properties and semantic theme/font IDs; no raw `lv_style_t`/`lv_font_t` pointers.
-4. **Object registry (done):** per-VM `lvgl_rust::Owner` and 32-bit generational handles (`Handle::into_raw()`), global `set_free_observer` reclamation, O(1) `find_handle()` reverse lookup, slot reuse, and sparse side table for retained 1-allocation resources and alias kinds.
+4. **Object registry (done):** per-VM sorted `Vec<u32>` handle table and `lvgl_rust` 32-bit generational handles (`Handle::into_raw()`, 65,536-reuse generation), global `set_free_observer` reclamation, O(1) `find_handle()` reverse lookup, slot reuse, and sparse side table for retained 1-allocation resources and alias kinds.
 5. **Events and controls:** versioned bounded event payload with key/target identity, followed by complete vertical slices for common controls and existing partial widgets.
 6. **Advanced resources/widgets:** separately scoped bounded list/table/menu/chart/image and VFS-backed asset ownership work.
 7. **Integration:** standalone WASM UI acceptance, migration/limits docs, native/browser tests and available MCU checks.

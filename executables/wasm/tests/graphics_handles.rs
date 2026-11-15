@@ -8,7 +8,6 @@ use wasm::{
     graphics::{Function, GraphicsCall, GraphicsError, GraphicsState, dispatch},
     translation::{GuestMemory, GuestPointer, WasmUsize},
 };
-use xila::graphics::lvgl_rust::Owner;
 
 fn call(
     state: &mut GraphicsState,
@@ -32,7 +31,7 @@ fn call(
 }
 
 #[xila::task::test(task_path = xila::task)]
-async fn handles_check_owner_generation_class_and_slot() {
+async fn handles_check_vm_isolation_generation_class_and_slot() {
     let _standard = testing::initialize(false, false).await;
     let manager = support::manager().await;
     let mut bytes = [0; 128];
@@ -41,11 +40,22 @@ async fn handles_check_owner_generation_class_and_slot() {
     let mut second = GraphicsState::new(Some(manager));
     let root = call(&mut first, &mut memory, Function::WindowCreate, &[]).unwrap();
     let child = call(&mut first, &mut memory, Function::ObjectCreate, &[root]).unwrap();
+    assert_eq!(first.handle_count(), 2);
     assert_eq!(
         call(&mut second, &mut memory, Function::ObjectDelete, &[child]),
         Err(GraphicsError::InvalidHandle)
     );
-    for forged in [0, u32::MAX as WasmUsize, child ^ 0x10000, child & !0xffff] {
+    assert_eq!(
+        call(&mut second, &mut memory, Function::ObjectDelete, &[root]),
+        Err(GraphicsError::InvalidHandle)
+    );
+    for forged in [
+        0,
+        u32::MAX as WasmUsize,
+        child ^ 0x10000,
+        child & !0xffff,
+        0x1234_5678,
+    ] {
         assert_eq!(
             call(&mut first, &mut memory, Function::ObjectDelete, &[forged]),
             Err(GraphicsError::InvalidHandle)
@@ -61,6 +71,7 @@ async fn handles_check_owner_generation_class_and_slot() {
         Err(GraphicsError::InvalidHandle)
     );
     call(&mut first, &mut memory, Function::ObjectDelete, &[child]).unwrap();
+    assert_eq!(first.handle_count(), 1);
     for _ in 0..600 {
         let current = call(&mut first, &mut memory, Function::ObjectCreate, &[root]).unwrap();
         assert_ne!(current, child);
@@ -72,7 +83,9 @@ async fn handles_check_owner_generation_class_and_slot() {
     }
     let parent = call(&mut first, &mut memory, Function::ObjectCreate, &[root]).unwrap();
     let descendant = call(&mut first, &mut memory, Function::ObjectCreate, &[parent]).unwrap();
+    assert_eq!(first.handle_count(), 3);
     call(&mut first, &mut memory, Function::ObjectDelete, &[parent]).unwrap();
+    assert_eq!(first.handle_count(), 1);
     assert_eq!(
         call(
             &mut first,
@@ -85,6 +98,7 @@ async fn handles_check_owner_generation_class_and_slot() {
     drop(first);
     drop(second);
     assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(GraphicsState::registered_state_count(manager), 0);
     let mut replacement = GraphicsState::new(Some(manager));
     assert_eq!(
         call(
@@ -95,31 +109,43 @@ async fn handles_check_owner_generation_class_and_slot() {
         ),
         Err(GraphicsError::InvalidHandle)
     );
+    drop(replacement);
+    assert_eq!(GraphicsState::registered_state_count(manager), 0);
 }
 
 #[xila::task::test(task_path = xila::task)]
-async fn owner_exhaustion_is_reported_and_teardown_releases_ids() {
+async fn multiple_vms_exceed_legacy_cap_and_teardown_releases_registry() {
     let _standard = testing::initialize(false, false).await;
     let manager = support::manager().await;
     let mut bytes = [0; 32];
     let mut memory = GuestMemory::new(&mut bytes);
     let mut states = Vec::new();
-    for _ in 0..Owner::MAX {
+    let mut objects = Vec::new();
+    for index in 0..20 {
         let mut state = GraphicsState::new(Some(manager));
-        call(&mut state, &mut memory, Function::Percentage, &[50]).unwrap();
+        let root = call(&mut state, &mut memory, Function::WindowCreate, &[]).unwrap();
+        let child = call(&mut state, &mut memory, Function::ObjectCreate, &[root]).unwrap();
+        assert_eq!(state.handle_count(), 2);
+        assert_eq!(GraphicsState::registered_state_count(manager), index + 1);
         states.push(state);
+        objects.push((root, child));
     }
-    let mut extra = GraphicsState::new(Some(manager));
+    assert_eq!(manager.get_window_count().await.unwrap(), 20);
     assert_eq!(
-        call(&mut extra, &mut memory, Function::WindowCreate, &[]),
-        Err(GraphicsError::ResourceLimit)
+        call(
+            &mut states[0],
+            &mut memory,
+            Function::ObjectDelete,
+            &[objects[19].1]
+        ),
+        Err(GraphicsError::InvalidHandle)
     );
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
-    drop(states.pop());
-    call(&mut extra, &mut memory, Function::WindowCreate, &[]).unwrap();
-    drop(extra);
+    states.truncate(10);
+    assert_eq!(manager.get_window_count().await.unwrap(), 10);
+    assert_eq!(GraphicsState::registered_state_count(manager), 10);
     drop(states);
     assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(GraphicsState::registered_state_count(manager), 0);
 }
 
 #[xila::task::test(task_path = xila::task)]
@@ -327,6 +353,9 @@ async fn cascade_delete_and_teardown_release_all_retained_resources() {
     )
     .unwrap();
 
+    assert_eq!(state.handle_count(), 12);
+    assert_eq!(state.side_entry_count(), 6);
+    assert_eq!(state.resource_counters(), (84, 192, 65_280));
     let with_resources = __XILA_TESTING_MEMORY_MANAGER.get_used();
     call(
         &mut state,
@@ -335,6 +364,10 @@ async fn cascade_delete_and_teardown_release_all_retained_resources() {
         &[container],
     )
     .unwrap();
+
+    assert_eq!(state.handle_count(), 1);
+    assert_eq!(state.side_entry_count(), 0);
+    assert_eq!(state.resource_counters(), (0, 0, 0));
 
     for stale in [
         matrix, calendar, line, canvas, chart, tabs, tab, tab_label, tiles, tile,
@@ -367,7 +400,7 @@ async fn cascade_delete_and_teardown_release_all_retained_resources() {
     )
     .unwrap();
 
-    // Also attach a FilePicker and TabView+Tab to verify clean VM teardown via delete_owner.
+    // Also attach a FilePicker and TabView+Tab to verify clean VM teardown.
     let picker = call(
         &mut state,
         &mut memory,
@@ -387,4 +420,5 @@ async fn cascade_delete_and_teardown_release_all_retained_resources() {
 
     drop(state);
     assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(GraphicsState::registered_state_count(manager), 0);
 }

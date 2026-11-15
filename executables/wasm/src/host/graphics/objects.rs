@@ -17,40 +17,47 @@ pub const MAX_GRID_TRACKS_PER_VM: usize = 512;
 
 // Accessed only under Manager's process-wide graphics lock. Boxes keep these
 // addresses stable when GraphicsState moves. The observer never calls LVGL.
-struct Owners(UnsafeCell<[*mut Side; safe::Owner::MAX as usize + 1]>);
-unsafe impl Sync for Owners {}
-static OWNERS: Owners = Owners(UnsafeCell::new(
-    [core::ptr::null_mut(); safe::Owner::MAX as usize + 1],
-));
+struct Sides(UnsafeCell<Vec<*mut Side>>);
+unsafe impl Sync for Sides {}
+static SIDES: Sides = Sides(UnsafeCell::new(Vec::new()));
 
 fn freed(event: safe::Freed) {
-    let Some(owner) = event.owner() else { return };
-    // SAFETY: the graphics lock serializes owner registration, callbacks and drop.
-    let side = unsafe { (*OWNERS.0.get())[owner.get() as usize].as_mut() };
-    if let Some(side) = side {
-        // The OBJ_ID hook runs at the END of the destructor, after LVGL has
-        // finished reading maps, grid tracks and widget buffers.
-        if let Some(entry) = side.entries.remove(&event.handle().into_raw()) {
-            side.widget_options_bytes -= usize::from(entry.option_bytes);
-            if let Some(resource) = entry.resource {
-                match &resource {
-                    Resource::Grid(grid) => side.grid_tracks -= grid.track_count(),
-                    Resource::Canvas(canvas) => side.canvas_pixels -= canvas.len(),
-                    Resource::GridWith { grid, inner } => {
-                        side.grid_tracks -= grid.track_count();
-                        if let Resource::Canvas(canvas) = &**inner {
-                            side.canvas_pixels -= canvas.len();
+    let raw = event.handle().into_raw();
+    // SAFETY: the graphics lock serializes Side registration, callbacks and drop.
+    // The observer never calls LVGL and never mutates SIDES.
+    let sides = unsafe { &*SIDES.0.get() };
+    for &side_ptr in sides {
+        // SAFETY: every pointer in SIDES points to a live, Box-allocated Side
+        // that is unregistered before being freed.
+        let side = unsafe { &mut *side_ptr };
+        if let Ok(index) = side.handles.binary_search(&raw) {
+            side.handles.remove(index);
+            // The OBJ_ID hook runs at the END of the destructor, after LVGL has
+            // finished reading maps, grid tracks and widget buffers.
+            if let Some(entry) = side.entries.remove(&raw) {
+                side.widget_options_bytes -= usize::from(entry.option_bytes);
+                if let Some(resource) = entry.resource {
+                    match &resource {
+                        Resource::Grid(grid) => side.grid_tracks -= grid.track_count(),
+                        Resource::Canvas(canvas) => side.canvas_pixels -= canvas.len(),
+                        Resource::GridWith { grid, inner } => {
+                            side.grid_tracks -= grid.track_count();
+                            if let Resource::Canvas(canvas) = &**inner {
+                                side.canvas_pixels -= canvas.len();
+                            }
                         }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
+            break;
         }
     }
 }
 
 #[derive(Default)]
 struct Side {
+    handles: Vec<u32>,
     entries: BTreeMap<u32, Entry>,
     grid_tracks: usize,
     widget_options_bytes: usize,
@@ -199,7 +206,6 @@ impl Entry {
 
 pub struct GraphicsState {
     pub(crate) manager: Option<&'static Manager>,
-    owner: Option<safe::Owner>,
     side: Option<Box<UnsafeCell<Side>>>,
     /// Trusted native context, refreshed from GlobalStore at the VM boundary.
     pub(crate) file_system: Option<(
@@ -212,7 +218,6 @@ impl GraphicsState {
     pub fn new(manager: Option<&'static Manager>) -> Self {
         Self {
             manager,
-            owner: None,
             side: None,
             file_system: None,
         }
@@ -231,24 +236,26 @@ impl GraphicsState {
     }
 
     pub(crate) fn initialize(&mut self, lv: &mut safe::Lvgl) -> Result<()> {
-        if self.owner.is_some() {
+        if self.side.is_some() {
             return Ok(());
         }
-        // SAFETY: called only inside the manager session.
-        let owners = unsafe { &mut *OWNERS.0.get() };
-        let index = (1..owners.len())
-            .find(|&i| owners[i].is_null())
-            .ok_or(GraphicsError::ResourceLimit)?;
         let side = Box::new(UnsafeCell::new(Side::default()));
-        owners[index] = side.get();
-        self.owner = safe::Owner::new(index as u8);
+        // SAFETY: called only inside the manager session under the graphics lock.
+        let sides = unsafe { &mut *SIDES.0.get() };
+        if sides.try_reserve(1).is_err() {
+            return Err(GraphicsError::ResourceLimit);
+        }
+        sides.push(side.get());
         self.side = Some(side);
         lv.set_free_observer(Some(freed));
         Ok(())
     }
 
     pub(crate) fn ensure_capacity(&self) -> Result<()> {
-        self.owner.map(|_| ()).ok_or(GraphicsError::ResourceLimit)
+        self.side
+            .as_ref()
+            .map(|_| ())
+            .ok_or(GraphicsError::ResourceLimit)
     }
 
     fn side(&self) -> &Side {
@@ -273,11 +280,16 @@ impl GraphicsState {
     }
 
     fn resolve_raw(&self, handle: WasmUsize) -> Result<(u32, *mut lvgl::lv_obj_t)> {
-        let owner = self.owner.ok_or(GraphicsError::InvalidHandle)?;
+        let side = self.side.as_ref().ok_or(GraphicsError::InvalidHandle)?;
         let raw = Self::raw(handle)?;
-        let object = self
-            .lv()
-            .resolve_for::<safe::Obj>(raw, owner)
+        // SAFETY: dispatcher holds the graphics lock; no borrow spans deletion.
+        if unsafe { &*side.get() }.handles.binary_search(&raw).is_err() {
+            return Err(GraphicsError::InvalidHandle);
+        }
+        let handle =
+            safe::Handle::<safe::Obj>::from_raw(raw).ok_or(GraphicsError::InvalidHandle)?;
+        let object = handle
+            .get(self.lv())
             .map_err(|_| GraphicsError::InvalidHandle)?;
         Ok((raw, object.as_ptr()))
     }
@@ -419,10 +431,15 @@ impl GraphicsState {
         let Some(non_null) = NonNull::new(pointer) else {
             return 0;
         };
+        let Some(side) = self.side.as_ref() else {
+            return 0;
+        };
         let obj = unsafe { safe::Obj::from_raw(self.lv(), non_null) };
         obj.find_handle()
-            .filter(|h| h.owner() == self.owner)
-            .map_or(0, |h| h.into_raw() as WasmUsize)
+            .map(safe::Handle::into_raw)
+            // SAFETY: dispatcher holds the graphics lock; no borrow spans deletion.
+            .filter(|raw| unsafe { &*side.get() }.handles.binary_search(raw).is_ok())
+            .map_or(0, |raw| raw as WasmUsize)
     }
 
     pub(crate) fn insert(
@@ -442,15 +459,27 @@ impl GraphicsState {
             }
             root = unsafe { lvgl::lv_obj_get_parent(root) };
         }
+        let Some(side) = self.side.as_mut() else {
+            unsafe { lvgl::lv_obj_delete(pointer.as_ptr()) };
+            return Err(GraphicsError::ResourceLimit);
+        };
+        // SAFETY: graphics lock held; no borrow spans LVGL deletion.
+        if unsafe { &mut *side.get() }.handles.try_reserve(1).is_err() {
+            unsafe { lvgl::lv_obj_delete(pointer.as_ptr()) };
+            return Err(GraphicsError::ResourceLimit);
+        }
         let obj = unsafe { safe::Obj::from_raw(self.lv(), pointer) };
-        let owner = self.owner.ok_or(GraphicsError::ResourceLimit)?;
-        let handle = match obj.handle_for(owner) {
+        let handle = match obj.handle() {
             Ok(h) => h.into_raw(),
             Err(_) => {
                 unsafe { lvgl::lv_obj_delete(pointer.as_ptr()) };
                 return Err(GraphicsError::ResourceLimit);
             }
         };
+        let side = self.side_mut();
+        if let Err(pos) = side.handles.binary_search(&handle) {
+            side.handles.insert(pos, handle);
+        }
         if matches!(
             kind,
             Kind::IndexedCanvas
@@ -460,7 +489,7 @@ impl GraphicsState {
                 | Kind::Badge
                 | Kind::Card
         ) {
-            self.side_mut().entries.entry(handle).or_default().kind = Some(kind);
+            side.entries.entry(handle).or_default().kind = Some(kind);
         }
         Ok(handle as WasmUsize)
     }
@@ -784,21 +813,120 @@ impl GraphicsState {
             _ => panic!("canvas kind checked"),
         }
     }
+
+    #[doc(hidden)]
+    pub fn handle_count(&self) -> usize {
+        let _lock = self.manager.map(Manager::synchronous_lock);
+        self.side
+            .as_ref()
+            // SAFETY: graphics lock held when manager is present.
+            .map_or(0, |side| unsafe { &*side.get() }.handles.len())
+    }
+
+    #[doc(hidden)]
+    pub fn side_entry_count(&self) -> usize {
+        let _lock = self.manager.map(Manager::synchronous_lock);
+        self.side
+            .as_ref()
+            // SAFETY: graphics lock held when manager is present.
+            .map_or(0, |side| unsafe { &*side.get() }.entries.len())
+    }
+
+    #[doc(hidden)]
+    pub fn resource_counters(&self) -> (usize, usize, usize) {
+        let _lock = self.manager.map(Manager::synchronous_lock);
+        self.side.as_ref().map_or((0, 0, 0), |side| {
+            // SAFETY: graphics lock held when manager is present.
+            let side = unsafe { &*side.get() };
+            (
+                side.grid_tracks,
+                side.widget_options_bytes,
+                side.canvas_pixels,
+            )
+        })
+    }
+
+    #[doc(hidden)]
+    pub fn registered_state_count(manager: &Manager) -> usize {
+        let _lock = manager.synchronous_lock();
+        // SAFETY: graphics lock held.
+        unsafe { &*SIDES.0.get() }.len()
+    }
+}
+
+fn unregister_side(side: Option<Box<UnsafeCell<Side>>>) {
+    let Some(side) = side else {
+        return;
+    };
+    let target = side.get();
+    // SAFETY: called only while holding the graphics lock.
+    let sides = unsafe { &mut *SIDES.0.get() };
+    if let Some(pos) = sides.iter().position(|&ptr| ptr == target) {
+        sides.swap_remove(pos);
+        if sides.is_empty() {
+            *sides = Vec::new();
+        }
+    }
+    drop(side);
 }
 
 impl Drop for GraphicsState {
     fn drop(&mut self) {
-        let (Some(manager), Some(owner)) = (self.manager, self.owner) else {
+        let Some(manager) = self.manager else {
             return;
         };
+        if self.side.is_none() {
+            return;
+        }
         let _ = manager.with_lvgl_sync(|lv| {
-            lv.delete_owner(owner);
+            let handles = core::mem::take(&mut self.side_mut().handles);
+            for raw in handles {
+                let Some(handle) = safe::Handle::<safe::Obj>::from_raw(raw) else {
+                    continue;
+                };
+                if let Ok(object) = handle.get_mut(lv) {
+                    let _ = object.delete();
+                }
+            }
             // Private window roots ensure structural deletion cannot leave a
             // retained resource attached to an untracked shared object.
-            unsafe {
-                (*OWNERS.0.get())[owner.get() as usize] = core::ptr::null_mut();
-            }
+            unregister_side(self.side.take());
             Ok(())
         });
+        if self.side.is_some() {
+            let _lock = manager.synchronous_lock();
+            unregister_side(self.side.take());
+        }
+    }
+}
+
+#[cfg(target_pointer_width = "32")]
+const _: () = {
+    assert!(core::mem::size_of::<u32>() == 4);
+    assert!(core::mem::size_of::<Entry>() == 24);
+    assert!(core::mem::size_of::<Side>() == 36);
+    assert!(core::mem::size_of::<Sides>() == 12);
+    assert!(core::mem::size_of::<GraphicsState>() == 16);
+    assert!(core::mem::size_of::<ChartSeries>() == 36);
+};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::mem::size_of;
+
+    #[test]
+    fn host_type_sizes_match_expected_layouts() {
+        assert_eq!(size_of::<u32>(), 4);
+        assert_eq!(size_of::<lvgl::lv_calendar_date_t>(), 4);
+        assert_eq!(size_of::<lvgl::lv_point_precise_t>(), 8);
+        assert_eq!(size_of::<xila::task::TaskIdentifier>(), 4);
+        #[cfg(target_pointer_width = "64")]
+        {
+            assert_eq!(size_of::<Entry>(), 40);
+            assert_eq!(size_of::<Side>(), 72);
+            assert_eq!(size_of::<Sides>(), 24);
+            assert_eq!(size_of::<GraphicsState>(), 32);
+        }
     }
 }
