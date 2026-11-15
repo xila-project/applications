@@ -136,10 +136,13 @@ fn table(memory: &mut GuestMemory<'_>, pointers: &[WasmUsize]) {
 fn c_strings_are_bounded_and_never_accept_null_or_out_of_range_offsets() {
     let mut bytes = [0; 1030];
     bytes[1..1025].fill(b'a');
+    let base = bytes.as_ptr() as usize;
     let memory = GuestMemory::new(&mut bytes);
     assert_eq!(read_c_string(&memory, 0), Err(GraphicsError::InvalidMemory));
     assert_eq!(read_c_string(&memory, 1), Err(GraphicsError::ResourceLimit));
-    assert_eq!(read_c_string(&memory, 2).unwrap().to_bytes().len(), 1023);
+    let borrowed = read_c_string(&memory, 2).unwrap();
+    assert_eq!(borrowed.to_bytes().len(), 1023);
+    assert_eq!(borrowed.as_ptr() as usize, base + 2);
     assert_eq!(read_c_string(&memory, 1029).unwrap().to_bytes(), b"");
     assert_eq!(
         read_c_string(&memory, 1030),
@@ -160,8 +163,11 @@ fn c_strings_are_bounded_and_never_accept_null_or_out_of_range_offsets() {
 fn textarea_strings_allow_a_full_page_and_remain_bounded() {
     let mut bytes = vec![b'a'; 4099];
     bytes[4097] = 0;
+    let base = bytes.as_ptr() as usize;
     let mut memory = GuestMemory::new(&mut bytes);
-    assert_eq!(read_textarea_string(&memory, 1).unwrap().to_bytes().len(), 4096);
+    let borrowed = read_textarea_string(&memory, 1).unwrap();
+    assert_eq!(borrowed.to_bytes().len(), 4096);
+    assert_eq!(borrowed.as_ptr() as usize, base + 1);
     memory.write(GuestPointer::new(4097), b'a').unwrap();
     assert_eq!(
         read_textarea_string(&memory, 1),

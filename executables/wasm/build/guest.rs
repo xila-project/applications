@@ -283,9 +283,32 @@ fn generate_c_abi_functions(
     Ok(())
 }
 
+fn widen_object_delete_handle(signature: &mut Signature) {
+    for input in &mut signature.inputs {
+        let FnArg::Typed(pattern_type) = input else {
+            continue;
+        };
+        if !matches!(&*pattern_type.pat, syn::Pat::Ident(pat) if pat.ident.to_string().starts_with("__"))
+            && let Type::Path(path) = &*pattern_type.ty
+            && path.path.is_ident("u16")
+        {
+            *pattern_type.ty = syn::parse_quote!(u32);
+        }
+    }
+}
+
 pub fn generate(output_path: &Path, registry: &GraphicsRegistry<'_>) {
     let calls = registry.calls();
-    let signatures: Vec<_> = calls.iter().map(|call| call.signature.clone()).collect();
+    let signatures: Vec<_> = calls
+        .iter()
+        .map(|call| {
+            let mut signature = call.signature.clone();
+            if call.name == "object_delete" {
+                widen_object_delete_handle(&mut signature);
+            }
+            signature
+        })
+        .collect();
 
     let enumerations_generated_path = output_path.join("enumeration.generated.rs");
     let functions_generated_path = output_path.join("functions.generated.rs");

@@ -125,29 +125,58 @@ async fn wasmi_adapter_uses_context_and_checked_exports() {
         invoke
             .call(
                 &mut store,
-                (Function::WindowCreate.id(), 0, 0, 0, 0, 0, 0, 0, 0, 1)
+                (Function::WindowCreate.id(), 0, 0, 0, 0, 0, 0, 0, 0, 800)
             )
             .unwrap(),
         0
     );
+    let root = {
+        use wasm::translation::{GuestMemory, GuestPointer, WasmUsize};
+        GuestMemory::new(memory.data_mut(&mut store))
+            .read::<WasmUsize>(GuestPointer::new(800))
+            .unwrap()
+    };
     assert_eq!(
         invoke
             .call(
                 &mut store,
-                (Function::LabelCreate.id(), 1, 0, 0, 0, 0, 0, 0, 1, 1)
+                (Function::LabelCreate.id(), root, 0, 0, 0, 0, 0, 0, 1, 800)
             )
             .unwrap(),
         0
     );
+    let label = {
+        use wasm::translation::{GuestMemory, GuestPointer, WasmUsize};
+        GuestMemory::new(memory.data_mut(&mut store))
+            .read::<WasmUsize>(GuestPointer::new(800))
+            .unwrap()
+    };
     assert_eq!(
         invoke
             .call(
                 &mut store,
-                (Function::ButtonmatrixCreate.id(), 1, 0, 0, 0, 0, 0, 0, 1, 1)
+                (
+                    Function::ButtonmatrixCreate.id(),
+                    root,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    1,
+                    800
+                )
             )
             .unwrap(),
         0
     );
+    let matrix = {
+        use wasm::translation::{GuestMemory, GuestPointer, WasmUsize};
+        GuestMemory::new(memory.data_mut(&mut store))
+            .read::<WasmUsize>(GuestPointer::new(800))
+            .unwrap()
+    };
     {
         use wasm::translation::{GuestMemory, GuestPointer, GuestValue, WasmUsize};
         let mut view = GuestMemory::new(memory.data_mut(&mut store));
@@ -170,7 +199,7 @@ async fn wasmi_adapter_uses_context_and_checked_exports() {
         invoke
             .call(
                 &mut store,
-                (Function::LabelSetText.id(), 2, 600, 0, 0, 0, 0, 0, 2, 0)
+                (Function::LabelSetText.id(), label, 600, 0, 0, 0, 0, 0, 2, 0)
             )
             .unwrap(),
         0
@@ -181,7 +210,7 @@ async fn wasmi_adapter_uses_context_and_checked_exports() {
                 &mut store,
                 (
                     Function::ButtonmatrixSetMap.id(),
-                    3,
+                    matrix,
                     400,
                     0,
                     0,
@@ -230,7 +259,7 @@ async fn wasmi_adapter_uses_context_and_checked_exports() {
                 &mut store,
                 (
                     Function::FilePickerCreate.id(),
-                    1,
+                    root,
                     2,
                     700,
                     0,

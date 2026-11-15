@@ -154,19 +154,33 @@ cargo test -p xila-wasm --features graphics,xila/graphics_rendering_xrgb8888 \
   and checked borrowed guest memory. They do not use Wasmi types or global
   graphics-manager lookups. The thin `graphics/wasmi.rs` adapter alone handles
   imports, exports, memory/store borrowing, and context capability checks.
-- Object handles are local to the VM. Deleted handles are never reused during
-  execution. Native deletion notifications invalidate handles and remove stale
-  queued event targets. Teardown deletes owned windows and their children using
-  the same context-provided manager and lock, including on traps.
-  Registration clears matching pre-existing queued targets to null before
-  issuing a new handle, so native address reuse cannot grant an old unknown
-  event a new capability. Event codes are preserved.
-- LVGL copies label strings synchronously. Button-map strings and the native
-  pointer table are copied into stable VM-owned storage because LVGL retains
-  them. Guest memory growth/mutation does not invalidate the map. A replacement
-  switches LVGL to the new map before releasing the old map.
-  Deleted widgets' maps are reclaimed after native deletion returns (or on the
-  next dispatch for external deletions); only small handle tombstones persist.
+- Object handles are 32-bit `lvgl-rust` generational handles (16-bit slot +
+  16-bit generation, 65,536 reuse generations per slot) tracked in a per-VM
+  sorted `Vec<u32>` handle table. Every guest handle is verified by binary
+  search in the calling VM's table before resolving it in `lvgl-rust`'s
+  registry, rejecting forged, stale, or cross-VM handles with
+  `GraphicsError::InvalidHandle`. There is no 15-VM cap; live VMs are
+  registered dynamically in a growable host table of `Side` pointers with no
+  static reservation. Guest handle typedefs (`ObjectHandle`, `LvObject`) and
+  `object_delete(u32)` are widened to 32 bits while preserving all call IDs.
+- One global `set_free_observer` removes freed handles from the owning VM's
+  table and reclaims retained side-table entries and quota counters immediately
+  when LVGL finishes object destruction (including cascading and external
+  deletes), without per-object `DELETE` callbacks or `Rc` wrappers. VM teardown
+  deletes the VM's still-live objects under the graphics manager lock (skipping
+  already-dead children and ignoring refused structural deletions) and
+  unregisters its `Side` before freeing it, including on traps. Registration
+  clears matching pre-existing queued targets to null before issuing a new
+  handle, so native address reuse cannot grant an old unknown event a new
+  capability. Event codes are preserved.
+- Text setters validate NUL termination (and UTF-8 where required) directly in
+  guest memory and pass pointers to LVGL's synchronous copying setters with
+  zero host allocations. Button maps (one packed allocation for pointer table
+  plus strings), grid tracks, calendar highlights, line points, chart series,
+  indexed canvases (one packed allocation), and alias kinds live in a sparse
+  per-VM side table keyed by raw handle; plain widgets add zero host
+  side-table entries. A map or grid replacement switches LVGL to the new
+  buffer before releasing the old one.
 
 Enable the optional `graphics` feature for host bindings. Select the Xila
 rendering feature appropriate to the platform (e.g.
@@ -203,12 +217,16 @@ unsupported. Chart supports bounded series slots and copied values; Line accepts
 bounded points copied into host-owned memory because LVGL retains the point
 array pointer. List supports copied text sections/buttons with safe child
 handles, and Tileview supports bounded tile creation and active-tile navigation.
-List text is UTF-8 validated and copied before native calls; the guest never
-passes icon, tile, or series pointers to LVGL.
+List text is UTF-8 validated in guest memory and passed to LVGL's copying
+calls without a host allocation; the guest never passes icon, tile, or series
+pointers to LVGL.
 The shadcn-themed slice adds Badge and Card helpers, Button variants, and Input
 error states by calling the shared `lvgl_theme_shadcn` theme APIs.
 
-- 256 issued object handles per execution, including subsequently deleted ones.
+- No fixed concurrent graphical VM limit (dynamic per-VM registry and sorted
+  handle tables); object slots are dynamically grown in non-moving doubling
+  chunks up to 65,535 live objects and reused across 65,536 generations after
+  deletion.
 - 64 map entries including the sentinel; 1024 bytes per NUL-terminated string.
 - 8192 retained map-string bytes per widget, including the native sentinel.
 - 1024 option-string bytes/64 entries per Dropdown or Roller, with an 8192-byte

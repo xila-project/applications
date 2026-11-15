@@ -71,7 +71,7 @@ fn generate() {
             "Word",
             Some("*mut lv_obj_t"),
         ),
-        ("object_delete", &["u16"], "None", None),
+        ("object_delete", &["u32"], "None", None),
         (
             "object_set_flex_flow",
             &["*mut lv_obj_t", "lv_flex_flow_t"],
@@ -820,8 +820,14 @@ fn generate() {
             .chain(extra)
             .find(|entry| entry.0 == call.name)
             .unwrap_or_else(|| panic!("registry call {} has no ABI declaration", call.name));
-        call.validate_signature(arguments, *output)
-            .unwrap_or_else(|error| panic!("{error}"));
+        if call.name == "object_delete" && *arguments == ["u32"] {
+            call.validate_signature(&["u16"], *output)
+                .or_else(|_| call.validate_signature(arguments, *output))
+                .unwrap_or_else(|error| panic!("{error}"));
+        } else {
+            call.validate_signature(arguments, *output)
+                .unwrap_or_else(|error| panic!("{error}"));
+        }
         let count = arguments.len() as i32;
         let variant = graphics_bindgen::enumeration::get_variant_identifier(&call.signature.ident);
         let id = call.id as i32;

@@ -33,7 +33,7 @@ fn call(
 }
 
 #[xila::task::test(task_path = xila::task)]
-async fn deleted_maps_are_reclaimed_without_reusing_handles() {
+async fn deleted_maps_are_reclaimed_with_generational_handles() {
     let _standard = testing::initialize(false, false).await;
     let manager = support::manager().await;
     let mut bytes = [0; 2048];
@@ -70,7 +70,7 @@ async fn deleted_maps_are_reclaimed_without_reusing_handles() {
                 Function::ButtonmatrixCreate,
                 &[parent],
             );
-            assert!(matrix > previous);
+            assert_ne!(matrix, previous);
             previous = matrix;
             call(
                 &mut state,
@@ -90,13 +90,11 @@ async fn deleted_maps_are_reclaimed_without_reusing_handles() {
                     &[if mode == "parent" { parent } else { matrix }],
                 );
             }
-            // Next dispatch reaps external deletions before allocating again.
+            // The free observer reclaims external deletions synchronously.
             call(&mut state, &mut memory, Function::Percentage, &[100]);
             let reclaimed = with_map.saturating_sub(__XILA_TESTING_MEMORY_MANAGER.get_used());
-            // Measure deletion against the same registry capacity: handles are
-            // never reused, so tombstones can legitimately outgrow one map.
-            // Eight 1000-byte strings, their NULs, and the empty sentinel must
-            // be released, in addition to the native widget allocations.
+            // Slots are reused with new generations, so deleting the matrix frees
+            // its eight 1000-byte strings, their NULs, the sentinel, and native widget storage.
             assert!(
                 reclaimed >= 8009,
                 "{mode} deletion reclaimed only {reclaimed} bytes"

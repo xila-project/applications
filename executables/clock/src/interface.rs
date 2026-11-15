@@ -128,7 +128,7 @@ pub fn run() -> wasm::Result<()> {
                 // Never drop a change made just before closing.
                 ui.flush_save();
                 unsafe {
-                    object_delete(u16::try_from(ui.window as usize).map_err(|_| -1)?)?;
+                    object_delete(u32::try_from(ui.window as usize).map_err(|_| -1)?)?;
                 }
                 return Ok(());
             }
@@ -216,7 +216,7 @@ impl Interface {
             match Self::build(window, store, settings, persistence_error) {
                 Ok(ui) => Ok(ui),
                 Err(error) => {
-                    if let Ok(handle) = u16::try_from(window as usize) {
+                    if let Ok(handle) = u32::try_from(window as usize) {
                         let _ = object_delete(handle);
                     }
                     Err(error)
