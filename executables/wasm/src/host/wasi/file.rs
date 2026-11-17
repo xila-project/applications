@@ -383,7 +383,11 @@ mod tests {
             xila::time::Manager::new(&testing::TimeDevice).unwrap(),
         ));
         let memory_device = xila::file_system::MemoryDevice::<512>::new_static(1024 * 512);
-        let filesystem = xila::little_fs::FileSystem::new_format(memory_device, 256).unwrap();
+        let filesystem = xila::little_fs::FileSystem::new_format(
+            memory_device,
+            xila::little_fs::Options::new(256),
+        )
+        .unwrap();
         let vfs = Box::leak(Box::new(
             xila::virtual_file_system::initialize(
                 task_manager,
@@ -644,7 +648,11 @@ mod tests {
             xila::time::Manager::new(&testing::TimeDevice).unwrap(),
         ));
         let memory_device = xila::file_system::MemoryDevice::<512>::new_static(1024 * 512);
-        let filesystem = xila::little_fs::FileSystem::new_format(memory_device, 256).unwrap();
+        let filesystem = xila::little_fs::FileSystem::new_format(
+            memory_device,
+            xila::little_fs::Options::new(256),
+        )
+        .unwrap();
         let vfs = Box::leak(Box::new(
             xila::virtual_file_system::initialize(
                 task_manager,

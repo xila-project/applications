@@ -131,7 +131,9 @@ mod tests {
         let users_manager = Box::leak(Box::new(xila::users::Manager::new()));
         let time_manager = Box::leak(Box::new(xila::time::Manager::with_clock(&FixedClock)));
         let disk = xila::file_system::MemoryDevice::<512>::new_static(1024 * 512);
-        let filesystem = xila::little_fs::FileSystem::new_format(disk, 256).unwrap();
+        let filesystem =
+            xila::little_fs::FileSystem::new_format(disk, xila::little_fs::Options::new(256))
+                .unwrap();
         let vfs = Box::leak(Box::new(xila::virtual_file_system::VirtualFileSystem::new(
             task_manager,
             users_manager,
