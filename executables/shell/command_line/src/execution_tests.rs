@@ -1200,8 +1200,8 @@ async fn mv_checks_write_permission_on_both_parent_directories() {
 async fn rename_checks_parent_paths_relative_to_the_mounted_filesystem() {
     let shell = shell().await;
     let device = xila::file_system::MemoryDevice::<512>::new_static(1024 * 512);
-    little_fs::FileSystem::format(device, 256).unwrap();
-    let file_system = little_fs::FileSystem::new(device, 256).unwrap();
+    little_fs::FileSystem::format(device, little_fs::Options::new(256)).unwrap();
+    let file_system = little_fs::FileSystem::new(device, little_fs::Options::new(256)).unwrap();
     xila::file_system::FileSystemOperations::set_attributes(
         &file_system,
         xila::file_system::Path::ROOT,

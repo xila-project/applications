@@ -102,7 +102,9 @@ impl Guest {
             xila::time::Manager::new(&testing::TimeDevice).unwrap(),
         ));
         let device = xila::file_system::MemoryDevice::<512>::new_static(1024 * 512);
-        let file_system = xila::little_fs::FileSystem::new_format(device, 256).unwrap();
+        let file_system =
+            xila::little_fs::FileSystem::new_format(device, xila::little_fs::Options::new(256))
+                .unwrap();
         let vfs: &'static VirtualFileSystem = Box::leak(Box::new(
             xila::virtual_file_system::initialize(task_manager, users_manager, clock, file_system)
                 .unwrap(),
