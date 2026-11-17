@@ -50,7 +50,6 @@ fn widget_options_reject_excess_entries_and_oversized_option_text() {
         Err(GraphicsError::ResourceLimit)
     );
 
-    drop(memory);
     bytes.fill(0);
     for index in 0..65 {
         bytes[64 + index * 2] = b'x';
@@ -87,7 +86,6 @@ fn grid_track_arrays_are_bounded_terminated_and_copied() {
         memory.write(GuestPointer::new(offset), value).unwrap();
     }
     let grid = GridTracks::decode(&memory, 32, 64, GRID_LAST, GRID_CONTENT).unwrap();
-    drop(memory);
     bytes.fill(0xff);
     assert_eq!(grid.columns(), &[48, GRID_CONTENT, GRID_LAST]);
     assert_eq!(grid.rows(), &[24, GRID_LAST]);
