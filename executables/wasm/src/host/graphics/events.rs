@@ -1,6 +1,8 @@
 //! Translate native event semantics to the shared Xila guest contract.
 use crate::graphics_event::{EVENT_CLOSE_REQUESTED, EventCode};
-use xila::graphics::{EventKind, lvgl};
+use xila::graphics::EventKind;
+#[expect(deprecated, reason = "the host still drives the raw LVGL bindings")]
+use xila::graphics::lvgl;
 
 pub(super) fn guest_code(event: EventKind) -> u32 {
     match event {

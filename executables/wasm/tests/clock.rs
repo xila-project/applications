@@ -14,6 +14,10 @@ mod localization;
 mod support;
 
 use core::{ffi::CStr, future::poll_fn, task::Poll, time::Duration};
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{Manager, lvgl};
 
 fn text(key: &str) -> String {

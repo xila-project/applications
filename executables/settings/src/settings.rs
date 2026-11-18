@@ -1,6 +1,10 @@
 use alloc::string::String;
 use xila::file_system::Kind;
 use xila::graphics::OwnedWindow;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{
     self, EventKind, lvgl,
     palette::{self, Hue},
@@ -84,7 +88,7 @@ impl Settings {
             while let Some(event) = self.window.pop_event() {
                 // Logique de filtrage spécifique à Settings
                 if (event.code == EventKind::Delete || event.code == EventKind::CloseRequested)
-                    && event.target == self.window.as_object_mutable()
+                    && event.is_target(self.window.as_object())
                 {
                     return false;
                 }

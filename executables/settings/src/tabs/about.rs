@@ -1,6 +1,10 @@
 use crate::error::Result;
 use alloc::{ffi::CString, format, string::ToString, vec::Vec};
 use core::{ffi::CStr, ptr::null_mut, str};
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::{
     about,
     graphics::{

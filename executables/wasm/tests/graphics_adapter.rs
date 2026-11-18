@@ -234,6 +234,10 @@ async fn wasmi_adapter_uses_context_and_checked_exports() {
     );
     memory.data_mut(&mut store)[600..605].fill(0xff);
     {
+        #[expect(
+            deprecated,
+            reason = "raw LVGL access until this module migrates to the safe layer"
+        )]
         use xila::graphics::lvgl;
         let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
         let _lock = manager.synchronous_lock();

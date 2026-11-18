@@ -3,6 +3,10 @@ use alloc::{collections::vec_deque::VecDeque, string::String};
 use core::ffi::CStr;
 use xila::graphics::OwnedWindow;
 use xila::graphics::fonts::get_font_monospace_medium;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{
     self, Color, EventKind, Key,
     lvgl::{self, lv_obj_t},
@@ -319,7 +323,7 @@ impl Terminal {
             while let Some(event) = inner.window.pop_event() {
                 match event.code {
                     EventKind::Delete | EventKind::CloseRequested
-                        if event.target == inner.window.as_object_mutable() =>
+                        if event.is_target(inner.window.as_object()) =>
                     {
                         running = false;
                     }
@@ -329,11 +333,11 @@ impl Terminal {
                             notify_input = true;
                         }
                     }
-                    EventKind::Clicked if event.target == inner.send => {
+                    EventKind::Clicked if event.is_target(inner.send) => {
                         Self::submit(&mut inner).await?;
                         notify_input = true;
                     }
-                    EventKind::Clicked if event.target == inner.clear => {
+                    EventKind::Clicked if event.is_target(inner.clear) => {
                         // Only the scrollback is dropped; the shell keeps
                         // running and its current line, the prompt, stays.
                         let last_line = Self::last_line_start(&inner.buffer);

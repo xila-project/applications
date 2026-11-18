@@ -16,6 +16,10 @@ use core::{
     task::Poll,
     time::Duration,
 };
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{Manager, lvgl};
 
 /// Text of a label, or `None` for a null object.

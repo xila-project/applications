@@ -8,6 +8,10 @@ use wasm::{
     graphics::{Function, GraphicsCall, GraphicsState, dispatch},
     translation::{GuestMemory, GuestPointer, GuestValue, WasmUsize},
 };
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::{graphics::lvgl, memory::ManagerTrait};
 
 fn call(

@@ -1,4 +1,7 @@
 #![no_std]
+// Migrated to the safe LVGL layer: any raw LVGL import must be audited.
+#![deny(deprecated)]
+#![forbid(unsafe_code)]
 
 extern crate alloc;
 
@@ -17,7 +20,7 @@ use debug_protocol::{
 use xila::{
     executable::{self, ExecutableTrait, Standard},
     file_system::AccessFlags,
-    graphics::{self, EventKind, Key, State},
+    graphics::{self, EventKind, Key, State, lvgl_rust::widgets::Label},
     synchronization::Arc,
     task::{self, TaskIdentifier},
     virtual_file_system::{File, VirtualFileSystem},
@@ -45,20 +48,29 @@ async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), 
         None
     } else {
         Some({
-            let _lock = graphics.lock().await;
-            let mut window = graphics.create_window().await.map_err(|_| code(1))?;
+            // Creating a window needs the graphics lock; the safe session below
+            // takes it again, so the guard is released first.
+            let mut window = {
+                let _lock = graphics.lock().await;
+                graphics.create_window().await.map_err(|_| code(1))?
+            };
             window.set_icon("Db", graphics::Color::BLACK);
-            let label = unsafe { graphics::lvgl::lv_label_create(window.as_object_mutable()) };
-            if label.is_null() {
-                return Err(code(1));
-            }
-            unsafe {
-                graphics::lvgl::lv_label_set_text(
-                    label,
-                    c"Debug agent is ready. Use xila-debug from the host.".as_ptr(),
-                );
-                graphics::lvgl::lv_obj_center(label);
-            }
+            // The window owns its content: no raw pointer and no unsafe. On
+            // failure `window` drops after the session released the lock.
+            graphics
+                .with_lvgl(|lv| {
+                    let mut content = window.content_mut(lv);
+                    Label::create(&mut content)?.set_text_static(Some(
+                        c"Debug agent is ready. Use xila-debug from the host.",
+                    ))?;
+                    window
+                        .edit(lv, |root| root.child(-1))
+                        .ok_or(graphics::Error::InvalidReference)?
+                        .center();
+                    Ok(())
+                })
+                .await
+                .map_err(|_| code(1))?;
             window
         })
     };
@@ -88,7 +100,7 @@ async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), 
             graphics::lock!(graphics, {
                 while let Some(event) = window.pop_event() {
                     if matches!(event.code, EventKind::Delete | EventKind::CloseRequested)
-                        && event.target == window.as_object_mutable()
+                        && event.is_target(window.as_object())
                     {
                         should_close = true;
                         break;

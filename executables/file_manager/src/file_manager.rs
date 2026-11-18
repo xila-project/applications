@@ -10,6 +10,10 @@ use xila::graphics::fonts;
 use xila::log;
 use xila::task;
 use xila::virtual_file_system::Directory;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::{
     file_system::{Kind, Path, PathOwned},
     graphics::{
@@ -122,29 +126,27 @@ impl FileManager {
     pub async fn handle_event(&mut self, event: graphics::Event) -> Result<()> {
         match event.code {
             EventKind::Delete | EventKind::CloseRequested
-                if event.target == self.window.as_object_mutable() =>
+                if event.is_target(self.window.as_object()) =>
             {
                 self.running = false;
             }
             EventKind::Clicked => {
-                let target = event.target;
-
                 // Handle different button clicks
-                if target == self.up_button {
+                if event.is_target(self.up_button) {
                     self.handle_up_click().await?;
-                } else if target == self.home_button {
+                } else if event.is_target(self.home_button) {
                     self.handle_home_click().await?;
-                } else if target == self.refresh_button {
+                } else if event.is_target(self.refresh_button) {
                     self.handle_refresh_click().await?;
-                } else if target == self.go_button {
+                } else if event.is_target(self.go_button) {
                     self.handle_go_click().await?;
                 } else {
                     // Handle file item clicks
-                    self.handle_file_click(target).await?;
+                    self.handle_file_click(&event).await?;
                 }
             }
             // Enter in the path field navigates like the Go button.
-            EventKind::Key if event.target == self.path_text_area => {
+            EventKind::Key if event.is_target(self.path_text_area) => {
                 if let Some(Key::Enter) = event.key {
                     self.handle_go_click().await?;
                 }
@@ -505,32 +507,31 @@ impl FileManager {
         }
     }
 
-    async fn handle_file_click(&mut self, target: *mut lvgl::lv_obj_t) -> Result<()> {
-        unsafe {
-            // Check if the clicked object is a file list button
-            let parent = lvgl::lv_obj_get_parent(target as *const lvgl::lv_obj_t);
-            if core::ptr::eq(parent as *mut lvgl::lv_obj_t, self.file_list) {
-                // Get the file index from user data
-                let index = lvgl::lv_obj_get_user_data(target) as usize;
+    async fn handle_file_click(&mut self, event: &graphics::Event) -> Result<()> {
+        // This runs under the graphics lock. Only live list buttons can
+        // supply a file index.
+        let file = unsafe {
+            let count = lvgl::lv_obj_get_child_count(self.file_list);
+            (0..count)
+                .map(|index| lvgl::lv_obj_get_child(self.file_list, index as i32))
+                .find(|&child| {
+                    event.is_target(child)
+                        && lvgl::lv_obj_check_type(child, &lvgl::lv_list_button_class)
+                })
+                .and_then(|button| self.files.get(lvgl::lv_obj_get_user_data(button) as usize))
+        };
 
-                if index < self.files.len() {
-                    let file = &self.files[index];
-
-                    if file.kind == Kind::Directory {
-                        // Navigate to directory
-                        if let Some(new_path) =
-                            self.current_path.clone().join(Path::from_str(&file.name))
-                        {
-                            self.open(new_path).await?;
-                        }
-                    } else {
-                        // No application association yet: describe the file.
-                        self.set_status(
-                            &alloc::format!("{} - {}", file.name, format_size(file.size)),
-                            false,
-                        );
-                    }
+        if let Some(file) = file {
+            if file.kind == Kind::Directory {
+                if let Some(new_path) = self.current_path.clone().join(Path::from_str(&file.name)) {
+                    self.open(new_path).await?;
                 }
+            } else {
+                // No application association yet: describe the file.
+                self.set_status(
+                    &alloc::format!("{} - {}", file.name, format_size(file.size)),
+                    false,
+                );
             }
         }
 
