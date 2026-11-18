@@ -12,8 +12,9 @@ resizing or rotating the display preserves the drawing.
 
 Save/Open uses the absolute path in the text field. Focusing it opens an on-screen
 keyboard; its accept/cancel key hides it. The default is
-`/users/<user-id>/applications/pixel_painter/data/drawing.xpnt`, provisioned by
-the launcher for each user. Enter a path inside an existing writable SD mount
+`<home>/applications/pixel_painter/data/drawing.xpnt` in the user's home
+(`/users/<user name>` for new accounts), provisioned by the launcher for each
+user. Enter a path inside an existing writable SD mount
 to use removable storage; no particular SD mount path is assumed. Filesystem
 availability and permissions determine whether a save is possible.
 

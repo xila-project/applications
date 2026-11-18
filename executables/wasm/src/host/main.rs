@@ -238,12 +238,11 @@ async fn main_inner(
     });
     if let Some(application_name) = application_name {
         let user = context.task_manager.get_user(task).await?;
-        context
+        // The directory lives in the home recorded in the user's account.
+        let application_directory = context
             .virtual_file_system
             .ensure_user_application_directories(task, user, application_name)
             .await?;
-        let application_directory =
-            xila::virtual_file_system::user_application_directory(user, application_name);
         let configuration = application_directory
             .clone()
             .append("configuration")

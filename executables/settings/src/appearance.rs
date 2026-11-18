@@ -2,10 +2,7 @@
 mod tests {
     use xila::graphics::appearance::Appearance;
     use xila::graphics::appearance::restore_appearance;
-    use xila::{
-        file_system::Permissions,
-        virtual_file_system::{File, user_home},
-    };
+    use xila::{file_system::Permissions, virtual_file_system::File};
 
     #[xila::task::test(task_path = xila::task)]
     async fn preferences_survive_reopening_and_invalid_files_are_rejected() {
@@ -13,14 +10,17 @@ mod tests {
         let context = standard.context;
         let task = context.task_manager.get_current_task_identifier().await;
         let vfs = context.virtual_file_system;
-        let path = user_home(xila::users::UserIdentifier::ROOT)
+        let path = vfs
+            .get_user_home(xila::users::UserIdentifier::ROOT)
+            .await
+            .unwrap()
             .append(".appearance")
             .unwrap();
         let root_home = vfs
             .ensure_user_home(task, xila::users::UserIdentifier::ROOT)
             .await
             .unwrap();
-        assert_eq!(root_home.as_str(), "/users/0");
+        assert_eq!(root_home.as_str(), xila::users::ROOT_HOME);
         let stats = vfs.get_statistics(&root_home).await.unwrap();
         assert_eq!(stats.permissions, Permissions::USER_FULL);
         assert_eq!(
@@ -68,11 +68,11 @@ mod tests {
             .unwrap();
         context
             .users_manager
-            .add_user(user, "appearance-test", group)
+            .add_user(user, "appearance-test", group, "/users/appearance-test")
             .await
             .unwrap();
         let home = vfs.ensure_user_home(task, user).await.unwrap();
-        assert_eq!(home.as_str(), "/users/42");
+        assert_eq!(home.as_str(), "/users/appearance-test");
         let stats = vfs.get_statistics(&home).await.unwrap();
         assert_eq!(stats.user, user);
         assert_eq!(stats.group, group);

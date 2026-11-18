@@ -198,17 +198,14 @@ mod filesystem_tests {
         ));
         let owner = UserIdentifier::new(263);
         let other = UserIdentifier::new(264);
-        for user in [owner, other] {
+        for (user, name) in [(owner, "chmod_owner"), (other, "chmod_other")] {
             services
                 .users_manager
                 .add_user(
                     user,
-                    if user == owner {
-                        "chmod_owner"
-                    } else {
-                        "chmod_other"
-                    },
+                    name,
                     GroupIdentifier::ROOT,
+                    &alloc::format!("/users/{name}"),
                 )
                 .await
                 .unwrap();

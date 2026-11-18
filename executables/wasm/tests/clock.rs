@@ -215,17 +215,15 @@ async fn real_clock_guest_runs_stopwatch_timer_saves_alarm_and_closes() {
     )
     .await;
     // Clock shows a change before writing it, so wait for the record.
-    let settings = format!(
-        "/users/{}/applications/clock/configuration/settings.1",
-        administrator.as_u16()
-    );
+    // New accounts record a home named after the user.
+    let settings = "/users/administrator/applications/clock/configuration/settings.1";
     let mut saved = Vec::new();
     for attempt in 0.. {
         saved.clear();
         match xila::virtual_file_system::File::read_from_path(
             context.virtual_file_system,
             task,
-            settings.as_str(),
+            settings,
             &mut saved,
         )
         .await

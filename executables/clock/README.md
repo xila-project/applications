@@ -52,7 +52,8 @@ wasm /applications/executables/clock
 
 The install export creates `/configuration/shared/applications/shortcuts/clock.json`.
 The launcher provisions a writable
-`/users/<user-id>/applications/clock/configuration` directory for each user.
+`<home>/applications/clock/configuration` directory in each user's home
+(`/users/<user name>` for new accounts).
 
 ## Timing and lifecycle
 
@@ -91,7 +92,7 @@ subject to executor scheduling; this is not a real-time alarm guarantee.
 ## Settings and storage
 
 The initial settings are shared by the device, in
-`/users/<user-id>/applications/clock/configuration/settings.0` and `settings.1`; use a single Clock
+`<home>/applications/clock/configuration/settings.0` and `settings.1`; use a single Clock
 instance when editing settings. Each record is 38 bytes (generation, versioned
 payload, checksum), and reads use fixed buffers. Writes alternate slots so a torn
 or corrupt latest record can fall back to the previous valid one. Settings are
