@@ -7,7 +7,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::num::NonZeroUsize;
+use core::{num::NonZeroUsize, ptr::NonNull};
 use portable_atomic::{AtomicBool, Ordering};
 
 use debug_protocol::{
@@ -17,7 +17,10 @@ use debug_protocol::{
 use xila::{
     executable::{self, ExecutableTrait, Standard},
     file_system::AccessFlags,
-    graphics::{self, EventKind, Key, State},
+    graphics::{
+        self, EventKind, Key, State,
+        lvgl_rust::{Lvgl, Obj, widgets::Label},
+    },
     synchronization::Arc,
     task::{self, TaskIdentifier},
     virtual_file_system::{File, VirtualFileSystem},
@@ -45,20 +48,40 @@ async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), 
         None
     } else {
         Some({
-            let _lock = graphics.lock().await;
+            let lock = graphics.lock().await;
             let mut window = graphics.create_window().await.map_err(|_| code(1))?;
             window.set_icon("Db", graphics::Color::BLACK);
-            let label = unsafe { graphics::lvgl::lv_label_create(window.as_object_mutable()) };
-            if label.is_null() {
-                return Err(code(1));
-            }
-            unsafe {
-                graphics::lvgl::lv_label_set_text(
-                    label,
-                    c"Debug agent is ready. Use xila-debug from the host.".as_ptr(),
-                );
-                graphics::lvgl::lv_obj_center(label);
-            }
+            let parent = NonNull::from(window.as_object_mutable());
+            // SAFETY: the graphics lock grants exclusive access to LVGL. The
+            // bridge adds a child without draining deferred requests.
+            let lv = unsafe { Lvgl::assume() };
+            let result = lv
+                .edit(|lv| {
+                    // SAFETY: the window was created under this lock and
+                    // nothing has had exclusive access since then.
+                    Some(unsafe { Obj::from_raw(lv, parent) })
+                })
+                .ok_or(graphics::lvgl_rust::Error::Dead)
+                .and_then(|mut parent| {
+                    let label = Label::create(&mut parent)?;
+                    label.set_text_static(Some(
+                        c"Debug agent is ready. Use xila-debug from the host.",
+                    ))?;
+                    NonNull::new(label.as_ptr()).ok_or(graphics::lvgl_rust::Error::Dead)
+                });
+            let result = result.and_then(|label| {
+                let mut label = lv
+                    .edit(|lv| {
+                        // SAFETY: no exclusive operation has run since creation.
+                        Some(unsafe { Obj::from_raw(lv, label) })
+                    })
+                    .ok_or(graphics::lvgl_rust::Error::Dead)?;
+                label.center();
+                Ok(())
+            });
+            // OwnedWindow also takes this lock on drop, including on error.
+            drop(lock);
+            result.map_err(|_| code(1))?;
             window
         })
     };
