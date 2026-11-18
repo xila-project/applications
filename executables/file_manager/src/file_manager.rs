@@ -506,16 +506,10 @@ impl FileManager {
     async fn handle_file_click(&mut self, event: &graphics::Event) -> Result<()> {
         // This runs under the graphics lock. Only live list buttons can
         // supply a file index.
-        let file = unsafe {
-            let count = lvgl::lv_obj_get_child_count(self.file_list);
-            (0..count)
-                .map(|index| lvgl::lv_obj_get_child(self.file_list, index as i32))
-                .find(|&child| {
-                    event.is_target(child)
-                        && lvgl::lv_obj_check_type(child, &lvgl::lv_list_button_class)
-                })
-                .and_then(|button| self.files.get(lvgl::lv_obj_get_user_data(button) as usize))
-        };
+        let file = unsafe { clicked_list_button(self.file_list, event) }.and_then(|button| {
+            self.files
+                .get(unsafe { lvgl::lv_obj_get_user_data(button) } as usize)
+        });
 
         if let Some(file) = file {
             if file.kind == Kind::Directory {
@@ -620,9 +614,69 @@ pub fn format_size(bytes: u64) -> String {
     }
 }
 
+/// The live list button of `list` a queued click was aimed at.
+///
+/// # Safety
+///
+/// The caller holds the graphics lock and `list` is a live object.
+unsafe fn clicked_list_button(
+    list: *mut lvgl::lv_obj_t,
+    event: &graphics::Event,
+) -> Option<*mut lvgl::lv_obj_t> {
+    unsafe {
+        let count = lvgl::lv_obj_get_child_count(list);
+        (0..count)
+            .map(|index| lvgl::lv_obj_get_child(list, index as i32))
+            .find(|&child| {
+                event.is_target(child)
+                    && lvgl::lv_obj_check_type(child, &lvgl::lv_list_button_class)
+            })
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::format_size;
+    use super::{clicked_list_button, format_size};
+    use xila::graphics::{EventKind, Window, lvgl};
+
+    /// A double tap on a folder queues two clicks; the first rebuilds the
+    /// list, and the second must not open whatever LVGL put at the old
+    /// button's address.
+    #[test]
+    fn a_stale_click_cannot_pick_a_rebuilt_list_entry() {
+        unsafe {
+            lvgl::lv_init();
+            lvgl::lv_display_create(320, 240);
+            let screen = lvgl::lv_obj_create(core::ptr::null_mut());
+            let mut window = Window::new(screen).unwrap();
+            let window = window.as_mut();
+            let list = lvgl::lv_list_create(window.as_object_mutable());
+            let folder = lvgl::lv_list_add_button(list, core::ptr::null(), c"folder".as_ptr());
+            while window.pop_event().is_some() {}
+            for _ in 0..2 {
+                lvgl::lv_obj_send_event(
+                    folder,
+                    lvgl::lv_event_code_t_LV_EVENT_CLICKED,
+                    core::ptr::null_mut(),
+                );
+            }
+
+            let mut clicks = core::iter::from_fn(|| window.pop_event())
+                .filter(|event| event.code == EventKind::Clicked);
+            let first = clicks.next().unwrap();
+            assert_eq!(clicked_list_button(list, &first), Some(folder));
+
+            // Opening the folder cleans the list and builds it again.
+            lvgl::lv_obj_clean(list);
+            let rebuilt = lvgl::lv_list_add_button(list, core::ptr::null(), c"entry".as_ptr());
+            let second = clicks.next().unwrap();
+            assert!(!second.is_target(rebuilt));
+            assert_eq!(clicked_list_button(list, &second), None);
+            drop(clicks);
+
+            window.delete();
+        }
+    }
 
     #[test]
     fn sizes_use_binary_prefixes() {
