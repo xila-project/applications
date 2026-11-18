@@ -5,18 +5,31 @@ use xila::graphics::{self, lvgl};
 use crate::{desk::Desk, error::Result};
 
 pub struct Home {
+    graphics_manager: &'static graphics::Manager,
     button: *mut lvgl::lv_obj_t,
 }
 
 impl Drop for Home {
     fn drop(&mut self) {
-        unsafe {
-            lvgl::lv_obj_delete_async(self.button);
-        }
+        let button = self.button;
+        let _ = self.graphics_manager.lock_function_sync(|| {
+            // SAFETY: the graphics lock is held and `Home` owns `button` on
+            // `lv_layer_top()`. Deleting it synchronously guarantees its
+            // `RELEASED` callback cannot fire after `Desk` drops.
+            unsafe {
+                lvgl::lv_obj_delete(button);
+            }
+            Ok(())
+        });
     }
 }
 
 impl Home {
+    #[cfg(test)]
+    pub(crate) fn button_object(&self) -> *mut lvgl::lv_obj_t {
+        self.button
+    }
+
     pub async fn new(
         graphics_manager: &'static graphics::Manager,
         desk: *mut lvgl::lv_obj_t,
@@ -61,7 +74,10 @@ impl Home {
             }
         });
 
-        Ok(Self { button })
+        Ok(Self {
+            graphics_manager,
+            button,
+        })
     }
 }
 

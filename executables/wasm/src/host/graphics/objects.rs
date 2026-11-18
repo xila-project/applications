@@ -9,7 +9,7 @@ use crate::host::translation::WasmUsize;
 use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
 use core::{cell::UnsafeCell, ptr::NonNull};
 use xila::graphics::{
-    Event, Manager, Window, lvgl,
+    Event, Manager, OwnedWindow, Window, lvgl,
     lvgl_rust::{self as safe, WidgetExt},
 };
 
@@ -874,12 +874,17 @@ impl Drop for GraphicsState {
                 };
                 // The host owns the guest's windows: safe structural calls
                 // refuse them (Core registers them as host objects), so a
-                // window goes through Core's own delete.
-                if let Ok(object) = handle.get(lv)
-                    && let Some(mut window) = unsafe { Window::from_raw(object.as_ptr()) }
-                {
-                    // SAFETY: the session lock is held and the window is live.
-                    unsafe { window.as_mut().delete() };
+                // window goes through its owner.
+                let window = handle
+                    .get(lv)
+                    .ok()
+                    // SAFETY: the session lock is held and the object is live.
+                    .and_then(|object| unsafe { Window::from_raw(object.as_ptr()) });
+                if let Some(window) = window {
+                    // SAFETY: this VM created the window (`WindowCreate`) and
+                    // took it from its `OwnedWindow`; nothing else owns or
+                    // deletes it.
+                    unsafe { OwnedWindow::from_raw(window) }.delete(lv);
                     continue;
                 }
                 if let Ok(object) = handle.get_mut(lv) {

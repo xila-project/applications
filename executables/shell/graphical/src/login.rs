@@ -19,6 +19,11 @@ pub struct Login {
 }
 
 impl Login {
+    #[cfg(test)]
+    pub(crate) fn window_object(&mut self) -> *mut lvgl::lv_obj_t {
+        self.window.as_object_mutable()
+    }
+
     pub async fn new(context: &'static xila::executable::ExecutableContext) -> Result<Self> {
         let graphics_manager = graphics::ffi_manager();
         // - Lock the graphics
