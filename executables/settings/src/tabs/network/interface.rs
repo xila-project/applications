@@ -434,11 +434,11 @@ impl InterfacePanel {
         // Allow only selection of one radio button at a time
 
         if event.code == EventKind::Clicked {
-            if event.target == self.cancel_button {
+            if event.is_target(self.cancel_button) {
                 log::information!("Cancel button clicked in interface panel");
                 // Close the panel without applying changes
                 return false;
-            } else if event.target == self.apply_button {
+            } else if event.is_target(self.apply_button) {
                 log::information!("Apply button clicked in interface panel");
                 // Apply the configuration changes
                 return false;

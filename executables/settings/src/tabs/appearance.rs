@@ -87,7 +87,9 @@ impl AppearanceTab {
     /// Settings dispatches events while holding the LVGL lock.
     pub async fn handle_event(&mut self, event: &Event) -> bool {
         if event.code != EventKind::ValueChanged
-            || ![self.dark_mode, self.primary, self.secondary].contains(&event.target)
+            || ![self.dark_mode, self.primary, self.secondary]
+                .into_iter()
+                .any(|widget| event.is_target(widget))
         {
             return false;
         }

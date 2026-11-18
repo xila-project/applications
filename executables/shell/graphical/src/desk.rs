@@ -549,6 +549,33 @@ impl Desk {
         }
     }
 
+    fn find_event_target(&mut self, event: &Event) -> Option<core::ptr::NonNull<lvgl::lv_obj_t>> {
+        type Search<'a> = (&'a Event, *mut lvgl::lv_obj_t);
+        unsafe extern "C" fn visit(
+            object: *mut lvgl::lv_obj_t,
+            data: *mut core::ffi::c_void,
+        ) -> lvgl::lv_obj_tree_walk_res_t {
+            let (event, found) = unsafe { &mut *data.cast::<Search<'_>>() };
+            if event.is_target(object) {
+                *found = object;
+                lvgl::lv_obj_tree_walk_res_t_LV_OBJ_TREE_WALK_END
+            } else {
+                lvgl::lv_obj_tree_walk_res_t_LV_OBJ_TREE_WALK_NEXT
+            }
+        }
+
+        let mut search: Search<'_> = (event, core::ptr::null_mut());
+        // SAFETY: the graphics lock keeps the window tree live during the walk.
+        unsafe {
+            lvgl::lv_obj_tree_walk(
+                self.window.as_object_mutable(),
+                Some(visit),
+                (&raw mut search).cast(),
+            );
+        }
+        core::ptr::NonNull::new(search.1)
+    }
+
     async fn get_visible_windows(&self) -> Result<Vec<(usize, String, Color)>> {
         let graphics_manager = self.graphics_manager;
         let window_count = graphics_manager.get_window_count().await?;
@@ -649,11 +676,26 @@ impl Desk {
     }
 
     pub async fn handle_event(&mut self, event: Event) -> Result<()> {
+        // Resolve pointer events against the live window tree before
+        // inspecting their widgets. The graphics lock is held by the caller.
+        let target = match event.code {
+            EventKind::Clicked
+            | EventKind::LongPressed
+            | EventKind::Pressed
+            | EventKind::Released => {
+                let Some(target) = self.find_event_target(&event) else {
+                    return Ok(());
+                };
+                target.as_ptr()
+            }
+            _ => core::ptr::null_mut(),
+        };
+
         match event.code {
             Self::HOME_EVENT => unsafe {
                 lvgl::lv_tileview_set_tile_by_index(self.tile_view, 0, 0, true);
             },
-            EventKind::ValueChanged if event.target == self.tile_view => unsafe {
+            EventKind::ValueChanged if event.is_target(self.tile_view) => unsafe {
                 if lvgl::lv_tileview_get_tile_active(self.tile_view) == self.desk_tile {
                     lvgl::lv_obj_clean(self.drawer_tile);
                 } else if lvgl::lv_obj_get_child_count(self.drawer_tile) == 0 {
@@ -664,8 +706,8 @@ impl Desk {
                 if self
                     .dock_menu_maximize_button
                     .is_some_and(|maximize_button| {
-                        event.target == maximize_button
-                            || unsafe { lvgl::lv_obj_get_parent(event.target) == maximize_button }
+                        target == maximize_button
+                            || unsafe { lvgl::lv_obj_get_parent(target) == maximize_button }
                     })
                 {
                     if let Some(window_identifier) = self.dock_menu_target_window
@@ -689,8 +731,8 @@ impl Desk {
                 }
 
                 if self.dock_menu_close_button.is_some_and(|close_button| {
-                    event.target == close_button
-                        || unsafe { lvgl::lv_obj_get_parent(event.target) == close_button }
+                    target == close_button
+                        || unsafe { lvgl::lv_obj_get_parent(target) == close_button }
                 }) {
                     if let Some(window_identifier) = self.dock_menu_target_window {
                         self.close_app_for_window(window_identifier).await;
@@ -704,11 +746,11 @@ impl Desk {
                 }
 
                 if self.dock_menu.is_some()
-                    && unsafe { lvgl::lv_obj_get_parent(event.target) == self.dock }
-                    && event.target != self.main_button
+                    && unsafe { lvgl::lv_obj_get_parent(target) == self.dock }
+                    && target != self.main_button
                 {
                     let clicked_window_identifier =
-                        unsafe { lvgl::lv_obj_get_user_data(event.target) as usize };
+                        unsafe { lvgl::lv_obj_get_user_data(target) as usize };
 
                     if self
                         .dock_menu_target_window
@@ -721,7 +763,7 @@ impl Desk {
                 }
 
                 if let Some(menu) = self.dock_menu
-                    && !unsafe { Self::is_object_inside(menu, event.target) }
+                    && !unsafe { Self::is_object_inside(menu, target) }
                 {
                     unsafe {
                         self.close_dock_menu();
@@ -729,13 +771,13 @@ impl Desk {
                 }
 
                 // If the target is a shortcut, execute the shortcut
-                if let Some(shortcut_name) = self.shortcuts.get(&event.target).cloned() {
+                if let Some(shortcut_name) = self.shortcuts.get(&target).cloned() {
                     self.execute_shortcut(&shortcut_name).await?;
                 }
                 // If the target is a dock icon, move the window to the foreground
-                else if unsafe { lvgl::lv_obj_get_parent(event.target) == self.dock } {
+                else if unsafe { lvgl::lv_obj_get_parent(target) == self.dock } {
                     // Ignore the main button
-                    if event.target == self.main_button {
+                    if target == self.main_button {
                         return Ok(());
                     }
 
@@ -743,8 +785,7 @@ impl Desk {
                         self.close_dock_menu();
                     }
 
-                    let window_identifier =
-                        unsafe { lvgl::lv_obj_get_user_data(event.target) as usize };
+                    let window_identifier = unsafe { lvgl::lv_obj_get_user_data(target) as usize };
 
                     if let Err(error) = self
                         .graphics_manager
@@ -760,25 +801,24 @@ impl Desk {
                 }
             }
             EventKind::LongPressed
-                if unsafe { lvgl::lv_obj_get_parent(event.target) == self.dock }
-                    && event.target != self.main_button =>
+                if unsafe { lvgl::lv_obj_get_parent(target) == self.dock }
+                    && target != self.main_button =>
             {
-                let window_identifier =
-                    unsafe { lvgl::lv_obj_get_user_data(event.target) as usize };
+                let window_identifier = unsafe { lvgl::lv_obj_get_user_data(target) as usize };
 
                 unsafe {
-                    self.open_dock_menu(event.target, window_identifier)?;
+                    self.open_dock_menu(target, window_identifier)?;
                 }
             }
             EventKind::Pressed
-                if (event.target == self.main_button
-                    || unsafe { lvgl::lv_obj_get_parent(event.target) == self.main_button }) =>
+                if (target == self.main_button
+                    || unsafe { lvgl::lv_obj_get_parent(target) == self.main_button }) =>
             unsafe {
                 lvgl::lv_obj_add_state(self.main_button, lvgl::LV_STATE_PRESSED);
             },
             EventKind::Released
-                if (event.target == self.main_button
-                    || unsafe { lvgl::lv_obj_get_parent(event.target) == self.main_button }) =>
+                if (target == self.main_button
+                    || unsafe { lvgl::lv_obj_get_parent(target) == self.main_button }) =>
             {
                 unsafe {
                     self.clear_main_button_pressed_state();

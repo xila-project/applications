@@ -229,7 +229,7 @@ impl WifiPanel {
         Ok(())
     }
     pub fn handle_event(&mut self, event: &Event) {
-        let result = if event.target == self.radio && event.code == EventKind::ValueChanged {
+        let result = if event.is_target(self.radio) && event.code == EventKind::ValueChanged {
             self.message = None;
             self.clear_password();
             let radio = if unsafe { lvgl::lv_obj_has_state(self.radio, lvgl::LV_STATE_CHECKED) } {
@@ -238,20 +238,20 @@ impl WifiPanel {
                 WifiRadioState::OFF
             };
             self.control(SET_WIFI_RADIO_STATE, &radio)
-        } else if event.target == self.scan && event.code == EventKind::Clicked {
+        } else if event.is_target(self.scan) && event.code == EventKind::Clicked {
             self.message = None;
             self.clear_password();
             self.control(START_WIFI_SCAN, &WifiScanConfiguration::default())
-        } else if event.target == self.disconnect && event.code == EventKind::Clicked {
+        } else if event.is_target(self.disconnect) && event.code == EventKind::Clicked {
             self.message = None;
             self.clear_password();
             self.control(DISCONNECT_WIFI_CLIENT, &())
-        } else if event.target == self.connect && event.code == EventKind::Clicked {
+        } else if event.is_target(self.connect) && event.code == EventKind::Clicked {
             self.message = None;
             let result = self.connect_selected();
             self.clear_password();
             result
-        } else if event.target == self.networks && event.code == EventKind::ValueChanged {
+        } else if event.is_target(self.networks) && event.code == EventKind::ValueChanged {
             self.message = None;
             self.clear_password();
             Ok(())

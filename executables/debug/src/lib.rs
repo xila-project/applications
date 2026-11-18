@@ -88,7 +88,7 @@ async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), 
             graphics::lock!(graphics, {
                 while let Some(event) = window.pop_event() {
                     if matches!(event.code, EventKind::Delete | EventKind::CloseRequested)
-                        && event.target == window.as_object_mutable()
+                        && event.is_target(window.as_object())
                     {
                         should_close = true;
                         break;
