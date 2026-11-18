@@ -5,11 +5,10 @@ extern crate alloc;
 use alloc::{
     boxed::Box,
     string::{String, ToString},
-    sync::Arc,
     vec::Vec,
 };
 use core::num::NonZeroUsize;
-use core::sync::atomic::{AtomicBool, Ordering};
+use portable_atomic::{AtomicBool, Ordering};
 
 use debug_protocol::{
     InputState, MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, Request, ScreenshotMetadata,
@@ -19,6 +18,7 @@ use xila::{
     executable::{self, ExecutableTrait, Standard},
     file_system::AccessFlags,
     graphics::{self, EventKind, Key, State},
+    synchronization::Arc,
     task::{self, TaskIdentifier},
     virtual_file_system::{File, VirtualFileSystem},
 };
@@ -33,6 +33,10 @@ impl ExecutableTrait for DebugExecutable {
     }
 }
 
+#[allow(
+    clippy::disallowed_types,
+    reason = "xila::synchronization::Arc resolves to alloc::sync::Arc until core#650 merges"
+)]
 async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), NonZeroUsize> {
     let context = standard.context;
     let graphics = graphics::ffi_manager();
@@ -101,6 +105,10 @@ async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), 
     }
 }
 
+#[allow(
+    clippy::disallowed_types,
+    reason = "xila::synchronization::Arc resolves to alloc::sync::Arc until core#650 merges"
+)]
 async fn serve_agent(
     vfs: &'static VirtualFileSystem,
     context: &'static xila::executable::ExecutableContext,

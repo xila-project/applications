@@ -15,6 +15,7 @@ xila = { workspace = true, optional = true, default-features = true }
 getargs-derive = { workspace = true, optional = true }
 getargs = { version = "0.5", optional = true }
 embassy-time = { workspace = true, optional = true }
+portable-atomic = { workspace = true, optional = true }
 
 [features]
 guest = []
@@ -26,6 +27,7 @@ host = [
   "dep:getargs-derive",
   "dep:getargs",
   "dep:embassy-time",
+  "dep:portable-atomic",
 ]
 default = ["host", "memory_32"]
 memory_32 = []

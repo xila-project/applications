@@ -1,15 +1,14 @@
 #![cfg(feature = "host")]
+#![allow(clippy::disallowed_types, reason = "host-only test")]
 extern crate abi_definitions;
 testing::instantiate_global_allocator!();
 use std::{
     num::NonZeroU32,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
 use wasm::{GlobalStore, WasiContext, add_wasi_to_linker, execution::run};
 use wasmi::{Config, Engine, Linker, Module, Store};
+use xila::synchronization::Arc;
 
 #[xila::task::test(task_path=xila::task)]
 async fn resumable_execution_yields_sleeps_and_preserves_real_traps() {

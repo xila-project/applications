@@ -45,7 +45,8 @@ impl BaseOperations for Terminal {
         buffer: &mut [u8],
         _: Size,
     ) -> core::task::Poll<Result<usize>> {
-        use core::{sync::atomic::Ordering, task::Poll};
+        use core::task::Poll;
+        use portable_atomic::Ordering;
         let waiter = context
             .get_private_data_mutable_of_type::<Waiter>()
             .ok_or(Error::InvalidContext)?;

@@ -16,7 +16,7 @@ pub use store::GlobalStore;
 pub use wasi::WasiContext;
 pub use wasi::register::add_wasi_to_linker;
 
-use core::sync::atomic::{AtomicBool, Ordering};
+use portable_atomic::{AtomicBool, Ordering};
 
 static SHUTDOWN_REQUESTED: AtomicBool = AtomicBool::new(false);
 
@@ -52,11 +52,15 @@ impl ExecutionControl {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_types,
+    reason = "xila::synchronization::Arc resolves to alloc::sync::Arc until core#650 merges"
+)]
 mod control_tests {
     use super::ExecutionControl;
     #[test]
     fn cancellation_is_per_instance_and_monotonic() {
-        let first = alloc::sync::Arc::new(ExecutionControl::new());
+        let first = xila::synchronization::Arc::new(ExecutionControl::new());
         let second = ExecutionControl::new();
         let handle = first.clone();
         handle.request_stop();

@@ -22,7 +22,7 @@ pub(crate) struct Inner {
 
 pub struct Terminal {
     pub(crate) input_waiters: xila::file_system::WaitQueue<16>,
-    pub(crate) input_closed: core::sync::atomic::AtomicBool,
+    pub(crate) input_closed: portable_atomic::AtomicBool,
     inner: RwLock<CriticalSectionRawMutex, Inner>,
     graphics_manager: &'static graphics::Manager,
 }
@@ -167,7 +167,7 @@ impl Terminal {
 
         Ok(Self {
             input_waiters: xila::file_system::WaitQueue::new(),
-            input_closed: core::sync::atomic::AtomicBool::new(false),
+            input_closed: portable_atomic::AtomicBool::new(false),
             inner: RwLock::new(inner),
             graphics_manager,
         })
@@ -348,7 +348,7 @@ impl Terminal {
 
         if !running {
             self.input_closed
-                .store(true, core::sync::atomic::Ordering::Release);
+                .store(true, portable_atomic::Ordering::Release);
         }
         if notify_input || !running {
             self.input_waiters.wake_all();

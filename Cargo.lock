@@ -1297,6 +1297,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13bee6c73da26345c729282832b60b0363cf3dd9f4bfd81d8551b7a1c889a113"
 
 [[package]]
+name = "portable-atomic"
+version = "1.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05c8b63e8d9609db387f0324918f81d68fe27748f084ef092fb35954d0539a85"
+
+[[package]]
 name = "prettyplease"
 version = "0.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2270,6 +2276,7 @@ dependencies = [
 name = "xila-debug-application"
 version = "0.1.0"
 dependencies = [
+ "portable-atomic",
  "serde_json",
  "xila",
  "xila-debug-protocol",
@@ -2507,6 +2514,7 @@ version = "0.1.0"
 dependencies = [
  "getargs",
  "getargs-derive",
+ "portable-atomic",
  "tar-no-std",
  "xila",
  "xila-abi-declarations",
@@ -2650,6 +2658,7 @@ version = "0.1.0"
 dependencies = [
  "critical-section",
  "embedded-i18n",
+ "portable-atomic",
  "xila",
  "xila-abi-definitions",
  "xila-command-line-shell",
@@ -2741,6 +2750,7 @@ dependencies = [
  "getargs",
  "getargs-derive",
  "lvgl-rust-sys",
+ "portable-atomic",
  "proc-macro2",
  "quote",
  "serde_json",

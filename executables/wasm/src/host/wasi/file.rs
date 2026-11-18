@@ -304,6 +304,7 @@ define_wasi_module! {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_types, reason = "host-only unit tests")]
 mod tests {
     extern crate std;
 

@@ -9,6 +9,7 @@ xila = { workspace = true, default-features = true, features = [
 ] }
 log = { workspace = true }
 debug_protocol = { workspace = true }
+portable-atomic = { workspace = true }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
 [lib]
