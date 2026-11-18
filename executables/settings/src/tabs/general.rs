@@ -1,4 +1,8 @@
 use crate::error::Result;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{Event, lvgl};
 use xila::internationalization::t;
 

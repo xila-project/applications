@@ -2,6 +2,7 @@
 use super::error::{GraphicsError, Result};
 use alloc::{vec, vec::Vec};
 use core::mem::size_of;
+#[expect(deprecated, reason = "the host still drives the raw LVGL bindings")]
 use xila::graphics::lvgl;
 
 pub(super) const MAX_CANVAS_PIXELS: usize = 65_536;

@@ -1,5 +1,9 @@
 use core::ptr::null_mut;
 
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{self, lvgl};
 
 use crate::{desk::Desk, error::Result};

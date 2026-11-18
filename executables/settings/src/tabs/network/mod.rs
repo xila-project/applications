@@ -4,6 +4,10 @@ use crate::{Error, Result};
 use alloc::{ffi::CString, string::ToString};
 use core::{ffi::CStr, ptr::null_mut, time::Duration};
 use interface::*;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::{
     file_system::{AccessFlags, Path},
     graphics::{Event, EventKind, lvgl, symbol},
@@ -209,51 +213,48 @@ impl NetworkTab {
             return true;
         }
 
-        // check if any specific events need to be handled here
-        if event.code == EventKind::Clicked {
-            // Find which interface button was clicked
-            let parent = unsafe { lvgl::lv_obj_get_parent(event.target) };
-            if parent == self.interfaces_list
-                && unsafe { lvgl::lv_obj_check_type(event.target, &lvgl::lv_list_button_class) }
-            {
-                let interface = unsafe {
-                    let label = lvgl::lv_obj_get_child(event.target, 1);
+        if event.code != EventKind::Clicked {
+            return false;
+        }
 
-                    if label.is_null() {
-                        log::error!("Failed to get label child from interface button");
-                        return false;
-                    }
+        // The graphics lock keeps these list children live while we match
+        // the queued address and copy the interface name.
+        let interface = unsafe {
+            let count = lvgl::lv_obj_get_child_count(self.interfaces_list);
+            let button = (0..count)
+                .map(|index| lvgl::lv_obj_get_child(self.interfaces_list, index as i32))
+                .find(|&child| {
+                    event.is_target(child)
+                        && lvgl::lv_obj_check_type(child, &lvgl::lv_list_button_class)
+                });
+            let Some(button) = button else {
+                return false;
+            };
+            let label = lvgl::lv_obj_get_child(button, 1);
+            if label.is_null() || !lvgl::lv_obj_check_type(label, &lvgl::lv_label_class) {
+                return false;
+            }
+            let text = lvgl::lv_label_get_text(label);
+            if text.is_null() {
+                return false;
+            }
+            let Ok(interface) = CStr::from_ptr(text).to_str() else {
+                return false;
+            };
+            interface.to_string()
+        };
 
-                    let text = lvgl::lv_label_get_text(label);
-
-                    if text.is_null() {
-                        log::error!("Failed to get text from label");
-                        return false;
-                    }
-
-                    CStr::from_ptr(text as *const _)
-                        .to_str()
-                        .unwrap_or_default()
-                };
-
-                log::information!("Opening configuration panel for interface: {}", interface);
-
-                match InterfacePanel::new(self.context, interface.to_string(), self.tab_container)
-                    .await
-                {
-                    Ok(panel) => {
-                        self.configuration_panel.replace(panel);
-                    }
-                    Err(e) => {
-                        log::error!("Failed to create configuration panel: {:?}", e);
-                    }
-                }
-
-                return true;
+        log::information!("Opening configuration panel for interface: {}", interface);
+        match InterfacePanel::new(self.context, interface, self.tab_container).await {
+            Ok(panel) => {
+                self.configuration_panel.replace(panel);
+            }
+            Err(e) => {
+                log::error!("Failed to create configuration panel: {:?}", e);
             }
         }
 
-        false
+        true
     }
 }
 

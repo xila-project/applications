@@ -7,10 +7,12 @@ use super::{
 };
 use crate::host::translation::WasmUsize;
 use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
-use core::{cell::UnsafeCell, ptr::NonNull};
+use core::{cell::UnsafeCell, num::NonZeroU32, ptr::NonNull};
+#[expect(deprecated, reason = "the host still drives the raw LVGL bindings")]
+use xila::graphics::lvgl;
 use xila::graphics::{
-    Manager, Window, lvgl,
-    lvgl_rust::{self as safe, WidgetExt},
+    Event, Manager,
+    object_id::{self, ObjectTable},
 };
 
 pub const MAX_GRID_TRACKS_PER_VM: usize = 512;
@@ -21,8 +23,8 @@ struct Sides(UnsafeCell<Vec<*mut Side>>);
 unsafe impl Sync for Sides {}
 static SIDES: Sides = Sides(UnsafeCell::new(Vec::new()));
 
-fn freed(event: safe::Freed) {
-    let raw = event.handle().into_raw();
+fn freed(object: NonNull<lvgl::lv_obj_t>, id: NonZeroU32) {
+    let raw = id.get();
     // SAFETY: the graphics lock serializes Side registration, callbacks and drop.
     // The observer never calls LVGL and never mutates SIDES.
     let sides = unsafe { &*SIDES.0.get() };
@@ -30,9 +32,10 @@ fn freed(event: safe::Freed) {
         // SAFETY: every pointer in SIDES points to a live, Box-allocated Side
         // that is unregistered before being freed.
         let side = unsafe { &mut *side_ptr };
-        if let Ok(index) = side.handles.binary_search(&raw) {
-            side.handles.remove(index);
-            // The OBJ_ID hook runs at the END of the destructor, after LVGL has
+        // Keyed by pointer: another VM may hold the same number for another
+        // object.
+        if side.table.remove(raw, object) {
+            // The id hook runs at the END of the destructor, after LVGL has
             // finished reading maps, grid tracks and widget buffers.
             if let Some(entry) = side.entries.remove(&raw) {
                 side.widget_options_bytes -= usize::from(entry.option_bytes);
@@ -57,7 +60,8 @@ fn freed(event: safe::Freed) {
 
 #[derive(Default)]
 struct Side {
-    handles: Vec<u32>,
+    /// This VM's guest-visible objects, by the ids it issued.
+    table: ObjectTable,
     entries: BTreeMap<u32, Entry>,
     grid_tracks: usize,
     widget_options_bytes: usize,
@@ -235,7 +239,7 @@ impl GraphicsState {
         state
     }
 
-    pub(crate) fn initialize(&mut self, lv: &mut safe::Lvgl) -> Result<()> {
+    pub(crate) fn initialize(&mut self) -> Result<()> {
         if self.side.is_some() {
             return Ok(());
         }
@@ -245,9 +249,9 @@ impl GraphicsState {
         if sides.try_reserve(1).is_err() {
             return Err(GraphicsError::ResourceLimit);
         }
+        object_id::set_free_observer(freed).map_err(|_| GraphicsError::ResourceLimit)?;
         sides.push(side.get());
         self.side = Some(side);
-        lv.set_free_observer(Some(freed));
         Ok(())
     }
 
@@ -269,11 +273,6 @@ impl GraphicsState {
         unsafe { &mut *self.side.as_ref().expect("initialized graphics").get() }
     }
 
-    fn lv(&self) -> &safe::Lvgl {
-        // SAFETY: all dispatcher helpers run inside the manager's session.
-        unsafe { safe::Lvgl::assume() }
-    }
-
     #[allow(clippy::useless_conversion)]
     fn raw(handle: WasmUsize) -> Result<u32> {
         u32::try_from(handle).map_err(|_| GraphicsError::InvalidHandle)
@@ -282,15 +281,13 @@ impl GraphicsState {
     fn resolve_raw(&self, handle: WasmUsize) -> Result<(u32, *mut lvgl::lv_obj_t)> {
         let side = self.side.as_ref().ok_or(GraphicsError::InvalidHandle)?;
         let raw = Self::raw(handle)?;
+        // A guest value is never dereferenced: it either names an object this
+        // VM published and that is still alive, or it is not found.
         // SAFETY: dispatcher holds the graphics lock; no borrow spans deletion.
-        if unsafe { &*side.get() }.handles.binary_search(&raw).is_err() {
-            return Err(GraphicsError::InvalidHandle);
-        }
-        let handle =
-            safe::Handle::<safe::Obj>::from_raw(raw).ok_or(GraphicsError::InvalidHandle)?;
-        let object = handle
-            .get(self.lv())
-            .map_err(|_| GraphicsError::InvalidHandle)?;
+        let object = unsafe { &*side.get() }
+            .table
+            .find(raw)
+            .ok_or(GraphicsError::InvalidHandle)?;
         Ok((raw, object.as_ptr()))
     }
 
@@ -365,13 +362,25 @@ impl GraphicsState {
         row: u8,
     ) -> Result<bool> {
         let view_pointer = self.object(view, Some(Kind::Tileview))?;
-        Ok(self.side().entries.iter().any(|(&raw, entry)| {
-            entry.kind == Some(Kind::Tile)
-                && entry.tile_position == Some((column, row))
-                && self
-                    .object(raw as WasmUsize, None)
-                    .is_ok_and(|p| unsafe { lvgl::lv_obj_get_parent(p) } == view_pointer)
-        }))
+        // Walk the view's own children and read each child's id once, instead
+        // of resolving every side entry against the tree.
+        // SAFETY: the view is live under the graphics lock; children are live.
+        let count = unsafe { lvgl::lv_obj_get_child_count(view_pointer) };
+        for index in 0..count {
+            let child = unsafe { lvgl::lv_obj_get_child(view_pointer, index as _) };
+            let Some(child) = NonNull::new(child) else {
+                continue;
+            };
+            let Some(id) = (unsafe { self.side().table.id_of(child) }) else {
+                continue;
+            };
+            if self.side().entries.get(&id.get()).is_some_and(|entry| {
+                entry.kind == Some(Kind::Tile) && entry.tile_position == Some((column, row))
+            }) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     pub(crate) fn set_tile_position(
@@ -388,58 +397,26 @@ impl GraphicsState {
         Ok(())
     }
 
-    pub(crate) fn event_handle_for(
-        &self,
-        root: *mut lvgl::lv_obj_t,
-        target: *mut lvgl::lv_obj_t,
-    ) -> WasmUsize {
-        // Native children without handles can also appear in events and can
-        // die without notifying our observer. Validate by address comparison
-        // in the live tree, never by dereferencing a queued target pointer.
-        struct Search {
-            target: *mut lvgl::lv_obj_t,
-            found: bool,
-        }
-        unsafe extern "C" fn visit(
-            obj: *mut lvgl::lv_obj_t,
-            data: *mut core::ffi::c_void,
-        ) -> lvgl::lv_obj_tree_walk_res_t {
-            let search = unsafe { &mut *data.cast::<Search>() };
-            if obj == search.target {
-                search.found = true;
-                lvgl::lv_obj_tree_walk_res_t_LV_OBJ_TREE_WALK_END
-            } else {
-                lvgl::lv_obj_tree_walk_res_t_LV_OBJ_TREE_WALK_NEXT
-            }
-        }
-        if target.is_null() {
-            return 0;
-        }
-        let mut search = Search {
-            target,
-            found: false,
-        };
-        unsafe { lvgl::lv_obj_tree_walk(root, Some(visit), (&mut search as *mut Search).cast()) };
-        if search.found {
-            self.handle_for(target)
-        } else {
-            0
-        }
+    /// The guest handle of an event's target: the id it carried when the event
+    /// was queued, if it still names one of this VM's live objects. Native
+    /// children carry no id, and an id never names a later object at a reused
+    /// address.
+    pub(crate) fn event_handle(&self, event: &Event) -> WasmUsize {
+        event
+            .target_id()
+            .filter(|id| self.side.is_some() && self.side().table.find(id.get()).is_some())
+            .map_or(0, |id| id.get() as WasmUsize)
     }
 
     pub(crate) fn handle_for(&self, pointer: *mut lvgl::lv_obj_t) -> WasmUsize {
         let Some(non_null) = NonNull::new(pointer) else {
             return 0;
         };
-        let Some(side) = self.side.as_ref() else {
+        if self.side.is_none() {
             return 0;
-        };
-        let obj = unsafe { safe::Obj::from_raw(self.lv(), non_null) };
-        obj.find_handle()
-            .map(safe::Handle::into_raw)
-            // SAFETY: dispatcher holds the graphics lock; no borrow spans deletion.
-            .filter(|raw| unsafe { &*side.get() }.handles.binary_search(raw).is_ok())
-            .map_or(0, |raw| raw as WasmUsize)
+        }
+        // SAFETY: dispatcher holds the graphics lock; `pointer` is live.
+        unsafe { self.side().table.id_of(non_null) }.map_or(0, |id| id.get() as WasmUsize)
     }
 
     pub(crate) fn insert(
@@ -449,37 +426,21 @@ impl GraphicsState {
         _parent: Option<WasmUsize>,
     ) -> Result<WasmUsize> {
         let pointer = NonNull::new(pointer).ok_or(GraphicsError::NativeFailure)?;
-        // Clear pre-registration event targets at the capability birth boundary,
-        // including a recycled native address. Shared screens are never tagged.
-        let mut root = pointer.as_ptr();
-        while !root.is_null() {
-            if let Some(mut window) = unsafe { Window::from_raw(root) } {
-                unsafe { window.as_mut().clear_event_targets_for(pointer.as_ptr()) };
-                break;
-            }
-            root = unsafe { lvgl::lv_obj_get_parent(root) };
-        }
-        let Some(side) = self.side.as_mut() else {
-            unsafe { lvgl::lv_obj_delete(pointer.as_ptr()) };
-            return Err(GraphicsError::ResourceLimit);
-        };
-        // SAFETY: graphics lock held; no borrow spans LVGL deletion.
-        if unsafe { &mut *side.get() }.handles.try_reserve(1).is_err() {
+        if self.side.is_none() {
             unsafe { lvgl::lv_obj_delete(pointer.as_ptr()) };
             return Err(GraphicsError::ResourceLimit);
         }
-        let obj = unsafe { safe::Obj::from_raw(self.lv(), pointer) };
-        let handle = match obj.handle() {
-            Ok(h) => h.into_raw(),
+        // A fresh, never reissued id: events queued for an earlier object at
+        // this address carry another id (or none) and cannot name this one.
+        // SAFETY: the object was just created under the graphics lock.
+        let id = match unsafe { self.side_mut().table.publish(pointer) } {
+            Ok(id) => id.get(),
             Err(_) => {
+                // Out of memory or ids: only this VM's creations fail.
                 unsafe { lvgl::lv_obj_delete(pointer.as_ptr()) };
                 return Err(GraphicsError::ResourceLimit);
             }
         };
-        let side = self.side_mut();
-        if let Err(pos) = side.handles.binary_search(&handle) {
-            side.handles.insert(pos, handle);
-        }
         if matches!(
             kind,
             Kind::IndexedCanvas
@@ -489,9 +450,9 @@ impl GraphicsState {
                 | Kind::Badge
                 | Kind::Card
         ) {
-            side.entries.entry(handle).or_default().kind = Some(kind);
+            self.side_mut().entries.entry(id).or_default().kind = Some(kind);
         }
-        Ok(handle as WasmUsize)
+        Ok(id as WasmUsize)
     }
 
     pub(crate) fn set_map(&mut self, handle: WasmUsize, map: ButtonMap) {
@@ -820,7 +781,7 @@ impl GraphicsState {
         self.side
             .as_ref()
             // SAFETY: graphics lock held when manager is present.
-            .map_or(0, |side| unsafe { &*side.get() }.handles.len())
+            .map_or(0, |side| unsafe { &*side.get() }.table.len())
     }
 
     #[doc(hidden)]
@@ -878,14 +839,16 @@ impl Drop for GraphicsState {
         if self.side.is_none() {
             return;
         }
-        let _ = manager.with_lvgl_sync(|lv| {
-            let handles = core::mem::take(&mut self.side_mut().handles);
-            for raw in handles {
-                let Some(handle) = safe::Handle::<safe::Obj>::from_raw(raw) else {
-                    continue;
-                };
-                if let Ok(object) = handle.get_mut(lv) {
-                    let _ = object.delete();
+        let _ = manager.with_lvgl_sync(|_| {
+            // Delete the VM's objects one at a time, re-reading the table after
+            // each: deleting an object frees its descendants, whose entries
+            // the free hook removes, so no stale pointer is ever visited.
+            while let Some(object) = self.side().table.first() {
+                let before = self.side().table.len();
+                // SAFETY: the table holds only live objects, under the lock.
+                unsafe { lvgl::lv_obj_delete(object.as_ptr()) };
+                if self.side().table.len() == before {
+                    break; // the free hook did not run: never loop forever
                 }
             }
             // Private window roots ensure structural deletion cannot leave a
@@ -914,7 +877,7 @@ impl Drop for GraphicsState {
 const _: () = {
     assert!(core::mem::size_of::<u32>() == 4);
     assert!(core::mem::size_of::<Entry>() == 24);
-    assert!(core::mem::size_of::<Side>() == 36);
+    assert!(core::mem::size_of::<Side>() == 40);
     assert!(core::mem::size_of::<Sides>() == 12);
     assert!(core::mem::size_of::<GraphicsState>() == 16);
     assert!(core::mem::size_of::<ChartSeries>() == 36);
@@ -934,7 +897,7 @@ mod tests {
         #[cfg(target_pointer_width = "64")]
         {
             assert_eq!(size_of::<Entry>(), 40);
-            assert_eq!(size_of::<Side>(), 72);
+            assert_eq!(size_of::<Side>(), 80);
             assert_eq!(size_of::<Sides>(), 24);
             assert_eq!(size_of::<GraphicsState>(), 32);
         }

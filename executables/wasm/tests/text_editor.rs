@@ -14,6 +14,10 @@ mod localization;
 mod support;
 
 use core::time::Duration;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::{
     file_system::{AccessFlags, CreateFlags, Flags},
     graphics::{Manager, Window, lvgl},

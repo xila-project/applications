@@ -1,6 +1,10 @@
 use crate::model::{self, MemorySample};
 use alloc::{collections::VecDeque, ffi::CString, format};
 use core::{ffi::c_char, num::NonZeroUsize};
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{self, EventKind, OwnedWindow, fonts, lvgl, theme};
 use xila::internationalization::t;
 
@@ -228,16 +232,16 @@ impl View {
         let _lock = self.graphics.lock().await;
         while let Some(event) = self.window.pop_event() {
             if matches!(event.code, EventKind::Delete | EventKind::CloseRequested)
-                && event.target == self.window.as_object_mutable()
+                && event.is_target(self.window.as_object())
             {
                 return Some(Action::Close);
             }
             if event.code == EventKind::ValueChanged {
-                if event.target == self.toggle {
+                if event.is_target(self.toggle) {
                     let on = unsafe { lvgl::lv_obj_has_state(self.toggle, lvgl::LV_STATE_CHECKED) };
                     return Some(Action::Workload(on));
                 }
-                if event.target == self.interval {
+                if event.is_target(self.interval) {
                     let index = unsafe { lvgl::lv_buttonmatrix_get_selected_button(self.interval) };
                     if let Some(interval) = INTERVALS.get(index as usize) {
                         return Some(Action::Interval(*interval));

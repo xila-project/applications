@@ -1,6 +1,10 @@
 use alloc::{ffi::CString, string::ToString};
 pub(crate) use core::ffi::CStr;
 use xila::authentication;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{self, Color, EventKind, Logo, OwnedWindow, fonts, lvgl, theme};
 use xila::internationalization::t;
 use xila::users::UserIdentifier;
@@ -232,13 +236,13 @@ impl Login {
                 while let Some(event) = self.window.pop_event() {
                     // If we are typing the user name or the password
                     if event.code == EventKind::ValueChanged
-                        && (event.target == self.user_name_text_area
-                            || event.target == self.password_text_area)
+                        && (event.is_target(self.user_name_text_area)
+                            || event.is_target(self.password_text_area))
                     {
                         self.clear_error();
                     }
                     // If the "Login" button is clicked
-                    else if event.code == EventKind::Clicked && event.target == self.button {
+                    else if event.code == EventKind::Clicked && event.is_target(self.button) {
                         let result = self.authenticate().await;
 
                         if let Err(error) = result {

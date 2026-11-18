@@ -4,6 +4,10 @@ use core::ffi::CStr;
 use core::ptr::null_mut;
 use core::time::Duration;
 use xila::file_system::{AccessFlags, Path};
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{self, EventKind, lvgl, symbol, theme};
 use xila::log;
 use xila::network::InterfaceKind;
