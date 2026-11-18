@@ -872,6 +872,16 @@ impl Drop for GraphicsState {
                 let Some(handle) = safe::Handle::<safe::Obj>::from_raw(raw) else {
                     continue;
                 };
+                // The host owns the guest's windows: safe structural calls
+                // refuse them (Core registers them as host objects), so a
+                // window goes through Core's own delete.
+                if let Ok(object) = handle.get(lv)
+                    && let Some(mut window) = unsafe { Window::from_raw(object.as_ptr()) }
+                {
+                    // SAFETY: the session lock is held and the window is live.
+                    unsafe { window.as_mut().delete() };
+                    continue;
+                }
                 if let Ok(object) = handle.get_mut(lv) {
                     let _ = object.delete();
                 }
