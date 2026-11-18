@@ -12,7 +12,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
-use core::sync::atomic::{AtomicUsize, Ordering};
+use portable_atomic::{AtomicUsize, Ordering};
 use tar_no_std::{StreamEvent, TarStreamParser};
 use xila::{
     file_system::{AccessFlags, CreateFlags, Flags, Kind, Path, Permissions},

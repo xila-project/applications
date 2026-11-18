@@ -133,10 +133,14 @@ pub async fn main(
 
 /// Run one guest with an independently owned stop handle. Join this future
 /// before replacing its module or reclaiming its VFS and graphics resources.
+#[allow(
+    clippy::disallowed_types,
+    reason = "xila::synchronization::Arc resolves to alloc::sync::Arc until core#650 merges"
+)]
 pub async fn execute_with_control(
     mut standard: Standard<'static>,
     arguments: Vec<String>,
-    control: alloc::sync::Arc<super::ExecutionControl>,
+    control: xila::synchronization::Arc<super::ExecutionControl>,
 ) -> core::result::Result<(), NonZeroUsize> {
     let (runtime_arguments, guest_arguments) = split_guest_arguments(&arguments);
     let arguments = match WasmArguments::from_args(runtime_arguments.iter().map(|s| s.as_str())) {
@@ -204,11 +208,15 @@ async fn read_file(path: &str, context: &'static ExecutableContext) -> Result<Ve
     Ok(buffer)
 }
 
+#[allow(
+    clippy::disallowed_types,
+    reason = "xila::synchronization::Arc resolves to alloc::sync::Arc until core#650 merges"
+)]
 async fn main_inner(
     standard: Standard<'static>,
     arguments: WasmArguments<'_>,
     guest_arguments: Vec<String>,
-    control: alloc::sync::Arc<super::ExecutionControl>,
+    control: xila::synchronization::Arc<super::ExecutionControl>,
 ) -> Result<()> {
     let context = standard.context;
     let WasmArguments {

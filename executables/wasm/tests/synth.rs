@@ -4,6 +4,7 @@
     feature = "memory_32",
     not(feature = "memory_64")
 ))]
+#![allow(clippy::disallowed_types, reason = "host-only test")]
 #[path = "support/applications.rs"]
 mod applications;
 extern crate abi_definitions;

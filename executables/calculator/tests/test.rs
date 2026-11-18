@@ -1,3 +1,4 @@
+#![allow(clippy::disallowed_types, reason = "host-only test")]
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 #[xila::task::test(task_path = xila::task)]
 #[ignore = "This test is meant to be run interactively"]

@@ -26,6 +26,7 @@ macro_rules! define_wasi_module {
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_types, reason = "host-only unit tests")]
 mod tests {
     use alloc::string::ToString;
     use core::sync::atomic::{AtomicUsize, Ordering};

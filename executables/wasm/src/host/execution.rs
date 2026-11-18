@@ -172,6 +172,7 @@ pub async fn run(
 }
 
 #[cfg(test)]
+#[allow(clippy::disallowed_types, reason = "host-only unit tests")]
 mod clock_tests {
     use super::*;
     use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
