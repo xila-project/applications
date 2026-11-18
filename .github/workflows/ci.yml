@@ -71,7 +71,7 @@ jobs:
       - name: "Lint | Native host"
         run: mise run ci:clippy-host
       - name: "Lint | Wasm host runtime"
-        run: cargo clippy --locked -p xila-wasm --features graphics,xila/graphics_rendering_xrgb8888 --target x86_64-unknown-linux-gnu -- -D warnings
+        run: cargo clippy --locked -p xila-wasm --all-targets --features graphics,xila/graphics_rendering_xrgb8888 --target x86_64-unknown-linux-gnu -- -D warnings
       - name: "Test | Application workspace"
         run: mise run test:workspace
   abi:

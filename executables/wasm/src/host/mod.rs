@@ -52,10 +52,6 @@ impl ExecutionControl {
 }
 
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_types,
-    reason = "xila::synchronization::Arc resolves to alloc::sync::Arc until core#650 merges"
-)]
 mod control_tests {
     use super::ExecutionControl;
     #[test]
