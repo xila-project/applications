@@ -1,7 +1,11 @@
 use crate::{Result, Shell, error::Error};
 use alloc::string::String;
 use core::fmt::Write;
-use xila::{authentication, internationalization::t};
+use xila::{
+    authentication,
+    file_system::character_device::{GET_TERMINAL_ATTRIBUTES, SET_TERMINAL_ATTRIBUTES},
+    internationalization::t,
+};
 
 impl Shell {
     // Unlike Standard::read_line, a login prompt must stop at EOF rather than
@@ -26,6 +30,38 @@ impl Shell {
         }
     }
 
+    /// Read the password with terminal echo turned off.
+    ///
+    /// The previous terminal attributes are restored whatever the outcome of
+    /// the read. When standard input does not support terminal attributes
+    /// (a host console, a pipe or a file), the password is read as before,
+    /// without any message. With echo off, the terminal still writes the line
+    /// break on Enter, so the prompt is left the same way in both cases.
+    async fn read_password_line(&mut self, buffer: &mut String) -> Result<bool> {
+        let input = self.standard.input();
+        let mut restore = None;
+        if let Ok(attributes) = input.control(GET_TERMINAL_ATTRIBUTES, &()).await
+            && attributes.is_echo_enabled()
+            && input
+                .control(SET_TERMINAL_ATTRIBUTES, &attributes.with_echo(false))
+                .await
+                .is_ok()
+        {
+            restore = Some(attributes);
+        }
+
+        let result = self.read_login_line(buffer).await;
+
+        if let Some(attributes) = restore {
+            let _ = self
+                .standard
+                .input()
+                .control(SET_TERMINAL_ATTRIBUTES, &attributes)
+                .await;
+        }
+        result
+    }
+
     pub async fn authenticate(&mut self) -> Result<Option<String>> {
         write!(
             self.standard.out(),
@@ -47,7 +83,7 @@ impl Shell {
         let _ = self.standard.out().flush().await;
 
         let mut password = String::with_capacity(32);
-        if !self.read_login_line(&mut password).await? {
+        if !self.read_password_line(&mut password).await? {
             return Ok(None);
         }
 
