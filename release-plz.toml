@@ -9,6 +9,15 @@ git_release_enable = false
 changelog_update = false
 # Release any version on main that has no tag yet (the first run releases 0.1.0).
 release_always = true
+# Applications are executables released as signed .xpk bundles, not libraries:
+# their Rust API is not a public interface, so cargo-semver-checks is pointless
+# (and fails resolving the Wasm host dependency graph). Without it, the next
+# version comes from the conventional commits touching each package:
+# - 0.x: breaking change (`type!:` or `BREAKING CHANGE:`) and `feat` -> minor,
+#   anything else (`fix`, `perf`, `refactor`, ...) -> patch;
+# - 1.x and later: breaking change -> major, `feat` -> minor, anything else -> patch.
+semver_check = false
+features_always_increment_minor = true
 
 [[package]]
 name = "xila-calculator"
