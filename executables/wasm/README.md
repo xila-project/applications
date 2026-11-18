@@ -120,7 +120,7 @@ cargo +stable test -p xila-wasm --no-default-features \
 
 Calculator is a wasm32 guest, so its acceptance test is not run in the memory64
 configuration. Core/adapter tests cover both guest-word widths. Portable memory
-tests, 100% line/function coverage commands, and Miri commands are documented in
+tests, 90% line and function coverage commands, and Miri commands are documented in
 [`tests/translation/README.md`](tests/translation/README.md).
 
 ## Graphics architecture

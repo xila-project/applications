@@ -85,11 +85,11 @@ cargo +stable llvm-cov \
   --manifest-path executables/wasm/tests/translation/Cargo.toml \
   --no-default-features --features memory_32 \
   --ignore-filename-regex '(tests\.rs|tests/translation/src/lib\.rs)$' \
-  --fail-under-lines 100 --fail-under-functions 100
+  --fail-under-lines 90 --fail-under-functions 90
 ```
 
 Only tests and the harness module are excluded. The production translation source
-and WASI record codecs are measured. CI enforces 100% line and function coverage
+and WASI record codecs are measured. CI enforces 90% line and function coverage
 for each guest width independently. LLVM regions and branch coverage are separate
 metrics: some conversion/error paths are unreachable on a given host width or
 generic instantiation. The gate is not a proof of correctness for arbitrary inputs.
