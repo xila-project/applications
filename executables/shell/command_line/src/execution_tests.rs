@@ -1,5 +1,5 @@
 use super::*;
-use alloc::{format, vec};
+use alloc::{boxed::Box, format, vec};
 use core::num::NonZeroUsize;
 use xila::executable::{ExecutableTrait, MainFuture, mount_executables};
 
@@ -1236,4 +1236,173 @@ async fn rename_checks_parent_paths_relative_to_the_mounted_filesystem() {
     )
     .await
     .unwrap();
+}
+
+/// Scripted standard input that keeps terminal attributes and records, for
+/// every byte read, whether echo was on at that moment.
+struct LoginTerminalState {
+    input: std::sync::Mutex<(Vec<u8>, Vec<bool>)>,
+    attributes: std::sync::Mutex<xila::file_system::character_device::TerminalAttributes>,
+}
+
+impl LoginTerminalState {
+    fn new(input: &[u8]) -> &'static Self {
+        Box::leak(Box::new(Self {
+            input: std::sync::Mutex::new((input.iter().rev().copied().collect(), Vec::new())),
+            attributes: std::sync::Mutex::new(
+                xila::file_system::character_device::TerminalAttributes::INTERACTIVE,
+            ),
+        }))
+    }
+
+    fn echo_per_byte(&self) -> Vec<bool> {
+        self.input.lock().unwrap().1.clone()
+    }
+
+    fn attributes(&self) -> xila::file_system::character_device::TerminalAttributes {
+        *self.attributes.lock().unwrap()
+    }
+}
+
+struct LoginTerminal(&'static LoginTerminalState);
+
+impl xila::file_system::DirectBaseOperations for LoginTerminal {
+    fn read(
+        &self,
+        _: &mut core::task::Context<'_>,
+        buffer: &mut [u8],
+        _: xila::file_system::Size,
+    ) -> core::task::Poll<xila::file_system::Result<usize>> {
+        let echo = self.0.attributes().is_echo_enabled();
+        let (remaining, echo_per_byte) = &mut *self.0.input.lock().unwrap();
+        let Some(byte) = remaining.pop() else {
+            return core::task::Poll::Ready(Ok(0));
+        };
+        buffer[0] = byte;
+        echo_per_byte.push(echo);
+        core::task::Poll::Ready(Ok(1))
+    }
+
+    fn write(
+        &self,
+        _: &mut core::task::Context<'_>,
+        buffer: &[u8],
+        _: xila::file_system::Size,
+    ) -> core::task::Poll<xila::file_system::Result<usize>> {
+        core::task::Poll::Ready(Ok(buffer.len()))
+    }
+
+    fn control(
+        &self,
+        _: &mut core::task::Context<'_>,
+        command: xila::file_system::ControlCommandIdentifier,
+        input: &xila::shared::AnyByLayout,
+        output: &mut xila::shared::AnyByLayout,
+    ) -> core::task::Poll<xila::file_system::Result<()>> {
+        use xila::file_system::{
+            ControlCommand,
+            character_device::{GET_TERMINAL_ATTRIBUTES, SET_TERMINAL_ATTRIBUTES},
+        };
+        xila::file_system::ready(|| match command {
+            GET_TERMINAL_ATTRIBUTES::IDENTIFIER => {
+                *GET_TERMINAL_ATTRIBUTES::cast_output(output)? = self.0.attributes();
+                Ok(())
+            }
+            SET_TERMINAL_ATTRIBUTES::IDENTIFIER => {
+                *self.0.attributes.lock().unwrap() = *SET_TERMINAL_ATTRIBUTES::cast_input(input)?;
+                Ok(())
+            }
+            _ => Err(xila::file_system::Error::UnsupportedOperation),
+        })
+    }
+}
+
+impl xila::file_system::MountOperations for LoginTerminal {}
+impl xila::file_system::DirectCharacterDevice for LoginTerminal {}
+
+async fn shell_with_login_terminal(
+    path: &str,
+    input: &[u8],
+) -> (Shell, &'static LoginTerminalState) {
+    let mut shell = shell().await;
+    let state = LoginTerminalState::new(input);
+    let file_system = shell.context.virtual_file_system;
+    file_system
+        .mount_character_device(shell.task, path, LoginTerminal(state))
+        .await
+        .unwrap();
+    // Like `Standard::open`, standard input is opened read-only.
+    shell.standard.standard_in =
+        File::open(file_system, shell.task, path, AccessFlags::Read.into())
+            .await
+            .unwrap();
+    (shell, state)
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn login_hides_the_password_and_restores_echo() {
+    let (mut shell, state) =
+        shell_with_login_terminal("/devices/login_terminal", b"administrator\n\n").await;
+
+    assert_eq!(
+        shell.authenticate().await.unwrap().as_deref(),
+        Some("administrator")
+    );
+
+    // The user name and its line feed are read with echo on, the (empty)
+    // password line with echo off.
+    let mut expected = vec![true; "administrator\n".len()];
+    expected.push(false);
+    assert_eq!(state.echo_per_byte(), expected);
+    assert_eq!(
+        state.attributes(),
+        xila::file_system::character_device::TerminalAttributes::INTERACTIVE
+    );
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn login_restores_echo_when_reading_the_password_fails() {
+    let mut input = b"administrator\n".to_vec();
+    input.extend(core::iter::repeat_n(b'x', 300));
+    let (mut shell, state) = shell_with_login_terminal("/devices/long_password", &input).await;
+
+    assert!(matches!(
+        shell.authenticate().await,
+        Err(crate::Error::LineTooLong)
+    ));
+    assert!(state.echo_per_byte().ends_with(&[false]));
+    assert_eq!(
+        state.attributes(),
+        xila::file_system::character_device::TerminalAttributes::INTERACTIVE
+    );
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn login_without_terminal_attributes_reads_the_password_as_before() {
+    let mut shell = shell().await;
+    let mut input = File::open(
+        shell.context.virtual_file_system,
+        shell.task,
+        "/login-input",
+        Flags::new(
+            AccessFlags::READ_WRITE,
+            Some(CreateFlags::CREATE_TRUNCATE),
+            None,
+        ),
+    )
+    .await
+    .unwrap();
+    write_all(&mut input, b"administrator\n\n").await.unwrap();
+    input
+        .set_position(&xila::file_system::Position::Start(0))
+        .await
+        .unwrap();
+    shell.standard.standard_in = input;
+
+    assert_eq!(
+        shell.authenticate().await.unwrap().as_deref(),
+        Some("administrator")
+    );
+    // No diagnostic is written when the input has no terminal attributes.
+    assert_eq!(contents(&shell, "/shell-errors").await, "");
 }
