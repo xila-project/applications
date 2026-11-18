@@ -59,6 +59,11 @@ pub enum Error<'a> {
     FailedToCreateSymbolicLink(virtual_file_system::Error),
     FailedToReadSymbolicLink(virtual_file_system::Error),
     Lifecycle(lifecycle::Error),
+    /// Standard input supports terminal attributes but echo could not be
+    /// turned off, so the password is not read and the login session ends.
+    FailedToHidePassword(virtual_file_system::Error),
+    /// Echo stays off after the password was read.
+    FailedToRestoreTerminalEcho(virtual_file_system::Error),
 }
 
 impl<A: getargs::Argument> From<getargs::Error<A>> for Error<'_> {
@@ -136,6 +141,20 @@ impl Display for Error<'_> {
                     formatter,
                     "{}",
                     t!("errors.lifecycle_request_failed", arg0 = error)
+                )
+            }
+            Error::FailedToHidePassword(error) => {
+                write!(
+                    formatter,
+                    "{}",
+                    t!("errors.failed_to_hide_password", arg0 = error)
+                )
+            }
+            Error::FailedToRestoreTerminalEcho(error) => {
+                write!(
+                    formatter,
+                    "{}",
+                    t!("errors.failed_to_restore_terminal_echo", arg0 = error)
                 )
             }
             Error::AuthenticationFailed(error) => {

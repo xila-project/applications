@@ -2,10 +2,26 @@ use crate::{Result, Shell, error::Error};
 use alloc::string::String;
 use core::fmt::Write;
 use xila::{
-    authentication,
-    file_system::character_device::{GET_TERMINAL_ATTRIBUTES, SET_TERMINAL_ATTRIBUTES},
+    authentication, file_system,
+    file_system::character_device::{
+        GET_TERMINAL_ATTRIBUTES, SET_TERMINAL_ATTRIBUTES, TerminalAttributes,
+    },
     internationalization::t,
+    virtual_file_system,
 };
+
+/// Whether `error` means that standard input has no terminal attributes.
+///
+/// The virtual file system answers `UnsupportedOperation` itself for items
+/// without base operations, and wraps the answer of devices and files that do
+/// not implement the command.
+const fn is_unsupported(error: virtual_file_system::Error) -> bool {
+    matches!(
+        error,
+        virtual_file_system::Error::UnsupportedOperation
+            | virtual_file_system::Error::FileSystem(file_system::Error::UnsupportedOperation)
+    )
+}
 
 impl Shell {
     // Unlike Standard::read_line, a login prompt must stop at EOF rather than
@@ -32,34 +48,64 @@ impl Shell {
 
     /// Read the password with terminal echo turned off.
     ///
+    /// When standard input does not support terminal attributes (a host
+    /// console, a pipe or a file: getting or setting them answers
+    /// `UnsupportedOperation`), the password is read as before, without any
+    /// message. Any other failure to turn echo off fails the authentication
+    /// before the password is read, so it is never echoed by mistake.
+    ///
     /// The previous terminal attributes are restored whatever the outcome of
-    /// the read. When standard input does not support terminal attributes
-    /// (a host console, a pipe or a file), the password is read as before,
-    /// without any message. With echo off, the terminal still writes the line
-    /// break on Enter, so the prompt is left the same way in both cases.
+    /// the read; see [`Self::restore_terminal_attributes`]. With echo off, the
+    /// terminal still writes the line break on Enter, so the prompt is left the
+    /// same way in both cases.
     async fn read_password_line(&mut self, buffer: &mut String) -> Result<bool> {
         let input = self.standard.input();
+        let attributes = match input.control(GET_TERMINAL_ATTRIBUTES, &()).await {
+            Ok(attributes) => Some(attributes),
+            Err(error) if is_unsupported(error) => None,
+            Err(error) => return Err(Error::FailedToHidePassword(error)),
+        };
+
         let mut restore = None;
-        if let Ok(attributes) = input.control(GET_TERMINAL_ATTRIBUTES, &()).await
+        if let Some(attributes) = attributes
             && attributes.is_echo_enabled()
-            && input
+        {
+            match input
                 .control(SET_TERMINAL_ATTRIBUTES, &attributes.with_echo(false))
                 .await
-                .is_ok()
-        {
-            restore = Some(attributes);
+            {
+                Ok(()) => restore = Some(attributes),
+                Err(error) if is_unsupported(error) => {}
+                Err(error) => return Err(Error::FailedToHidePassword(error)),
+            }
         }
 
         let result = self.read_login_line(buffer).await;
 
         if let Some(attributes) = restore {
-            let _ = self
-                .standard
-                .input()
-                .control(SET_TERMINAL_ATTRIBUTES, &attributes)
-                .await;
+            self.restore_terminal_attributes(attributes).await;
         }
         result
+    }
+
+    /// Restore the terminal attributes saved before reading the password.
+    ///
+    /// A failed restore is retried once. If it still fails, echo stays off
+    /// and the error is reported on standard error, without discarding the
+    /// password that was read.
+    async fn restore_terminal_attributes(&mut self, attributes: TerminalAttributes) {
+        let input = self.standard.input();
+        if input
+            .control(SET_TERMINAL_ATTRIBUTES, &attributes)
+            .await
+            .is_ok()
+        {
+            return;
+        }
+        if let Err(error) = input.control(SET_TERMINAL_ATTRIBUTES, &attributes).await {
+            self.diagnostic(Error::FailedToRestoreTerminalEcho(error))
+                .await;
+        }
     }
 
     pub async fn authenticate(&mut self) -> Result<Option<String>> {
