@@ -60,7 +60,7 @@ pub enum Error<'a> {
     FailedToReadSymbolicLink(virtual_file_system::Error),
     Lifecycle(lifecycle::Error),
     /// Standard input supports terminal attributes but echo could not be
-    /// turned off, so the password is not read.
+    /// turned off, so the password is not read and the login session ends.
     FailedToHidePassword(virtual_file_system::Error),
     /// Echo stays off after the password was read.
     FailedToRestoreTerminalEcho(virtual_file_system::Error),

@@ -254,6 +254,15 @@ impl Shell {
                 match self.authenticate().await {
                     Ok(Some(user)) => break user,
                     Ok(None) => return Ok(()),
+                    // Echo could not be turned off, so the password line was
+                    // left unread. Prompting again would read a password typed
+                    // ahead as the next user name, with echo on, and discarding
+                    // the line would echo it too: end the session instead.
+                    Err(error @ Error::FailedToHidePassword(_)) => {
+                        self.diagnostic(&error).await;
+                        let _ = self.standard.error().flush().await;
+                        return Err(error.into());
+                    }
                     Err(error) => self.diagnostic(error).await,
                 }
             },

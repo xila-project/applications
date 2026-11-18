@@ -1542,6 +1542,37 @@ async fn login_fails_without_reading_the_password_when_turning_echo_off_fails() 
 }
 
 #[xila::task::test(task_path = xila::task)]
+async fn login_ends_the_session_when_the_password_cannot_be_hidden() {
+    let state = LoginTerminalState::with_failures(
+        b"administrator\nsecret\n",
+        Some(xila::file_system::Error::RessourceBusy),
+        &[],
+    );
+    let (mut shell, state) =
+        shell_with_scripted_terminal("/devices/busy_login_session", state).await;
+
+    let error = crate::Error::FailedToHidePassword(xila::virtual_file_system::Error::FileSystem(
+        xila::file_system::Error::RessourceBusy,
+    ));
+    let expected_diagnostic = format!("{error}\n");
+    let expected_status = NonZeroUsize::from(error);
+    assert_eq!(shell.main(vec![]).await, Err(expected_status));
+
+    // The shell neither prompts again nor reads the password typed ahead:
+    // only the user name line was read, with echo on.
+    assert_eq!(state.echo_per_byte(), vec![true; "administrator\n".len()]);
+    assert_eq!(errors_written(&mut shell).await, expected_diagnostic);
+    shell.standard.out().flush().await.unwrap();
+    let output = contents(&shell, "/shell-output").await;
+    assert!(!output.contains("secret"));
+    let user_name_prompt = format!(
+        "{}",
+        xila::internationalization::t!("authentication.prompts.username")
+    );
+    assert_eq!(output.matches(user_name_prompt.as_str()).count(), 1);
+}
+
+#[xila::task::test(task_path = xila::task)]
 async fn login_retries_a_failed_restore_once() {
     let state = LoginTerminalState::with_failures(
         LOGIN_INPUT,
