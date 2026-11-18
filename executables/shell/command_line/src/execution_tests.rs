@@ -1240,19 +1240,41 @@ async fn rename_checks_parent_paths_relative_to_the_mounted_filesystem() {
 
 /// Scripted standard input that keeps terminal attributes and records, for
 /// every byte read, whether echo was on at that moment.
+///
+/// Getting the attributes fails with `get_error` when it is set, and each
+/// attempt to set them fails with the next entry of `set_errors` (`None`
+/// or no entry left: the attempt succeeds).
 struct LoginTerminalState {
     input: std::sync::Mutex<(Vec<u8>, Vec<bool>)>,
     attributes: std::sync::Mutex<xila::file_system::character_device::TerminalAttributes>,
+    get_error: Option<xila::file_system::Error>,
+    set_errors: std::sync::Mutex<Vec<Option<xila::file_system::Error>>>,
+    set_attempts: std::sync::Mutex<usize>,
 }
 
 impl LoginTerminalState {
     fn new(input: &[u8]) -> &'static Self {
+        Self::with_failures(input, None, &[])
+    }
+
+    fn with_failures(
+        input: &[u8],
+        get_error: Option<xila::file_system::Error>,
+        set_errors: &[Option<xila::file_system::Error>],
+    ) -> &'static Self {
         Box::leak(Box::new(Self {
             input: std::sync::Mutex::new((input.iter().rev().copied().collect(), Vec::new())),
             attributes: std::sync::Mutex::new(
                 xila::file_system::character_device::TerminalAttributes::INTERACTIVE,
             ),
+            get_error,
+            set_errors: std::sync::Mutex::new(set_errors.iter().rev().copied().collect()),
+            set_attempts: std::sync::Mutex::new(0),
         }))
+    }
+
+    fn set_attempts(&self) -> usize {
+        *self.set_attempts.lock().unwrap()
     }
 
     fn echo_per_byte(&self) -> Vec<bool> {
@@ -1305,10 +1327,17 @@ impl xila::file_system::DirectBaseOperations for LoginTerminal {
         };
         xila::file_system::ready(|| match command {
             GET_TERMINAL_ATTRIBUTES::IDENTIFIER => {
+                if let Some(error) = self.0.get_error {
+                    return Err(error);
+                }
                 *GET_TERMINAL_ATTRIBUTES::cast_output(output)? = self.0.attributes();
                 Ok(())
             }
             SET_TERMINAL_ATTRIBUTES::IDENTIFIER => {
+                *self.0.set_attempts.lock().unwrap() += 1;
+                if let Some(error) = self.0.set_errors.lock().unwrap().pop().flatten() {
+                    return Err(error);
+                }
                 *self.0.attributes.lock().unwrap() = *SET_TERMINAL_ATTRIBUTES::cast_input(input)?;
                 Ok(())
             }
@@ -1324,8 +1353,14 @@ async fn shell_with_login_terminal(
     path: &str,
     input: &[u8],
 ) -> (Shell, &'static LoginTerminalState) {
+    shell_with_scripted_terminal(path, LoginTerminalState::new(input)).await
+}
+
+async fn shell_with_scripted_terminal(
+    path: &str,
+    state: &'static LoginTerminalState,
+) -> (Shell, &'static LoginTerminalState) {
     let mut shell = shell().await;
-    let state = LoginTerminalState::new(input);
     let file_system = shell.context.virtual_file_system;
     file_system
         .mount_character_device(shell.task, path, LoginTerminal(state))
@@ -1377,6 +1412,12 @@ async fn login_restores_echo_when_reading_the_password_fails() {
     );
 }
 
+/// Standard error written so far, flushed first so that a new handle reads it.
+async fn errors_written(shell: &mut Shell) -> String {
+    shell.standard.error().flush().await.unwrap();
+    contents(shell, "/shell-errors").await
+}
+
 #[xila::task::test(task_path = xila::task)]
 async fn login_without_terminal_attributes_reads_the_password_as_before() {
     let mut shell = shell().await;
@@ -1404,5 +1445,149 @@ async fn login_without_terminal_attributes_reads_the_password_as_before() {
         Some("administrator")
     );
     // No diagnostic is written when the input has no terminal attributes.
-    assert_eq!(contents(&shell, "/shell-errors").await, "");
+    assert_eq!(errors_written(&mut shell).await, "");
+}
+
+const LOGIN_INPUT: &[u8] = b"administrator\n\n";
+
+/// Echo state of every byte of `LOGIN_INPUT` read with echo on throughout.
+fn echo_on_for_the_whole_login() -> Vec<bool> {
+    vec![true; LOGIN_INPUT.len()]
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn login_reads_the_password_with_echo_when_getting_attributes_is_unsupported() {
+    let state = LoginTerminalState::with_failures(
+        LOGIN_INPUT,
+        Some(xila::file_system::Error::UnsupportedOperation),
+        &[],
+    );
+    let (mut shell, state) =
+        shell_with_scripted_terminal("/devices/no_get_attributes", state).await;
+
+    assert_eq!(
+        shell.authenticate().await.unwrap().as_deref(),
+        Some("administrator")
+    );
+    assert_eq!(state.echo_per_byte(), echo_on_for_the_whole_login());
+    assert_eq!(state.set_attempts(), 0);
+    assert_eq!(errors_written(&mut shell).await, "");
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn login_reads_the_password_with_echo_when_setting_attributes_is_unsupported() {
+    let state = LoginTerminalState::with_failures(
+        LOGIN_INPUT,
+        None,
+        &[Some(xila::file_system::Error::UnsupportedOperation)],
+    );
+    let (mut shell, state) =
+        shell_with_scripted_terminal("/devices/no_set_attributes", state).await;
+
+    assert_eq!(
+        shell.authenticate().await.unwrap().as_deref(),
+        Some("administrator")
+    );
+    assert_eq!(state.echo_per_byte(), echo_on_for_the_whole_login());
+    // Nothing was changed, so nothing is restored.
+    assert_eq!(state.set_attempts(), 1);
+    assert_eq!(errors_written(&mut shell).await, "");
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn login_fails_without_reading_the_password_when_getting_attributes_fails() {
+    let state = LoginTerminalState::with_failures(
+        LOGIN_INPUT,
+        Some(xila::file_system::Error::RessourceBusy),
+        &[],
+    );
+    let (mut shell, state) =
+        shell_with_scripted_terminal("/devices/busy_get_attributes", state).await;
+
+    let error = shell.authenticate().await.unwrap_err();
+    assert!(matches!(
+        error,
+        crate::Error::FailedToHidePassword(xila::virtual_file_system::Error::FileSystem(
+            xila::file_system::Error::RessourceBusy
+        ))
+    ));
+    assert!(!error.to_string().is_empty());
+    // Only the user name line was read: the password stays unread.
+    assert_eq!(state.echo_per_byte(), vec![true; "administrator\n".len()]);
+    assert_eq!(state.set_attempts(), 0);
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn login_fails_without_reading_the_password_when_turning_echo_off_fails() {
+    let state = LoginTerminalState::with_failures(
+        LOGIN_INPUT,
+        None,
+        &[Some(xila::file_system::Error::InternalError)],
+    );
+    let (mut shell, state) =
+        shell_with_scripted_terminal("/devices/failing_set_attributes", state).await;
+
+    assert!(matches!(
+        shell.authenticate().await,
+        Err(crate::Error::FailedToHidePassword(
+            xila::virtual_file_system::Error::FileSystem(xila::file_system::Error::InternalError)
+        ))
+    ));
+    assert_eq!(state.echo_per_byte(), vec![true; "administrator\n".len()]);
+    assert_eq!(state.set_attempts(), 1);
+    assert_eq!(
+        state.attributes(),
+        xila::file_system::character_device::TerminalAttributes::INTERACTIVE
+    );
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn login_retries_a_failed_restore_once() {
+    let state = LoginTerminalState::with_failures(
+        LOGIN_INPUT,
+        None,
+        &[None, Some(xila::file_system::Error::RessourceBusy)],
+    );
+    let (mut shell, state) = shell_with_scripted_terminal("/devices/restore_retry", state).await;
+
+    assert_eq!(
+        shell.authenticate().await.unwrap().as_deref(),
+        Some("administrator")
+    );
+    // Echo off, a failed restore, then a successful one.
+    assert_eq!(state.set_attempts(), 3);
+    assert_eq!(
+        state.attributes(),
+        xila::file_system::character_device::TerminalAttributes::INTERACTIVE
+    );
+    assert_eq!(errors_written(&mut shell).await, "");
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn login_reports_a_restore_that_fails_twice() {
+    let state = LoginTerminalState::with_failures(
+        LOGIN_INPUT,
+        None,
+        &[
+            None,
+            Some(xila::file_system::Error::RessourceBusy),
+            Some(xila::file_system::Error::RessourceBusy),
+        ],
+    );
+    let (mut shell, state) = shell_with_scripted_terminal("/devices/restore_failure", state).await;
+
+    // The password was read, so the login itself goes on.
+    assert_eq!(
+        shell.authenticate().await.unwrap().as_deref(),
+        Some("administrator")
+    );
+    assert_eq!(state.set_attempts(), 3);
+    assert!(!state.attributes().is_echo_enabled());
+    let expected = format!(
+        "{}\n",
+        crate::Error::FailedToRestoreTerminalEcho(xila::virtual_file_system::Error::FileSystem(
+            xila::file_system::Error::RessourceBusy
+        ))
+    );
+    assert_eq!(errors_written(&mut shell).await, expected);
 }
