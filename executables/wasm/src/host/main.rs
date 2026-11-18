@@ -133,10 +133,6 @@ pub async fn main(
 
 /// Run one guest with an independently owned stop handle. Join this future
 /// before replacing its module or reclaiming its VFS and graphics resources.
-#[allow(
-    clippy::disallowed_types,
-    reason = "xila::synchronization::Arc resolves to alloc::sync::Arc until core#650 merges"
-)]
 pub async fn execute_with_control(
     mut standard: Standard<'static>,
     arguments: Vec<String>,
@@ -208,10 +204,6 @@ async fn read_file(path: &str, context: &'static ExecutableContext) -> Result<Ve
     Ok(buffer)
 }
 
-#[allow(
-    clippy::disallowed_types,
-    reason = "xila::synchronization::Arc resolves to alloc::sync::Arc until core#650 merges"
-)]
 async fn main_inner(
     standard: Standard<'static>,
     arguments: WasmArguments<'_>,
