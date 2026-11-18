@@ -1,6 +1,10 @@
 use alloc::string::String;
 use xila::file_system::Kind;
 use xila::graphics::OwnedWindow;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{
     self, EventKind, lvgl,
     palette::{self, Hue},

@@ -1,6 +1,10 @@
 use crate::error::Result;
 use alloc::ffi::CString;
 use xila::authentication;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{Event, EventKind, lvgl};
 use xila::internationalization::t;
 

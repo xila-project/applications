@@ -2,6 +2,10 @@ use crate::error::{Error, Result};
 use alloc::ffi::CString;
 use core::{ffi::CStr, ptr::null_mut};
 use xila::graphics::appearance::Appearance;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::{
     executable::ExecutableContext,
     graphics::{self, Event, EventKind, lvgl},
@@ -210,7 +214,7 @@ pub(crate) mod tests {
             );
             let bubbled = window.pop_event().unwrap();
             assert_eq!(bubbled.code, EventKind::ValueChanged);
-            assert_eq!(bubbled.target, tab.dark_mode);
+            assert!(bubbled.is_target(tab.dark_mode));
 
             assert_eq!(lvgl::lv_dropdown_get_selected(tab.primary), 2);
             assert_eq!(lvgl::lv_dropdown_get_selected(tab.secondary), 5);

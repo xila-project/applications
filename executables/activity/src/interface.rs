@@ -1,6 +1,10 @@
 use crate::model::{self, MemorySample};
 use alloc::{collections::VecDeque, ffi::CString, format};
 use core::{ffi::c_char, num::NonZeroUsize};
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{self, EventKind, OwnedWindow, fonts, lvgl, theme};
 use xila::internationalization::t;
 

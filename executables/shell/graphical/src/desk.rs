@@ -12,6 +12,10 @@ use alloc::{
     vec,
     vec::Vec,
 };
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{self, Color, EventKind, Logo, LogoStyle, OwnedWindow, Point, lvgl};
 use xila::log::{self, error, warning};
 use xila::virtual_file_system::Directory;

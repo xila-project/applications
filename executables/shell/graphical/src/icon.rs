@@ -1,4 +1,8 @@
 use alloc::ffi::CString;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{
     Color, Point,
     fonts::{get_font_extra_large, get_font_large},

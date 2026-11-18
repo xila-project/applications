@@ -3,6 +3,10 @@ use alloc::{collections::vec_deque::VecDeque, string::String};
 use core::ffi::CStr;
 use xila::graphics::OwnedWindow;
 use xila::graphics::fonts::get_font_monospace_medium;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{
     self, Color, EventKind, Key,
     lvgl::{self, lv_obj_t},

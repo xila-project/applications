@@ -1,5 +1,9 @@
 use crate::error::{Error, Result};
 use core::ffi::CStr;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{Event, fonts, lvgl, theme};
 
 /// Opacity of secondary text; dimming follows the palette.

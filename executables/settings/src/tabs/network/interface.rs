@@ -3,6 +3,10 @@ use crate::{Error, Result, tabs::network::open_interface};
 use alloc::{boxed::Box, string::String};
 use core::fmt::Write;
 use core::ptr::null_mut;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::{
     graphics::{EventKind, lvgl},
     internationalization::t,

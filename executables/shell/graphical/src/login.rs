@@ -1,6 +1,10 @@
 use alloc::{ffi::CString, string::ToString};
 pub(crate) use core::ffi::CStr;
 use xila::authentication;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::graphics::{self, Color, EventKind, Logo, OwnedWindow, fonts, lvgl, theme};
 use xila::internationalization::t;
 use xila::users::UserIdentifier;

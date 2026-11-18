@@ -4,6 +4,10 @@ use crate::{Error, Result};
 use alloc::{ffi::CString, string::ToString};
 use core::{ffi::CStr, ptr::null_mut, time::Duration};
 use interface::*;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::{
     file_system::{AccessFlags, Path},
     graphics::{Event, EventKind, lvgl, symbol},

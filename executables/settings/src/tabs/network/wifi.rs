@@ -2,6 +2,10 @@
 use crate::{Error, Result};
 use alloc::{ffi::CString, string::String};
 use core::{ffi::CStr, fmt::Write, ptr::null_mut};
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::{
     file_system::ControlCommand,
     graphics::{Event, EventKind, lvgl},

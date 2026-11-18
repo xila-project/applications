@@ -10,6 +10,10 @@ use xila::graphics::fonts;
 use xila::log;
 use xila::task;
 use xila::virtual_file_system::Directory;
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::{
     file_system::{Kind, Path, PathOwned},
     graphics::{
