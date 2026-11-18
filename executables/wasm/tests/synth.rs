@@ -19,6 +19,10 @@ use core::{
     time::Duration,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::{
     file_system::{
         BaseOperations, CharacterDevice, Context, ControlCommandIdentifier, Error, MountOperations,

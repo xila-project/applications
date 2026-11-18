@@ -131,12 +131,26 @@ async fn multiple_vms_exceed_legacy_cap_and_teardown_releases_registry() {
         objects.push((root, child));
     }
     assert_eq!(manager.get_window_count().await.unwrap(), 20);
+    // Ids are issued per VM, so VM 0 and VM 19 hold the same numbers. A value
+    // resolves only in the table of the VM that sent it: VM 0 deleting "VM
+    // 19's child" deletes its own object, and VM 19's stays alive.
+    assert_eq!(objects[19], objects[0]);
+    call(
+        &mut states[0],
+        &mut memory,
+        Function::ObjectDelete,
+        &[objects[19].1],
+    )
+    .unwrap();
+    assert_eq!(states[0].handle_count(), 1);
+    assert_eq!(states[19].handle_count(), 2);
+    // A number no VM issued names nothing.
     assert_eq!(
         call(
             &mut states[0],
             &mut memory,
             Function::ObjectDelete,
-            &[objects[19].1]
+            &[objects[19].1 + 1000]
         ),
         Err(GraphicsError::InvalidHandle)
     );
@@ -151,6 +165,10 @@ async fn multiple_vms_exceed_legacy_cap_and_teardown_releases_registry() {
 #[xila::task::test(task_path = xila::task)]
 async fn cascade_delete_and_teardown_release_all_retained_resources() {
     use wasm::translation::GuestValue;
+    #[expect(
+        deprecated,
+        reason = "raw LVGL access until this module migrates to the safe layer"
+    )]
     use xila::graphics::lvgl;
     use xila::memory::ManagerTrait;
 
@@ -421,4 +439,93 @@ async fn cascade_delete_and_teardown_release_all_retained_resources() {
     drop(state);
     assert_eq!(manager.get_window_count().await.unwrap(), 0);
     assert_eq!(GraphicsState::registered_state_count(manager), 0);
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn queued_events_carry_ids_and_never_name_a_later_object() {
+    #[expect(
+        deprecated,
+        reason = "raw LVGL access until this module migrates to the safe layer"
+    )]
+    use xila::graphics::lvgl;
+
+    let _standard = testing::initialize(false, false).await;
+    let manager = support::manager().await;
+    let mut bytes = [0; 128];
+    let mut memory = GuestMemory::new(&mut bytes);
+    let mut state = GraphicsState::new(Some(manager));
+    let root = call(&mut state, &mut memory, Function::WindowCreate, &[]).unwrap();
+    let first = call(&mut state, &mut memory, Function::ObjectCreate, &[root]).unwrap();
+    // A native child the guest never saw: it carries no id.
+    let root_pointer = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let native = {
+        let _lock = manager.synchronous_lock();
+        unsafe { lvgl::lv_obj_create(root_pointer) }
+    };
+    let send = |target: *mut lvgl::lv_obj_t| {
+        let _lock = manager.synchronous_lock();
+        unsafe {
+            lvgl::lv_obj_send_event(
+                target,
+                lvgl::lv_event_code_t_LV_EVENT_CLICKED,
+                core::ptr::null_mut(),
+            )
+        };
+    };
+    // The next click of the window's queue. Structural events (children
+    // created or deleted) land there too and are skipped; the click code is
+    // learned from the first event, the only one queued then. `None` when
+    // the queue is empty.
+    let clicked = core::cell::Cell::new(None);
+    let pop = |state: &mut GraphicsState, memory: &mut GuestMemory<'_>| loop {
+        call(state, memory, Function::WindowPopEvent, &[root, 40, 48]).unwrap();
+        let code = memory.read::<u32>(GuestPointer::new(40)).unwrap();
+        if code == 0 {
+            return None;
+        }
+        if clicked.get().unwrap_or(code) == code {
+            clicked.set(Some(code));
+            return Some(memory.read::<WasmUsize>(GuestPointer::new(48)).unwrap());
+        }
+    };
+    let first_pointer = {
+        let _lock = manager.synchronous_lock();
+        unsafe { lvgl::lv_obj_get_child(root_pointer, 0) }
+    };
+    while {
+        call(
+            &mut state,
+            &mut memory,
+            Function::WindowPopEvent,
+            &[root, 40, 48],
+        )
+        .unwrap();
+        memory.read::<u32>(GuestPointer::new(40)) != Some(0)
+    } {}
+
+    // Live target: the event names the guest's handle; a native child, none.
+    send(first_pointer);
+    send(native);
+    send(first_pointer);
+    assert_eq!(pop(&mut state, &mut memory), Some(first));
+    assert_eq!(pop(&mut state, &mut memory), Some(0));
+
+    // The target dies with an event still queued, and a new object is created
+    // (LVGL may reuse the address). The queued id is never reissued.
+    call(&mut state, &mut memory, Function::ObjectDelete, &[first]).unwrap();
+    let second = call(&mut state, &mut memory, Function::ObjectCreate, &[root]).unwrap();
+    assert!(second > first);
+    assert_eq!(
+        pop(&mut state, &mut memory),
+        Some(0),
+        "the stale id names nothing"
+    );
+
+    // The new object's own events carry its own handle.
+    let second_pointer = {
+        let _lock = manager.synchronous_lock();
+        unsafe { lvgl::lv_obj_get_child(root_pointer, -1) }
+    };
+    send(second_pointer);
+    assert_eq!(pop(&mut state, &mut memory), Some(second));
 }

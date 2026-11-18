@@ -18,6 +18,10 @@ use core::{
     task::Poll,
     time::Duration,
 };
+#[expect(
+    deprecated,
+    reason = "raw LVGL access until this module migrates to the safe layer"
+)]
 use xila::{
     graphics::{Manager, lvgl},
     virtual_file_system::File,

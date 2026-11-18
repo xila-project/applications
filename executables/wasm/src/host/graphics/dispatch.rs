@@ -10,7 +10,9 @@ use super::{
 use crate::host::translation::{GuestMemory, GuestPointer, GuestSlice, WasmUsize};
 use alloc::vec::Vec;
 use core::{ffi::CStr, ptr::NonNull};
-use xila::graphics::{Color, Window, lvgl};
+#[expect(deprecated, reason = "the host still drives the raw LVGL bindings")]
+use xila::graphics::lvgl;
+use xila::graphics::{Color, Window};
 
 const MAX_RANGE_VALUE: i32 = 1_000_000;
 
@@ -550,9 +552,9 @@ pub fn dispatch(
         }
     }
     manager
-        .with_lvgl_sync(|lv| {
+        .with_lvgl_sync(|_| {
             Ok(state
-                .initialize(lv)
+                .initialize()
                 .and_then(|()| dispatch_locked(state, memory, call, function)))
         })
         .map_err(|_| GraphicsError::NativeFailure)?
@@ -1404,7 +1406,7 @@ fn dispatch_locked(
             let (code, target) = event.map_or((0, 0), |event| {
                 (
                     super::events::guest_code(event.code),
-                    state.event_handle_for(pointer, &event),
+                    state.event_handle(&event),
                 )
             });
             memory
