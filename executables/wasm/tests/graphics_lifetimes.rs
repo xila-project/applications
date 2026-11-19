@@ -8,7 +8,7 @@ use wasm::{
     graphics::{Function, GraphicsCall, GraphicsState, dispatch},
     translation::{GuestMemory, GuestPointer, GuestValue, WasmUsize},
 };
-use xila::{graphics::lvgl, memory::ManagerTrait};
+use xila::graphics::lvgl;
 
 fn call(
     state: &mut GraphicsState,
@@ -78,7 +78,7 @@ async fn deleted_maps_are_reclaimed_with_generational_handles() {
                 Function::ButtonmatrixSetMap,
                 &[matrix, 400],
             );
-            let with_map = __XILA_TESTING_MEMORY_MANAGER.get_used();
+            let with_map = testing::MemoryManager::thread_allocations();
             if mode == "external" {
                 let _lock = manager.synchronous_lock();
                 unsafe { lvgl::lv_obj_delete(lvgl::lv_obj_get_child(root_pointer, 0)) };
@@ -92,7 +92,9 @@ async fn deleted_maps_are_reclaimed_with_generational_handles() {
             }
             // The free observer reclaims external deletions synchronously.
             call(&mut state, &mut memory, Function::Percentage, &[100]);
-            let reclaimed = with_map.saturating_sub(__XILA_TESTING_MEMORY_MANAGER.get_used());
+            let reclaimed = -testing::MemoryManager::thread_allocations()
+                .since(with_map)
+                .net_bytes();
             // Slots are reused with new generations, so deleting the matrix frees
             // its eight 1000-byte strings, their NULs, the sentinel, and native widget storage.
             assert!(
