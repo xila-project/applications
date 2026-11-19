@@ -7,13 +7,27 @@ use alloc::vec::Vec;
 use core::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(i32)]
 pub enum PollError {
-    Fault = 21,
-    Invalid = 28,
-    Io = 29,
-    NotSupported = 58,
-    Overflow = 61,
+    Fault,
+    Invalid,
+    Io,
+    NotSupported,
+    Overflow,
+}
+
+impl From<PollError> for i32 {
+    fn from(error: PollError) -> Self {
+        use super::Error;
+
+        match error {
+            PollError::Fault => Error::Fault,
+            PollError::Invalid => Error::Inval,
+            PollError::Io => Error::Io,
+            PollError::NotSupported => Error::Notsup,
+            PollError::Overflow => Error::Overflow,
+        }
+        .into()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -46,9 +46,25 @@ pub(crate) use wrap_function;
 
 pub type CombinedResult<T> = Result<T, CombinedError>;
 
-#[repr(u32)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Error {
+// Generate the range test from the enum so new variants are checked automatically.
+macro_rules! preview1_errors {
+    ($($(#[$doc:meta])* $name:ident = $value:literal,)+) => {
+        #[repr(u32)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub enum Error {
+            $($(#[$doc])* $name = $value,)+
+        }
+
+        #[test]
+        fn guest_errnos_are_in_the_preview1_range() {
+            for error in [$(Error::$name,)+] {
+                assert!((1..=76).contains(&i32::from(error)), "{error:?}");
+            }
+        }
+    };
+}
+
+preview1_errors! {
     /// Argument list too long (`E2BIG`).
     Toobig = 1,
     /// Permission denied (`EACCES`).
@@ -201,12 +217,6 @@ pub enum Error {
     Xdev = 75,
     /// Capabilities insufficient (`ENOTCAPABLE`).
     Notcapable = 76,
-    /// Cannot send after socket shutdown (`ESHUTDOWN`).
-    Shutdown = 77,
-    /// Memory violation or illegal memory access.
-    Memviolation = 78,
-    /// Unknown or unspecified error.
-    Unknown = 79,
 }
 
 impl From<Error> for i32 {
@@ -230,19 +240,25 @@ pub fn vfs_error(err: xila::virtual_file_system::Error) -> Error {
         Vfs::FileSystem(Fs::RessourceBusy) => Error::Again,
         Vfs::UnsupportedOperation | Vfs::FileSystem(Fs::UnsupportedOperation) => Error::Notsup,
         Vfs::FileSystem(Fs::DirectoryNotEmpty) => Error::Notempty,
-        Vfs::InvalidMode => Error::Badf,
-        Vfs::FileSystem(Fs::InvalidParameter) => Error::Inval,
+        Vfs::InvalidIdentifier
+        | Vfs::InvalidMode
+        | Vfs::FileSystem(Fs::InvalidIdentifier | Fs::InvalidMode) => Error::Badf,
+        Vfs::InvalidParameter
+        | Vfs::InvalidPath
+        | Vfs::InvalidOpen
+        | Vfs::FileSystem(Fs::InvalidParameter | Fs::InvalidPath | Fs::InvalidFlags) => {
+            Error::Inval
+        }
+        Vfs::FileSystem(Fs::NoMemory) => Error::Nomem,
         Vfs::FileSystem(Fs::FileTooLarge) => Error::Fbig,
         Vfs::FileSystem(Fs::NameTooLong) => Error::Nametoolong,
         Vfs::CrossDevice => Error::Xdev,
         Vfs::PathEscapesRoot => Error::Notcapable,
         Vfs::PermissionDenied => Error::Access,
         Vfs::NotADirectory => Error::Notdir,
-        Vfs::InvalidPath => Error::Inval,
         Vfs::AlreadyExists => Error::Exist,
         Vfs::RessourceBusy => Error::Again,
-        Vfs::TooManyOpenFiles => Error::Nfile,
-        Vfs::InvalidIdentifier => Error::Badf,
+        Vfs::TooManyOpenFiles | Vfs::FileSystem(Fs::TooManyOpenFiles) => Error::Nfile,
         _ => Error::Io,
     }
 }
@@ -290,6 +306,11 @@ mod tests {
         );
         assert_eq!(vfs_error(Vfs::InvalidMode), Error::Badf);
         assert_eq!(vfs_error(Vfs::FileSystem(Fs::FileTooLarge)), Error::Fbig);
+    }
+
+    #[test]
+    fn invalid_vfs_parameters_are_invalid_arguments_for_guests() {
+        assert_eq!(vfs_error(Vfs::InvalidParameter), Error::Inval);
     }
 
     #[test]
