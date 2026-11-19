@@ -499,9 +499,12 @@ mod tests {
             let handle = std::thread::spawn(move || {
                 let _ = sender.send(work());
             });
-            let result = receiver
-                .recv_timeout(timeout)
-                .unwrap_or_else(|_| panic!("{name} hung (likely deadlocked on the graphics lock)"));
+            let result = receiver.recv_timeout(timeout).unwrap_or_else(|_| {
+                // A deadlocked worker keeps the graphics lock forever, so later
+                // tests in this binary would block on it: exit instead of panicking.
+                std::eprintln!("{name} hung (likely deadlocked on the graphics lock)");
+                std::process::exit(1)
+            });
             handle.join().unwrap();
             result
         }

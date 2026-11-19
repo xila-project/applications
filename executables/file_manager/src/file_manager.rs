@@ -843,7 +843,14 @@ mod tests {
 
             receiver
                 .recv_timeout(Duration::from_secs(5))
-                .expect("FileManager::new_at hung (likely deadlocked on the graphics lock)");
+                .unwrap_or_else(|_| {
+                    // A deadlocked worker keeps the graphics lock forever, so later
+                    // tests in this binary would block on it: exit instead of panicking.
+                    std::eprintln!(
+                        "FileManager::new_at hung (likely deadlocked on the graphics lock)"
+                    );
+                    std::process::exit(1)
+                });
             handle.join().unwrap();
         }
     }
