@@ -47,10 +47,18 @@ struct GraphicalShellArguments {
     show_keyboard: bool,
 }
 
-pub async fn main(
+pub async fn main(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), NonZeroUsize> {
+    main_with(standard, arguments, Shell::new).await
+}
+
+async fn main_with<F>(
     mut standard: Standard<'static>,
     arguments: Vec<String>,
-) -> Result<(), NonZeroUsize> {
+    create_shell: impl FnOnce(Standard<'static>, bool) -> F,
+) -> Result<(), NonZeroUsize>
+where
+    F: core::future::Future<Output = error::Result<Shell>>,
+{
     let GraphicalShellArguments { show_keyboard } =
         match GraphicalShellArguments::from_args(arguments.iter().map(String::as_str)) {
             Ok(arguments) => arguments,
@@ -64,7 +72,7 @@ pub async fn main(
             }
         };
 
-    Shell::new(standard, show_keyboard).await?.main().await
+    create_shell(standard, show_keyboard).await?.main().await
 }
 
 // Fields drop in order: `_home` first (its button lives on `lv_layer_top()`
@@ -92,21 +100,20 @@ impl ExecutableTrait for ShellExecutable {
 
 impl Shell {
     pub async fn new(standard: Standard<'static>, show_keyboard: bool) -> error::Result<Self> {
+        let layout = Layout::new(standard.context, show_keyboard);
         let login = Login::new(standard.context);
-        Self::new_with_login(standard, show_keyboard, login).await
+        Self::new_with(standard, layout, login).await
     }
 
-    async fn new_with_login(
+    async fn new_with(
         standard: Standard<'static>,
-        show_keyboard: bool,
+        layout: impl core::future::Future<Output = error::Result<Layout>>,
         login: impl core::future::Future<Output = error::Result<Login>>,
     ) -> error::Result<Self> {
         let context = standard.context;
-        let layout = Layout::new(context, show_keyboard)
-            .await
-            .inspect_err(|error| {
-                xila::log::error!("Failed to initialize shell layout: {error:?}")
-            })?;
+        let layout = layout.await.inspect_err(|error| {
+            xila::log::error!("Failed to initialize shell layout: {error:?}")
+        })?;
         let login = Box::new(login.await.inspect_err(|error| {
             xila::log::error!("Failed to initialize graphical login: {error:?}")
         })?);
@@ -240,14 +247,16 @@ mod tests {
             shared::AnyByLayout,
         };
 
-        use core::time::Duration;
+        use core::{num::NonZeroUsize, time::Duration};
 
         use crate::{
             Shell,
             desk::{Desk, WINDOWS_PARENT_CHILD_CHANGED},
             error::Error,
             home::Home,
+            layout::{Layout, LayoutWidget},
             login::Login,
+            main_with,
         };
 
         struct HeadlessScreen;
@@ -577,6 +586,36 @@ mod tests {
             assert_eq!(screen_events, baseline_screen_events);
         }
 
+        fn screen_counts(
+            manager: &'static graphics::Manager,
+            screen: *mut lvgl::lv_obj_t,
+        ) -> (u32, u32) {
+            manager
+                .lock_function_sync(|| unsafe {
+                    Ok((
+                        lvgl::lv_obj_get_child_count(screen),
+                        lvgl::lv_obj_get_event_count(screen),
+                    ))
+                })
+                .unwrap()
+        }
+
+        fn screen_style(
+            manager: &'static graphics::Manager,
+            screen: *mut lvgl::lv_obj_t,
+        ) -> (i32, i32, u16, lvgl::lv_flex_flow_t) {
+            manager
+                .lock_function_sync(|| unsafe {
+                    Ok((
+                        lvgl::lv_obj_get_style_width(screen, lvgl::lv_part_t_LV_PART_MAIN),
+                        lvgl::lv_obj_get_style_height(screen, lvgl::lv_part_t_LV_PART_MAIN),
+                        lvgl::lv_obj_get_style_layout(screen, lvgl::lv_part_t_LV_PART_MAIN),
+                        lvgl::lv_obj_get_style_flex_flow(screen, lvgl::lv_part_t_LV_PART_MAIN),
+                    ))
+                })
+                .unwrap()
+        }
+
         #[xila::task::test(task_path = xila::task)]
         async fn shell_startup_failure_cleans_up_login_and_layout() {
             static LOGIN_FAIL_DELETE: &str = "login_fail_delete";
@@ -585,36 +624,27 @@ mod tests {
             let manager = headless_graphics_manager().await;
             let baseline_windows = manager.get_window_count().await.unwrap();
             let screen = manager.get_current_screen().unwrap();
-            let screen_counts = || {
-                manager
-                    .lock_function_sync(|| unsafe {
-                        Ok((
-                            lvgl::lv_obj_get_child_count(screen),
-                            lvgl::lv_obj_get_event_count(screen),
-                        ))
-                    })
-                    .unwrap()
-            };
-            let baseline_screen = screen_counts();
+            let baseline_screen = screen_counts(manager, screen);
+            let baseline_style = screen_style(manager, screen);
 
             EVENT_LOG.lock().unwrap().clear();
 
-            let error =
-                run_with_timeout("Shell::new_with_login", Duration::from_secs(5), move || {
-                    let login = Login::new_with(standard.context, manager, |window| {
-                        unsafe {
-                            let child = lvgl::lv_obj_create(window.as_object_mutable());
-                            assert!(!child.is_null());
-                            attach_probe(
-                                window.as_object_mutable(),
-                                lvgl::lv_event_code_t_LV_EVENT_DELETE,
-                                &LOGIN_FAIL_DELETE,
-                            );
-                        }
-                        Err(Error::FailedToCreateObject)
-                    });
-                    xila::task::block_on(Shell::new_with_login(standard, true, login)).err()
+            let error = run_with_timeout("Shell::new_with", Duration::from_secs(5), move || {
+                let layout = Layout::new(standard.context, true);
+                let login = Login::new_with(standard.context, manager, |window| {
+                    unsafe {
+                        let child = lvgl::lv_obj_create(window.as_object_mutable());
+                        assert!(!child.is_null());
+                        attach_probe(
+                            window.as_object_mutable(),
+                            lvgl::lv_event_code_t_LV_EVENT_DELETE,
+                            &LOGIN_FAIL_DELETE,
+                        );
+                    }
+                    Err(Error::FailedToCreateObject)
                 });
+                xila::task::block_on(Shell::new_with(standard, layout, login)).err()
+            });
 
             assert!(matches!(error, Some(Error::FailedToCreateObject)));
             assert_eq!(
@@ -627,7 +657,199 @@ mod tests {
                 "graphics lock must be released after Login setup error"
             );
             assert_eq!(manager.get_window_count().await.unwrap(), baseline_windows);
-            assert_eq!(screen_counts(), baseline_screen);
+            assert_eq!(screen_counts(manager, screen), baseline_screen);
+            assert_eq!(screen_style(manager, screen), baseline_style);
+        }
+
+        #[xila::task::test(task_path = xila::task)]
+        async fn layout_setup_failure_cleans_up_partial_objects_and_restores_screen() {
+            static HEADER_DELETE: &str = "layout_header_delete";
+            static BODY_DELETE: &str = "layout_body_delete";
+
+            let standard = testing::initialize(false, false).await;
+            let context = standard.context;
+            let manager = headless_graphics_manager().await;
+            let baseline_windows = manager.get_window_count().await.unwrap();
+            let screen = manager.get_current_screen().unwrap();
+            let baseline_screen = screen_counts(manager, screen);
+            let baseline_style = screen_style(manager, screen);
+
+            for fail_at in [
+                LayoutWidget::Header,
+                LayoutWidget::Clock,
+                LayoutWidget::Tray,
+                LayoutWidget::Network,
+                LayoutWidget::Battery,
+                LayoutWidget::Body,
+                LayoutWidget::Keyboard,
+            ] {
+                EVENT_LOG.lock().unwrap().clear();
+
+                let error =
+                    run_with_timeout("Layout::new_with", Duration::from_secs(5), move || {
+                        xila::task::block_on(Layout::new_with(
+                            context,
+                            manager,
+                            true,
+                            |widget, parent| {
+                                if widget == fail_at {
+                                    return null_mut();
+                                }
+                                let object = unsafe { widget.create(parent) };
+                                if !object.is_null() {
+                                    unsafe {
+                                        match widget {
+                                            LayoutWidget::Header => attach_probe(
+                                                object,
+                                                lvgl::lv_event_code_t_LV_EVENT_DELETE,
+                                                &HEADER_DELETE,
+                                            ),
+                                            LayoutWidget::Body => attach_probe(
+                                                object,
+                                                lvgl::lv_event_code_t_LV_EVENT_DELETE,
+                                                &BODY_DELETE,
+                                            ),
+                                            _ => {}
+                                        }
+                                    }
+                                }
+                                object
+                            },
+                        ))
+                        .err()
+                    });
+
+                assert!(
+                    matches!(error, Some(Error::FailedToCreateObject)),
+                    "failing at {fail_at:?} must return FailedToCreateObject"
+                );
+                let expected_deletes: &[&str] = match fail_at {
+                    LayoutWidget::Header => &[],
+                    LayoutWidget::Clock
+                    | LayoutWidget::Tray
+                    | LayoutWidget::Network
+                    | LayoutWidget::Battery
+                    | LayoutWidget::Body => &[HEADER_DELETE],
+                    LayoutWidget::Keyboard => &[BODY_DELETE, HEADER_DELETE],
+                };
+                assert_eq!(
+                    EVENT_LOG.lock().unwrap().as_slice(),
+                    expected_deletes,
+                    "failing at {fail_at:?} must delete all previously created layout widgets"
+                );
+                assert!(
+                    manager.try_lock().is_some(),
+                    "graphics lock must be released after failing at {fail_at:?}"
+                );
+                assert_eq!(manager.get_window_count().await.unwrap(), baseline_windows);
+                assert_eq!(
+                    screen_counts(manager, screen),
+                    baseline_screen,
+                    "screen child and callback counts must return to baseline after failing at {fail_at:?}"
+                );
+                assert_eq!(
+                    screen_style(manager, screen),
+                    baseline_style,
+                    "screen size and flex flow must return to baseline after failing at {fail_at:?}"
+                );
+            }
+
+            // Also verify pre-existing local size and flex flow values are restored.
+            manager
+                .lock_function_sync(|| unsafe {
+                    lvgl::lv_obj_set_size(screen, 200, 150);
+                    lvgl::lv_obj_set_flex_flow(screen, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW);
+                    Ok(())
+                })
+                .unwrap();
+            let custom_style = screen_style(manager, screen);
+            assert_eq!(
+                custom_style,
+                (
+                    200,
+                    150,
+                    lvgl::lv_layout_t_LV_LAYOUT_FLEX as u16,
+                    lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW,
+                )
+            );
+
+            let error = run_with_timeout(
+                "Layout::new_with custom style",
+                Duration::from_secs(5),
+                move || {
+                    xila::task::block_on(Layout::new_with(
+                        context,
+                        manager,
+                        true,
+                        |widget, parent| {
+                            if widget == LayoutWidget::Keyboard {
+                                return null_mut();
+                            }
+                            unsafe { widget.create(parent) }
+                        },
+                    ))
+                    .err()
+                },
+            );
+            assert!(matches!(error, Some(Error::FailedToCreateObject)));
+            assert_eq!(screen_counts(manager, screen), baseline_screen);
+            assert_eq!(screen_style(manager, screen), custom_style);
+
+            // Clean up the test's custom local style overrides so later tests see
+            // the original screen state.
+            manager
+                .lock_function_sync(|| unsafe {
+                    for prop in [
+                        lvgl::_lv_style_id_t_LV_STYLE_WIDTH as lvgl::lv_style_prop_t,
+                        lvgl::_lv_style_id_t_LV_STYLE_HEIGHT as lvgl::lv_style_prop_t,
+                        lvgl::_lv_style_id_t_LV_STYLE_FLEX_FLOW as lvgl::lv_style_prop_t,
+                        lvgl::_lv_style_id_t_LV_STYLE_LAYOUT as lvgl::lv_style_prop_t,
+                    ] {
+                        lvgl::lv_obj_remove_local_style_prop(screen, prop, lvgl::LV_STATE_DEFAULT);
+                    }
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(screen_style(manager, screen), baseline_style);
+        }
+
+        #[xila::task::test(task_path = xila::task)]
+        async fn main_returns_exit_status_two_on_layout_object_creation_failure() {
+            let standard = testing::initialize(false, false).await;
+            let manager = headless_graphics_manager().await;
+            let screen = manager.get_current_screen().unwrap();
+            let baseline_screen = screen_counts(manager, screen);
+            let baseline_style = screen_style(manager, screen);
+
+            let status = run_with_timeout("main_with", Duration::from_secs(5), move || {
+                xila::task::block_on(main_with(
+                    standard,
+                    alloc::vec![alloc::string::String::from("--show-keyboard")],
+                    |standard, show_keyboard| {
+                        let context = standard.context;
+                        let layout =
+                            Layout::new_with(context, manager, show_keyboard, |widget, parent| {
+                                if widget == LayoutWidget::Keyboard {
+                                    return null_mut();
+                                }
+                                unsafe { widget.create(parent) }
+                            });
+                        let login = Login::new(context);
+                        Shell::new_with(standard, layout, login)
+                    },
+                ))
+                .err()
+                .map(NonZeroUsize::get)
+            });
+
+            assert_eq!(
+                status,
+                Some(2),
+                "Error::FailedToCreateObject must map to exit status 2"
+            );
+            assert!(manager.try_lock().is_some());
+            assert_eq!(screen_counts(manager, screen), baseline_screen);
+            assert_eq!(screen_style(manager, screen), baseline_style);
         }
     }
 }

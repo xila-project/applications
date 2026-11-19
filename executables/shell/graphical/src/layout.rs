@@ -26,9 +26,168 @@ fn write_clock_text(output: &mut String, current_time: Option<i64>) {
 
 const KEYBOARD_SIZE_RATIO: f64 = 3.0 / 1.0;
 
+#[derive(Clone, Copy)]
+struct SavedLocalStyle {
+    prop: lvgl::lv_style_prop_t,
+    value: Option<lvgl::lv_style_value_t>,
+}
+
+impl SavedLocalStyle {
+    unsafe fn capture(object: *mut lvgl::lv_obj_t, prop: lvgl::lv_style_prop_t) -> Self {
+        let mut value = core::mem::MaybeUninit::uninit();
+        let found = unsafe {
+            lvgl::lv_obj_get_local_style_prop(
+                object,
+                prop,
+                value.as_mut_ptr(),
+                lvgl::LV_STATE_DEFAULT,
+            )
+        };
+        let value = (found == lvgl::lv_style_res_t_LV_STYLE_RES_FOUND)
+            .then(|| unsafe { value.assume_init() });
+        Self { prop, value }
+    }
+
+    unsafe fn restore(&self, object: *mut lvgl::lv_obj_t) {
+        unsafe {
+            match self.value {
+                Some(value) => lvgl::lv_obj_set_local_style_prop(
+                    object,
+                    self.prop,
+                    value,
+                    lvgl::LV_STATE_DEFAULT,
+                ),
+                None => {
+                    lvgl::lv_obj_remove_local_style_prop(object, self.prop, lvgl::LV_STATE_DEFAULT);
+                }
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct ScreenStyleSnapshot([SavedLocalStyle; 4]);
+
+impl ScreenStyleSnapshot {
+    const PROPERTIES: [lvgl::lv_style_prop_t; 4] = [
+        lvgl::_lv_style_id_t_LV_STYLE_WIDTH as lvgl::lv_style_prop_t,
+        lvgl::_lv_style_id_t_LV_STYLE_HEIGHT as lvgl::lv_style_prop_t,
+        lvgl::_lv_style_id_t_LV_STYLE_FLEX_FLOW as lvgl::lv_style_prop_t,
+        lvgl::_lv_style_id_t_LV_STYLE_LAYOUT as lvgl::lv_style_prop_t,
+    ];
+
+    unsafe fn capture(screen: *mut lvgl::lv_obj_t) -> Self {
+        Self(Self::PROPERTIES.map(|prop| unsafe { SavedLocalStyle::capture(screen, prop) }))
+    }
+
+    unsafe fn restore(&self, screen: *mut lvgl::lv_obj_t) {
+        for saved in &self.0 {
+            unsafe { saved.restore(screen) };
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum LayoutWidget {
+    Header,
+    Clock,
+    Tray,
+    Network,
+    Battery,
+    Body,
+    Keyboard,
+}
+
+impl LayoutWidget {
+    /// # Safety
+    /// The caller must hold the graphics lock and pass a valid LVGL parent.
+    pub(crate) unsafe fn create(self, parent: *mut lvgl::lv_obj_t) -> *mut lvgl::lv_obj_t {
+        unsafe {
+            match self {
+                Self::Header | Self::Tray | Self::Body => lvgl::lv_obj_create(parent),
+                Self::Clock | Self::Network | Self::Battery => lvgl::lv_label_create(parent),
+                Self::Keyboard => lvgl::lv_keyboard_create(parent),
+            }
+        }
+    }
+}
+
+/// Owns partially constructed layout widgets and the screen's saved styles
+/// while [`Layout::build_layout`] holds the graphics lock. Dropping it without
+/// calling [`Self::disarm`] deletes every widget created so far and restores
+/// the screen's size, flex flow, and callbacks.
+struct PartialLayout {
+    window: *mut lvgl::lv_obj_t,
+    saved_screen_style: ScreenStyleSnapshot,
+    header: Option<*mut lvgl::lv_obj_t>,
+    body: Option<*mut lvgl::lv_obj_t>,
+    keyboard: Option<*mut lvgl::lv_obj_t>,
+    screen_callbacks_attached: bool,
+    committed: bool,
+}
+
+impl PartialLayout {
+    /// # Safety
+    /// The caller must hold the graphics lock for the entire lifetime of the
+    /// returned guard, and `window` must be a valid active screen pointer.
+    unsafe fn new(window: *mut lvgl::lv_obj_t) -> Self {
+        Self {
+            window,
+            saved_screen_style: unsafe { ScreenStyleSnapshot::capture(window) },
+            header: None,
+            body: None,
+            keyboard: None,
+            screen_callbacks_attached: false,
+            committed: false,
+        }
+    }
+
+    fn disarm(mut self) -> ScreenStyleSnapshot {
+        self.committed = true;
+        self.saved_screen_style
+    }
+}
+
+impl Drop for PartialLayout {
+    fn drop(&mut self) {
+        if self.committed {
+            return;
+        }
+        // SAFETY: `PartialLayout` is only created and dropped while the
+        // graphics lock is held. Deleting `header`, `body`, and `keyboard`
+        // also deletes their descendants (`clock`, `tray`, `network`,
+        // `battery`).
+        unsafe {
+            if let Some(keyboard) = self.keyboard {
+                if self.screen_callbacks_attached {
+                    lvgl::lv_obj_remove_event_cb_with_user_data(
+                        self.window,
+                        Some(screen_event_handler),
+                        keyboard.cast(),
+                    );
+                    lvgl::lv_obj_remove_event_cb_with_user_data(
+                        self.window,
+                        Some(keyboard_event_handler),
+                        keyboard.cast(),
+                    );
+                }
+                lvgl::lv_obj_delete(keyboard);
+            }
+            if let Some(body) = self.body {
+                lvgl::lv_obj_delete(body);
+            }
+            if let Some(header) = self.header {
+                lvgl::lv_obj_delete(header);
+            }
+            self.saved_screen_style.restore(self.window);
+        }
+    }
+}
+
 pub struct Layout {
     context: &'static xila::executable::ExecutableContext,
     window: *mut lvgl::lv_obj_t,
+    saved_screen_style: ScreenStyleSnapshot,
     header: *mut lvgl::lv_obj_t,
     body: *mut lvgl::lv_obj_t,
     keyboard: *mut lvgl::lv_obj_t,
@@ -55,8 +214,8 @@ impl Drop for Layout {
             // SAFETY: the graphics lock is held. Detach `Layout`'s callbacks
             // from the screen before deleting `keyboard`, move every remaining
             // window out of `body` onto `screen` so each window's
-            // `OwnedWindow` remains its sole deleter, and delete only the
-            // widgets `Layout::new` created.
+            // `OwnedWindow` remains its sole deleter, delete only the widgets
+            // `Layout::new` created, and restore the screen's saved styles.
             unsafe {
                 lvgl::lv_obj_remove_event_cb_with_user_data(
                     screen,
@@ -78,6 +237,7 @@ impl Drop for Layout {
                 lvgl::lv_obj_delete(self.header);
                 lvgl::lv_obj_delete(self.body);
                 lvgl::lv_obj_delete(self.keyboard);
+                self.saved_screen_style.restore(screen);
             }
             Ok(())
         });
@@ -321,180 +481,29 @@ impl Layout {
         show_keyboard: bool,
     ) -> Result<Self> {
         let graphics_manager = graphics::ffi_manager();
+        Self::new_with(
+            context,
+            graphics_manager,
+            show_keyboard,
+            |widget, parent| {
+                // SAFETY: `build_layout` invokes this callback only while holding
+                // the graphics lock with a valid LVGL parent.
+                unsafe { widget.create(parent) }
+            },
+        )
+        .await
+    }
+
+    pub(crate) async fn new_with(
+        context: &'static xila::executable::ExecutableContext,
+        graphics_manager: &'static graphics::Manager,
+        show_keyboard: bool,
+        create_widget: impl FnMut(LayoutWidget, *mut lvgl::lv_obj_t) -> *mut lvgl::lv_obj_t,
+    ) -> Result<Self> {
         let layout = graphics::lock!(graphics_manager, {
-            // - Create a window
-            let window = unsafe {
-                let window = lvgl::lv_screen_active();
-
-                if window.is_null() {
-                    return Err(Error::FailedToCreateObject);
-                }
-
-                lvgl::lv_obj_set_size(window, lvgl::lv_pct(100), lvgl::lv_pct(100));
-                lvgl::lv_obj_set_flex_flow(window, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
-
-                window
-            };
-
-            // - Create a header
-            let header = unsafe {
-                let header = lvgl::lv_obj_create(window);
-
-                if header.is_null() {
-                    return Err(Error::FailedToCreateObject);
-                }
-                lvgl::lv_obj_set_size(header, lvgl::lv_pct(100), lvgl::LV_SIZE_CONTENT);
-                // Flat status-bar chrome: keep the theme surface but drop the
-                // card padding, border and radius so the height stays slim.
-                lvgl::lv_obj_set_style_pad_ver(header, 4, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_style_pad_hor(header, 8, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_style_border_width(header, 0, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_style_radius(header, 0, lvgl::LV_STATE_DEFAULT);
-                theme::set_surface(header, theme::Surface::Muted);
-
-                header
-            };
-
-            // - - Create a label for the clock
-            let clock = unsafe {
-                let clock = lvgl::lv_label_create(header);
-
-                if clock.is_null() {
-                    return Err(Error::FailedToCreateObject);
-                }
-
-                lvgl::lv_obj_set_align(clock, lvgl::lv_align_t_LV_ALIGN_CENTER);
-
-                clock
-            };
-
-            // - - Create a flex tray for the right side
-            let tray = {
-                unsafe {
-                    let tray = lvgl::lv_obj_create(header);
-
-                    if tray.is_null() {
-                        return Err(Error::FailedToCreateObject);
-                    }
-
-                    lvgl::lv_obj_set_size(tray, lvgl::LV_SIZE_CONTENT, lvgl::LV_SIZE_CONTENT);
-                    lvgl::lv_obj_set_flex_flow(tray, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW);
-                    lvgl::lv_obj_set_style_pad_all(tray, 0, lvgl::LV_STATE_DEFAULT);
-                    lvgl::lv_obj_set_style_border_width(tray, 0, lvgl::LV_STATE_DEFAULT);
-                    lvgl::lv_obj_set_style_radius(tray, 0, lvgl::LV_STATE_DEFAULT);
-                    lvgl::lv_obj_align(tray, lvgl::lv_align_t_LV_ALIGN_RIGHT_MID, 0, 0);
-                    lvgl::lv_obj_set_style_bg_opa(
-                        tray,
-                        lvgl::LV_OPA_TRANSP as _,
-                        lvgl::LV_STATE_DEFAULT,
-                    );
-
-                    tray
-                }
-            };
-
-            // - - Create a label for the WiFi
-
-            let network = unsafe {
-                // - - Create a label for the WiFi
-
-                let network = lvgl::lv_label_create(tray);
-
-                if network.is_null() {
-                    return Err(Error::FailedToCreateObject);
-                }
-
-                lvgl::lv_label_set_text(network, c"".as_ptr());
-
-                network
-            };
-
-            // - - Create a label for the battery
-            let battery = unsafe {
-                // - - Create a label for the battery
-                let battery = lvgl::lv_label_create(tray);
-
-                if battery.is_null() {
-                    return Err(Error::FailedToCreateObject);
-                }
-
-                lvgl::lv_label_set_text_static(battery, symbol::BATTERY_3.as_ptr());
-
-                battery
-            };
-
-            // - - Create a body object
-            let body = unsafe {
-                // - Create a body
-                let body = lvgl::lv_obj_create(window);
-
-                if body.is_null() {
-                    return Err(Error::FailedToCreateObject);
-                }
-                lvgl::lv_obj_add_flag(body, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_EVENT_BUBBLE);
-                lvgl::lv_obj_set_width(body, lvgl::lv_pct(100));
-                lvgl::lv_obj_set_flex_grow(body, 1);
-                // Edge-to-edge window area: the theme container would inset every
-                // child window with card padding, border and radius.
-                lvgl::lv_obj_set_style_pad_all(body, 0, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_style_border_width(body, 0, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_style_radius(body, 0, lvgl::LV_STATE_DEFAULT);
-
-                body
-            };
-
-            // - Create a keyboard
-            let keyboard = unsafe {
-                let keyboard = lvgl::lv_keyboard_create(window);
-
-                if keyboard.is_null() {
-                    return Err(Error::FailedToCreateObject);
-                }
-
-                lvgl::lv_obj_add_flag(keyboard, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
-
-                if show_keyboard {
-                    lvgl::lv_obj_add_event_cb(
-                        window,
-                        Some(screen_event_handler),
-                        EventKind::Focused.into_lvgl_code(),
-                        keyboard as *mut _,
-                    );
-                    lvgl::lv_obj_add_event_cb(
-                        window,
-                        Some(screen_event_handler),
-                        EventKind::Defocused.into_lvgl_code(),
-                        keyboard as *mut _,
-                    );
-                    lvgl::lv_obj_add_event_cb(
-                        keyboard,
-                        Some(keyboard_event_handler),
-                        EventKind::Ready.into_lvgl_code(),
-                        keyboard as *mut _,
-                    );
-                    lvgl::lv_obj_add_event_cb(
-                        window,
-                        Some(keyboard_event_handler),
-                        EventKind::Cancel.into_lvgl_code(),
-                        keyboard as *mut _,
-                    );
-                }
-
-                keyboard
-            };
-
-            Self {
-                context,
-                window,
-                header,
-                body,
-                keyboard,
-                clock,
-                clock_string: String::with_capacity(6),
-                _battery: battery,
-                network,
-                last_update: None,
-            }
+            // SAFETY: the graphics lock is held for the entire call, so
+            // `PartialLayout::drop` runs before the lock is released on error.
+            unsafe { Self::build_layout(context, show_keyboard, create_widget)? }
         });
 
         // SAFETY: the body is not inside a window, and it lives as long as
@@ -503,6 +512,159 @@ impl Layout {
         unsafe { graphics_manager.set_window_parent(layout.body) }.await?;
 
         Ok(layout)
+    }
+
+    /// # Safety
+    /// The caller must hold the graphics lock for the duration of this call.
+    unsafe fn build_layout(
+        context: &'static xila::executable::ExecutableContext,
+        show_keyboard: bool,
+        mut create_widget: impl FnMut(LayoutWidget, *mut lvgl::lv_obj_t) -> *mut lvgl::lv_obj_t,
+    ) -> Result<Self> {
+        // - Create a window
+        let window = unsafe { lvgl::lv_screen_active() };
+        if window.is_null() {
+            return Err(Error::FailedToCreateObject);
+        }
+
+        // Capture the screen's styles before modifying them so any early
+        // error restores the screen and deletes every widget created so far.
+        let mut partial = unsafe { PartialLayout::new(window) };
+
+        unsafe {
+            lvgl::lv_obj_set_size(window, lvgl::lv_pct(100), lvgl::lv_pct(100));
+            lvgl::lv_obj_set_flex_flow(window, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
+        }
+
+        // - Create a header
+        let header = create_widget(LayoutWidget::Header, window);
+        if header.is_null() {
+            return Err(Error::FailedToCreateObject);
+        }
+        partial.header = Some(header);
+        unsafe {
+            lvgl::lv_obj_set_size(header, lvgl::lv_pct(100), lvgl::LV_SIZE_CONTENT);
+            // Flat status-bar chrome: keep the theme surface but drop the
+            // card padding, border and radius so the height stays slim.
+            lvgl::lv_obj_set_style_pad_ver(header, 4, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_pad_hor(header, 8, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_border_width(header, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_radius(header, 0, lvgl::LV_STATE_DEFAULT);
+            theme::set_surface(header, theme::Surface::Muted);
+        }
+
+        // - - Create a label for the clock
+        let clock = create_widget(LayoutWidget::Clock, header);
+        if clock.is_null() {
+            return Err(Error::FailedToCreateObject);
+        }
+        unsafe {
+            lvgl::lv_obj_set_align(clock, lvgl::lv_align_t_LV_ALIGN_CENTER);
+        }
+
+        // - - Create a flex tray for the right side
+        let tray = create_widget(LayoutWidget::Tray, header);
+        if tray.is_null() {
+            return Err(Error::FailedToCreateObject);
+        }
+        unsafe {
+            lvgl::lv_obj_set_size(tray, lvgl::LV_SIZE_CONTENT, lvgl::LV_SIZE_CONTENT);
+            lvgl::lv_obj_set_flex_flow(tray, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW);
+            lvgl::lv_obj_set_style_pad_all(tray, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_border_width(tray, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_radius(tray, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_align(tray, lvgl::lv_align_t_LV_ALIGN_RIGHT_MID, 0, 0);
+            lvgl::lv_obj_set_style_bg_opa(tray, lvgl::LV_OPA_TRANSP as _, lvgl::LV_STATE_DEFAULT);
+        }
+
+        // - - Create a label for the WiFi
+        let network = create_widget(LayoutWidget::Network, tray);
+        if network.is_null() {
+            return Err(Error::FailedToCreateObject);
+        }
+        unsafe {
+            lvgl::lv_label_set_text(network, c"".as_ptr());
+        }
+
+        // - - Create a label for the battery
+        let battery = create_widget(LayoutWidget::Battery, tray);
+        if battery.is_null() {
+            return Err(Error::FailedToCreateObject);
+        }
+        unsafe {
+            lvgl::lv_label_set_text_static(battery, symbol::BATTERY_3.as_ptr());
+        }
+
+        // - - Create a body object
+        let body = create_widget(LayoutWidget::Body, window);
+        if body.is_null() {
+            return Err(Error::FailedToCreateObject);
+        }
+        partial.body = Some(body);
+        unsafe {
+            lvgl::lv_obj_add_flag(body, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_EVENT_BUBBLE);
+            lvgl::lv_obj_set_width(body, lvgl::lv_pct(100));
+            lvgl::lv_obj_set_flex_grow(body, 1);
+            // Edge-to-edge window area: the theme container would inset every
+            // child window with card padding, border and radius.
+            lvgl::lv_obj_set_style_pad_all(body, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_border_width(body, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_radius(body, 0, lvgl::LV_STATE_DEFAULT);
+        }
+
+        // - Create a keyboard
+        let keyboard = create_widget(LayoutWidget::Keyboard, window);
+        if keyboard.is_null() {
+            return Err(Error::FailedToCreateObject);
+        }
+        partial.keyboard = Some(keyboard);
+        unsafe {
+            lvgl::lv_obj_add_flag(keyboard, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
+
+            if show_keyboard {
+                partial.screen_callbacks_attached = true;
+                lvgl::lv_obj_add_event_cb(
+                    window,
+                    Some(screen_event_handler),
+                    EventKind::Focused.into_lvgl_code(),
+                    keyboard as *mut _,
+                );
+                lvgl::lv_obj_add_event_cb(
+                    window,
+                    Some(screen_event_handler),
+                    EventKind::Defocused.into_lvgl_code(),
+                    keyboard as *mut _,
+                );
+                lvgl::lv_obj_add_event_cb(
+                    keyboard,
+                    Some(keyboard_event_handler),
+                    EventKind::Ready.into_lvgl_code(),
+                    keyboard as *mut _,
+                );
+                lvgl::lv_obj_add_event_cb(
+                    window,
+                    Some(keyboard_event_handler),
+                    EventKind::Cancel.into_lvgl_code(),
+                    keyboard as *mut _,
+                );
+            }
+        }
+
+        let saved_screen_style = partial.disarm();
+
+        Ok(Self {
+            context,
+            window,
+            saved_screen_style,
+            header,
+            body,
+            keyboard,
+            clock,
+            clock_string: String::with_capacity(6),
+            _battery: battery,
+            network,
+            last_update: None,
+        })
     }
 }
 
