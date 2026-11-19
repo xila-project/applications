@@ -27,6 +27,6 @@
   "errors": {
     "invalid_file_drawing_preserved": "Fichier Pixel Painter invalide - dessin conservé",
     "open_failed": "Échec de lecture - vérifier le chemin et le stockage",
-    "save_failed_drawing_preserved": "Échec de sauvegarde - dessin conservé ; vérifier le chemin et le stockage"
+    "save_failed_drawing_preserved": "Échec de sauvegarde - dessin conservé ; vérifier le chemin et le stockage"
   }
 }

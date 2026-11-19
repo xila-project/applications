@@ -4,22 +4,22 @@
     "sources": "Horloge, registre des tâches et allocateur de Xila"
   },
   "metrics": {
-    "uptime": "Durée de fonctionnement : {arg0} s",
-    "tasks": "Tâches enregistrées : {arg0}",
-    "memory_used": "Mémoire utilisée par l’allocateur : {arg0} octets",
-    "memory_capacity": "Capacité de l’allocateur : {arg0} octets",
-    "capacity_unavailable": "Capacité de l’allocateur : indisponible",
-    "unsupported": "Charge CPU / périphériques enregistrés : indisponibles"
+    "uptime": "Durée de fonctionnement : {arg0} s",
+    "tasks": "Tâches enregistrées : {arg0}",
+    "memory_used": "Mémoire utilisée par l’allocateur : {arg0} octets",
+    "memory_capacity": "Capacité de l’allocateur : {arg0} octets",
+    "capacity_unavailable": "Capacité de l’allocateur : indisponible",
+    "unsupported": "Charge CPU / périphériques enregistrés : indisponibles"
   },
   "actions": {
-    "interval": "Actualisation : {arg0} ms (modifier)",
+    "interval": "Actualisation : {arg0} ms (modifier)",
     "start": "Démarrer la démo (4 KiB / 10 s)",
     "stop": "Arrêter la démo"
   },
   "workload": {
-    "idle": "Démo : arrêtée",
-    "running": "Démo : en cours (512 octets / 25 ms)",
-    "failed": "Démo : indisponible (échec d’allocation)"
+    "idle": "Démo : arrêtée",
+    "running": "Démo : en cours (512 octets / 25 ms)",
+    "failed": "Démo : indisponible (échec d’allocation)"
   },
   "cards": {
     "uptime": "Durée de fonctionnement",
