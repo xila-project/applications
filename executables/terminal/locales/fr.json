@@ -3,12 +3,12 @@
     "command_placeholder": "Saisissez votre commande..."
   },
   "errors": {
-    "failed_to_create_object": "Échec de la création de l'objet",
-    "failed_to_execute": "Échec de l'exécution: {arg0}",
-    "failed_to_get_task_identifier": "Échec de la récupération de l'identifiant de la tâche: {arg0}",
-    "failed_to_mount_device": "Échec du montage du périphérique: {arg0}",
-    "graphics": "Graphique: {arg0}",
+    "failed_to_create_object": "Échec de la création de l’objet",
+    "failed_to_execute": "Échec de l’exécution : {arg0}",
+    "failed_to_get_task_identifier": "Échec de la récupération de l’identifiant de la tâche : {arg0}",
+    "failed_to_mount_device": "Échec du montage du périphérique : {arg0}",
+    "graphics": "Graphique : {arg0}",
     "resource_busy": "Ressource occupée",
-    "utf_8": "UTF-8: {arg0}"
+    "utf_8": "UTF-8 : {arg0}"
   }
 }
