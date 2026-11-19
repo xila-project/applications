@@ -21,7 +21,7 @@
       }
     },
     "status": {
-      "no_records_found": "ドメイン '{arg0}' の {arg1} レコードが見つかりませんでした"
+      "no_records_found": "ドメイン '{arg1}' の {arg0} レコードが見つかりませんでした"
     }
   },
   "errors": {

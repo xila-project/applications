@@ -12,7 +12,7 @@
       "no_free_query_slot": "Impossible de résoudre {arg0} : tous les emplacements de requête DNS sont occupés",
       "no_network_interface": "Impossible de résoudre {arg0} : aucune interface réseau n’est disponible",
       "resolution_failed": "Impossible de résoudre les enregistrements {arg0} du domaine '{arg1}'",
-      "unknown_host": "Impossible de résoudre {arg0}: Hôte inconnu"
+      "unknown_host": "Impossible de résoudre {arg0} : hôte inconnu"
     },
     "records": {
       "unit": {
