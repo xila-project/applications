@@ -6,7 +6,6 @@ async fn main() {
     testing::instantiate_global_allocator!();
 
     extern crate alloc;
-    extern crate abi_definitions;
 
     use command_line_shell::ShellExecutable;
     use wasm::WasmExecutable;

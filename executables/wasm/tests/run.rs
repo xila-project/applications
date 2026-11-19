@@ -1,5 +1,4 @@
 #![cfg(feature = "host")]
-extern crate abi_definitions;
 testing::instantiate_global_allocator!();
 
 use xila::{
