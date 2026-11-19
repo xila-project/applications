@@ -6,8 +6,6 @@ extern crate alloc;
 async fn main() {
     testing::instantiate_global_allocator!();
 
-    extern crate abi_definitions;
-
     use graphical_shell::ShellExecutable;
     use xila::executable;
     use xila::executable::mount_executables;

@@ -6,8 +6,6 @@ extern crate alloc;
 async fn main() {
     testing::instantiate_global_allocator!();
 
-    extern crate abi_definitions;
-
     use xila::executable::{self, mount_executables};
 
     let standard = testing::initialize(true, false).await;

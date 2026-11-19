@@ -189,11 +189,11 @@ fn check_compatibility(manifest: &Manifest) -> Result<(), String> {
     if manifest.target != "wasm32-wasip1" {
         return Err("package is not a WASI Preview 1 application".into());
     }
-    if manifest.minimum_xila_abi > abi_declarations::APPLICATION_ABI_VERSION {
+    if manifest.minimum_xila_abi > abi_application::APPLICATION_ABI_VERSION {
         return Err(format!(
             "package requires Xila ABI {}, runtime supports {}",
             manifest.minimum_xila_abi,
-            abi_declarations::APPLICATION_ABI_VERSION
+            abi_application::APPLICATION_ABI_VERSION
         ));
     }
     // Until capability consent and sandbox policy are implemented, do not

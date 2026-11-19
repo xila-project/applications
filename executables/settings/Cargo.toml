@@ -14,7 +14,6 @@ embassy-futures = { workspace = true }
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dev-dependencies]
 drivers_core = { workspace = true }
 little_fs = { workspace = true }
-abi_definitions = { workspace = true }
 testing = { workspace = true }
 critical-section = { workspace = true, features = ["std"] }
 

@@ -1,6 +1,5 @@
 #![cfg(feature = "host")]
 #![allow(clippy::disallowed_types, reason = "host-only test")]
-extern crate abi_definitions;
 testing::instantiate_global_allocator!();
 use std::{
     num::NonZeroU32,

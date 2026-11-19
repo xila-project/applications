@@ -16,7 +16,6 @@ task = { workspace = true, features = ["test_harness"] }
 drivers_core = { workspace = true }
 time = { workspace = true }
 little_fs = { workspace = true }
-abi_definitions = { workspace = true }
 testing = { workspace = true }
 critical-section = { workspace = true, features = ["std"] }
 

@@ -15,7 +15,6 @@ drivers_core = { workspace = true }
 time = { workspace = true }
 little_fs = { workspace = true }
 command_line_shell = { workspace = true }
-abi_definitions = { workspace = true }
 testing = { workspace = true }
 critical-section = { workspace = true, features = ["std"] }
 

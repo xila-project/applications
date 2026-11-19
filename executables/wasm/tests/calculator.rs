@@ -6,7 +6,6 @@
 ))]
 #[path = "support/applications.rs"]
 mod applications;
-extern crate abi_definitions;
 testing::instantiate_global_allocator!();
 #[path = "support/graphics.rs"]
 mod support;
