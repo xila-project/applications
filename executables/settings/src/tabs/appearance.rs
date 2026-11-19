@@ -87,7 +87,9 @@ impl AppearanceTab {
     /// Settings dispatches events while holding the LVGL lock.
     pub async fn handle_event(&mut self, event: &Event) -> bool {
         if event.code != EventKind::ValueChanged
-            || ![self.dark_mode, self.primary, self.secondary].contains(&event.target)
+            || ![self.dark_mode, self.primary, self.secondary]
+                .into_iter()
+                .any(|widget| event.is_target(widget))
         {
             return false;
         }
@@ -208,7 +210,7 @@ pub(crate) mod tests {
             );
             let bubbled = window.pop_event().unwrap();
             assert_eq!(bubbled.code, EventKind::ValueChanged);
-            assert_eq!(bubbled.target, tab.dark_mode);
+            assert!(bubbled.is_target(tab.dark_mode));
 
             assert_eq!(lvgl::lv_dropdown_get_selected(tab.primary), 2);
             assert_eq!(lvgl::lv_dropdown_get_selected(tab.secondary), 5);

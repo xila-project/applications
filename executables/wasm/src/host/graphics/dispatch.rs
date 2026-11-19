@@ -1404,7 +1404,7 @@ fn dispatch_locked(
             let (code, target) = event.map_or((0, 0), |event| {
                 (
                     super::events::guest_code(event.code),
-                    state.event_handle_for(pointer, event.target),
+                    state.event_handle_for(pointer, &event),
                 )
             });
             memory

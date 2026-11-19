@@ -9,7 +9,7 @@ use crate::host::translation::WasmUsize;
 use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
 use core::{cell::UnsafeCell, ptr::NonNull};
 use xila::graphics::{
-    Manager, Window, lvgl,
+    Event, Manager, Window, lvgl,
     lvgl_rust::{self as safe, WidgetExt},
 };
 
@@ -388,43 +388,31 @@ impl GraphicsState {
         Ok(())
     }
 
-    pub(crate) fn event_handle_for(
-        &self,
-        root: *mut lvgl::lv_obj_t,
-        target: *mut lvgl::lv_obj_t,
-    ) -> WasmUsize {
-        // Native children without handles can also appear in events and can
-        // die without notifying our observer. Validate by address comparison
-        // in the live tree, never by dereferencing a queued target pointer.
-        struct Search {
-            target: *mut lvgl::lv_obj_t,
-            found: bool,
+    pub(crate) fn event_handle_for(&self, root: *mut lvgl::lv_obj_t, event: &Event) -> WasmUsize {
+        // Native children without handles can also appear in queued events.
+        // Resolve the address against the live tree under the graphics lock.
+        struct Search<'a> {
+            event: &'a Event,
+            found: *mut lvgl::lv_obj_t,
         }
         unsafe extern "C" fn visit(
             obj: *mut lvgl::lv_obj_t,
             data: *mut core::ffi::c_void,
         ) -> lvgl::lv_obj_tree_walk_res_t {
-            let search = unsafe { &mut *data.cast::<Search>() };
-            if obj == search.target {
-                search.found = true;
+            let search = unsafe { &mut *data.cast::<Search<'_>>() };
+            if search.event.is_target(obj) {
+                search.found = obj;
                 lvgl::lv_obj_tree_walk_res_t_LV_OBJ_TREE_WALK_END
             } else {
                 lvgl::lv_obj_tree_walk_res_t_LV_OBJ_TREE_WALK_NEXT
             }
         }
-        if target.is_null() {
-            return 0;
-        }
         let mut search = Search {
-            target,
-            found: false,
+            event,
+            found: core::ptr::null_mut(),
         };
-        unsafe { lvgl::lv_obj_tree_walk(root, Some(visit), (&mut search as *mut Search).cast()) };
-        if search.found {
-            self.handle_for(target)
-        } else {
-            0
-        }
+        unsafe { lvgl::lv_obj_tree_walk(root, Some(visit), (&raw mut search).cast()) };
+        self.handle_for(search.found)
     }
 
     pub(crate) fn handle_for(&self, pointer: *mut lvgl::lv_obj_t) -> WasmUsize {
@@ -884,6 +872,16 @@ impl Drop for GraphicsState {
                 let Some(handle) = safe::Handle::<safe::Obj>::from_raw(raw) else {
                     continue;
                 };
+                // The host owns the guest's windows: safe structural calls
+                // refuse them (Core registers them as host objects), so a
+                // window goes through Core's own delete.
+                if let Ok(object) = handle.get(lv)
+                    && let Some(mut window) = unsafe { Window::from_raw(object.as_ptr()) }
+                {
+                    // SAFETY: the session lock is held and the window is live.
+                    unsafe { window.as_mut().delete() };
+                    continue;
+                }
                 if let Ok(object) = handle.get_mut(lv) {
                     let _ = object.delete();
                 }
