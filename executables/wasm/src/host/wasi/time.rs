@@ -147,6 +147,7 @@ mod tests {
             virtual_file_system: vfs,
             graphics_manager: None,
             network_manager: None,
+            formats: &[],
         }));
         let mut config = Config::default();
         config.consume_fuel(true);

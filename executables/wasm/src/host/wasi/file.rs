@@ -408,6 +408,7 @@ mod tests {
             virtual_file_system: vfs,
             graphics_manager: None,
             network_manager: None,
+            formats: &[],
             time_manager,
         }));
         vfs.mount_character_device(task, Path::from_str("/fd-control"), ControlDevice)
@@ -673,6 +674,7 @@ mod tests {
             virtual_file_system: vfs,
             graphics_manager: None,
             network_manager: None,
+            formats: &[],
             time_manager,
         }));
 

@@ -92,6 +92,7 @@ pub fn context(
         virtual_file_system: source.virtual_file_system,
         graphics_manager: manager,
         network_manager: source.network_manager,
+        formats: source.formats,
         time_manager: source.time_manager,
     }))
 }
