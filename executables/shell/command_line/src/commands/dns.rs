@@ -1,3 +1,5 @@
+use core::fmt::{self, Display};
+
 use crate::Result;
 use getargs::Options;
 use getargs_derive::GetArgs;
@@ -53,6 +55,52 @@ fn format_kind(kind: DnsQueryKind) -> &'static str {
     }
 }
 
+pub(super) fn resolution_failure<'a>(
+    error: network::Error,
+    domain: &'a str,
+    record_kind: &'a str,
+) -> impl Display + 'a {
+    fmt::from_fn(move |formatter| match error {
+        network::Error::NameTooLong => {
+            write!(
+                formatter,
+                "{}",
+                t!("dns.errors.domain_name_too_long", arg0 = domain)
+            )
+        }
+        network::Error::InvalidName => {
+            write!(
+                formatter,
+                "{}",
+                t!("dns.errors.invalid_domain_name", arg0 = domain)
+            )
+        }
+        network::Error::NoFreeSlot => {
+            write!(
+                formatter,
+                "{}",
+                t!("dns.errors.no_free_query_slot", arg0 = domain)
+            )
+        }
+        network::Error::NotFound => {
+            write!(
+                formatter,
+                "{}",
+                t!("dns.errors.no_network_interface", arg0 = domain)
+            )
+        }
+        _ => write!(
+            formatter,
+            "{}",
+            t!(
+                "dns.errors.resolution_failed",
+                arg0 = record_kind,
+                arg1 = domain
+            )
+        ),
+    })
+}
+
 async fn resolve_record<C: CommandContext>(
     context: &mut C,
     network_manager: &network::Manager,
@@ -94,15 +142,11 @@ async fn resolve_record<C: CommandContext>(
                 ))
                 .await?;
         }
-        Err(_) => {
+        Err(error) => {
             context
                 .write_out_fmt(format_args!(
                     "{}\n",
-                    t!(
-                        "dns.errors.resolution_failed",
-                        arg0 = format_kind(kind),
-                        arg1 = domain
-                    )
+                    resolution_failure(error, domain, format_kind(kind))
                 ))
                 .await?;
         }
@@ -157,9 +201,49 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::format_kind;
+    use super::{format_kind, resolution_failure};
     use alloc::string::ToString;
-    use xila::network::DnsQueryKind;
+    use xila::{
+        internationalization::t,
+        network::{DnsQueryKind, Error},
+    };
+
+    #[test]
+    fn resolution_failure_reports_specific_dns_errors() {
+        let domain = "example.org";
+        for (error, expected) in [
+            (
+                Error::NameTooLong,
+                t!("dns.errors.domain_name_too_long", arg0 = domain).to_string(),
+            ),
+            (
+                Error::InvalidName,
+                t!("dns.errors.invalid_domain_name", arg0 = domain).to_string(),
+            ),
+            (
+                Error::NoFreeSlot,
+                t!("dns.errors.no_free_query_slot", arg0 = domain).to_string(),
+            ),
+            (
+                Error::NotFound,
+                t!("dns.errors.no_network_interface", arg0 = domain).to_string(),
+            ),
+        ] {
+            assert_eq!(resolution_failure(error, domain, "A").to_string(), expected);
+        }
+    }
+
+    #[test]
+    fn resolution_failure_falls_back_to_domain_and_record_kind() {
+        let domain = "example.org";
+        let expected = t!("dns.errors.resolution_failed", arg0 = "AAAA", arg1 = domain).to_string();
+        for error in [Error::Failed, Error::TimedOut] {
+            assert_eq!(
+                resolution_failure(error, domain, "AAAA").to_string(),
+                expected
+            );
+        }
+    }
 
     #[test]
     fn dns_record_count_selects_singular_and_plural() {

@@ -7,6 +7,10 @@
   },
   "dns": {
     "errors": {
+      "domain_name_too_long": "{arg0} kann nicht aufgelöst werden: Der Domainname ist zu lang",
+      "invalid_domain_name": "{arg0} kann nicht aufgelöst werden: Der Domainname ist ungültig",
+      "no_free_query_slot": "{arg0} kann nicht aufgelöst werden: Alle DNS-Abfrageplätze sind belegt",
+      "no_network_interface": "{arg0} kann nicht aufgelöst werden: Keine Netzwerkschnittstelle verfügbar",
       "resolution_failed": "Die {arg0}-Einträge für die Domain '{arg1}' konnten nicht aufgelöst werden",
       "unknown_host": "{arg0} kann nicht aufgelöst werden: Unbekannter Host"
     },
@@ -44,7 +48,6 @@
     "failed_to_remove_environment_variable": "Umgebungsvariable konnte nicht entfernt werden: {arg0}",
     "failed_to_rename_path": "Pfad konnte nicht umbenannt werden: {arg0}",
     "failed_to_resolve_domain": "Domain konnte nicht aufgelöst werden: {arg0}",
-    "failed_to_resolve_domain_for_records": "Domain '{arg0}' konnte für {arg1}-Einträge nicht aufgelöst werden: {arg2}",
     "failed_to_restore_terminal_echo": "Terminal-Echo konnte nicht wieder eingeschaltet werden: {arg0}",
     "failed_to_set_current_directory": "Aktuelles Verzeichnis konnte nicht festgelegt werden: {arg0}",
     "failed_to_set_environment_variable": "Umgebungsvariable konnte nicht gesetzt werden: {arg0}",

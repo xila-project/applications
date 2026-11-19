@@ -7,6 +7,10 @@
   },
   "dns": {
     "errors": {
+      "domain_name_too_long": "Failed to resolve {arg0}: The domain name is too long",
+      "invalid_domain_name": "Failed to resolve {arg0}: The domain name is invalid",
+      "no_free_query_slot": "Failed to resolve {arg0}: All DNS query slots are in use",
+      "no_network_interface": "Failed to resolve {arg0}: No network interface is available",
       "resolution_failed": "Failed to resolve {arg0} records for domain '{arg1}'",
       "unknown_host": "Cannot resolve {arg0}: Unknown host"
     },
@@ -44,7 +48,6 @@
     "failed_to_remove_environment_variable": "Failed to remove environment variable: {arg0}",
     "failed_to_rename_path": "Failed to rename path: {arg0}",
     "failed_to_resolve_domain": "Failed to resolve domain: {arg0}",
-    "failed_to_resolve_domain_for_records": "Failed to resolve domain '{arg0}' for {arg1} records: {arg2}",
     "failed_to_restore_terminal_echo": "Failed to turn terminal echo back on: {arg0}",
     "failed_to_set_current_directory": "Failed to set current directory: {arg0}",
     "failed_to_set_environment_variable": "Failed to set environment variable: {arg0}",

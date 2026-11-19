@@ -7,6 +7,10 @@
   },
   "dns": {
     "errors": {
+      "domain_name_too_long": "{arg0} を解決できません: ドメイン名が長すぎます",
+      "invalid_domain_name": "{arg0} を解決できません: ドメイン名が無効です",
+      "no_free_query_slot": "{arg0} を解決できません: DNS クエリ用の空きスロットがありません",
+      "no_network_interface": "{arg0} を解決できません: 使用可能なネットワークインターフェースがありません",
       "resolution_failed": "ドメイン '{arg1}' の {arg0} レコードを解決できませんでした",
       "unknown_host": "{arg0} を解決できません: 不明なホスト"
     },
@@ -44,7 +48,6 @@
     "failed_to_remove_environment_variable": "環境変数の削除に失敗しました: {arg0}",
     "failed_to_rename_path": "パスの名前変更に失敗しました: {arg0}",
     "failed_to_resolve_domain": "ドメインの名前解決に失敗しました: {arg0}",
-    "failed_to_resolve_domain_for_records": "ドメイン '{arg0}' の {arg1} レコードを解決できませんでした: {arg2}",
     "failed_to_restore_terminal_echo": "端末のエコーを再び有効にできませんでした: {arg0}",
     "failed_to_set_current_directory": "カレントディレクトリの設定に失敗しました: {arg0}",
     "failed_to_set_environment_variable": "環境変数の設定に失敗しました: {arg0}",

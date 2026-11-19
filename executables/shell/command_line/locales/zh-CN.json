@@ -7,6 +7,10 @@
   },
   "dns": {
     "errors": {
+      "domain_name_too_long": "无法解析 {arg0}：域名过长",
+      "invalid_domain_name": "无法解析 {arg0}：域名无效",
+      "no_free_query_slot": "无法解析 {arg0}：DNS 查询槽位已全部占用",
+      "no_network_interface": "无法解析 {arg0}：没有可用的网络接口",
       "resolution_failed": "无法解析域名 '{arg1}' 的 {arg0} 记录",
       "unknown_host": "无法解析 {arg0}：未知主机"
     },
@@ -43,7 +47,6 @@
     "failed_to_remove_environment_variable": "删除环境变量失败：{arg0}",
     "failed_to_rename_path": "重命名路径失败：{arg0}",
     "failed_to_resolve_domain": "解析域名失败：{arg0}",
-    "failed_to_resolve_domain_for_records": "解析域名 '{arg0}' 的 {arg1} 记录失败：{arg2}",
     "failed_to_restore_terminal_echo": "重新开启终端回显失败：{arg0}",
     "failed_to_set_current_directory": "设置当前目录失败：{arg0}",
     "failed_to_set_environment_variable": "设置环境变量失败：{arg0}",

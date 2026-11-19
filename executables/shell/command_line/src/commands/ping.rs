@@ -7,7 +7,7 @@ use xila::{
 
 use crate::Error;
 
-use super::{CommandContext, UserCommand};
+use super::{CommandContext, UserCommand, dns::resolution_failure};
 
 pub struct PingCommand;
 
@@ -143,22 +143,27 @@ where
         .as_ref()
         .ok_or(crate::Error::NetworkUnavailable)?;
 
-    let resolved_target = manager
+    let resolved_target = match manager
         .resolve(target, DnsQueryKind::A | DnsQueryKind::Aaaa, true, None)
         .await
-        .ok()
-        .and_then(|ips| ips.first().cloned());
-
-    let resolved_target = match resolved_target {
-        Some(ip) => ip,
-        None => {
-            context
+        .map(|ips| ips.into_iter().next())
+    {
+        Ok(Some(ip)) => ip,
+        Ok(None) => {
+            return context
                 .write_out_fmt(format_args!(
                     "{}\n",
-                    format_args!("{}", t!("dns.errors.unknown_host", arg0 = target))
+                    t!("dns.errors.unknown_host", arg0 = target)
                 ))
-                .await?;
-            return Ok(());
+                .await;
+        }
+        Err(error) => {
+            return context
+                .write_out_fmt(format_args!(
+                    "{}\n",
+                    resolution_failure(error, target, "A/AAAA")
+                ))
+                .await;
         }
     };
 

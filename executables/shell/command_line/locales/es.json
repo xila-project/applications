@@ -7,6 +7,10 @@
   },
   "dns": {
     "errors": {
+      "domain_name_too_long": "No se pudo resolver {arg0}: el nombre de dominio es demasiado largo",
+      "invalid_domain_name": "No se pudo resolver {arg0}: el nombre de dominio no es válido",
+      "no_free_query_slot": "No se pudo resolver {arg0}: todas las ranuras de consultas DNS están ocupadas",
+      "no_network_interface": "No se pudo resolver {arg0}: no hay ninguna interfaz de red disponible",
       "resolution_failed": "No se pudieron resolver los registros {arg0} del dominio '{arg1}'",
       "unknown_host": "No se puede resolver {arg0}: host desconocido"
     },
@@ -44,7 +48,6 @@
     "failed_to_remove_environment_variable": "No se pudo eliminar la variable de entorno: {arg0}",
     "failed_to_rename_path": "No se pudo cambiar el nombre de la ruta: {arg0}",
     "failed_to_resolve_domain": "No se pudo resolver el dominio: {arg0}",
-    "failed_to_resolve_domain_for_records": "No se pudo resolver el dominio '{arg0}' para registros {arg1}: {arg2}",
     "failed_to_restore_terminal_echo": "No se pudo reactivar el eco del terminal: {arg0}",
     "failed_to_set_current_directory": "No se pudo establecer el directorio actual: {arg0}",
     "failed_to_set_environment_variable": "No se pudo establecer la variable de entorno: {arg0}",

@@ -552,7 +552,7 @@ mod tests {
         any(target_os = "linux", target_os = "macos", target_os = "windows")
     ))]
     #[xila::task::test(task_path = xila::task)]
-    async fn dns_reports_resolver_failure_when_no_interface_is_available() {
+    async fn dns_reports_no_available_network_interface() {
         let standard = testing::initialize(false, true).await;
         let mut context = HelpContext {
             executable_context: Some(standard.context),
@@ -569,9 +569,37 @@ mod tests {
             alloc::format!(
                 "{}\n",
                 xila::internationalization::t!(
-                    "dns.errors.resolution_failed",
-                    arg0 = "A",
-                    arg1 = "example.org"
+                    "dns.errors.no_network_interface",
+                    arg0 = "example.org"
+                )
+            )
+        );
+    }
+
+    #[cfg(all(
+        feature = "network",
+        any(target_os = "linux", target_os = "macos", target_os = "windows")
+    ))]
+    #[xila::task::test(task_path = xila::task)]
+    async fn ping_reports_no_available_network_interface() {
+        let standard = testing::initialize(false, true).await;
+        let mut context = HelpContext {
+            executable_context: Some(standard.context),
+            ..Default::default()
+        };
+        let mut options = getargs::Options::new(["example.org"].into_iter());
+
+        super::dispatch_user_command(UserCommandKind::Ping, &mut context, &mut options, &[])
+            .await
+            .unwrap();
+
+        assert_eq!(
+            context.output,
+            alloc::format!(
+                "{}\n",
+                xila::internationalization::t!(
+                    "dns.errors.no_network_interface",
+                    arg0 = "example.org"
                 )
             )
         );
