@@ -7,6 +7,7 @@
   },
   "dns": {
     "errors": {
+      "resolution_failed": "无法解析域名 '{arg1}' 的 {arg0} 记录",
       "unknown_host": "无法解析 {arg0}：未知主机"
     },
     "records": {
@@ -63,6 +64,7 @@
     "missing_file_name_after_redirect_in": "输入重定向后缺少文件名",
     "missing_file_name_after_redirect_out": "输出重定向后缺少文件名",
     "missing_positional_argument": "缺少位置参数：{arg0}",
+    "network_unavailable": "此设备无法使用网络",
     "option_does_not_require_a_value": "此选项不需要值",
     "option_requires_a_value": "此选项需要值",
     "syntax_error_at_byte": "第 {arg0} 字节处有语法错误：{arg1}",

@@ -141,7 +141,7 @@ where
         .executable_context()
         .network_manager
         .as_ref()
-        .ok_or(crate::Error::InvalidOption)?;
+        .ok_or(crate::Error::NetworkUnavailable)?;
 
     let resolved_target = manager
         .resolve(target, DnsQueryKind::A | DnsQueryKind::Aaaa, true, None)

@@ -60,7 +60,7 @@ async fn resolve_record<C: CommandContext>(
     kind: DnsQueryKind,
 ) -> Result<()> {
     match network_manager.resolve(domain, kind, true, None).await {
-        Ok(ip) => {
+        Ok(ip) if !ip.is_empty() => {
             let count = ip.len();
             let record_label = xila::internationalization::t!("dns.records.unit", count = count);
             // DNS record types (A, AAAA, etc.) remain invariant CLI identifiers.
@@ -79,7 +79,7 @@ async fn resolve_record<C: CommandContext>(
                     .await?;
             }
         }
-        Err(network::Error::Failed) => {
+        Ok(_) => {
             context
                 .write_out_fmt(format_args!(
                     "{}\n",
@@ -94,18 +94,14 @@ async fn resolve_record<C: CommandContext>(
                 ))
                 .await?;
         }
-        Err(e) => {
+        Err(_) => {
             context
                 .write_out_fmt(format_args!(
-                    "{}",
-                    format_args!(
-                        "{}",
-                        t!(
-                            "errors.failed_to_resolve_domain_for_records",
-                            arg0 = domain,
-                            arg1 = format_kind(kind),
-                            arg2 = e
-                        )
+                    "{}\n",
+                    t!(
+                        "dns.errors.resolution_failed",
+                        arg0 = format_kind(kind),
+                        arg1 = domain
                     )
                 ))
                 .await?;
@@ -138,7 +134,7 @@ where
         .executable_context()
         .network_manager
         .as_ref()
-        .ok_or(crate::Error::InvalidOption)?;
+        .ok_or(crate::Error::NetworkUnavailable)?;
 
     if a_enabled || default {
         resolve_record(context, network_manager, domain, DnsQueryKind::A).await?;

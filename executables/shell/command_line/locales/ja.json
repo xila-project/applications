@@ -7,6 +7,7 @@
   },
   "dns": {
     "errors": {
+      "resolution_failed": "ドメイン '{arg1}' の {arg0} レコードを解決できませんでした",
       "unknown_host": "{arg0} を解決できません: 不明なホスト"
     },
     "records": {
@@ -64,6 +65,7 @@
     "missing_file_name_after_redirect_in": "入力リダイレクトの後にファイル名がありません",
     "missing_file_name_after_redirect_out": "出力リダイレクトの後にファイル名がありません",
     "missing_positional_argument": "位置引数がありません: {arg0}",
+    "network_unavailable": "このデバイスではネットワークを利用できません",
     "option_does_not_require_a_value": "このオプションに値は必要ありません",
     "option_requires_a_value": "このオプションには値が必要です",
     "syntax_error_at_byte": "バイト {arg0} の構文エラー: {arg1}",

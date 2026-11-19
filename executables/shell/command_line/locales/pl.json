@@ -7,6 +7,7 @@
   },
   "dns": {
     "errors": {
+      "resolution_failed": "Nie udało się rozwiązać rekordów {arg0} dla domeny '{arg1}'",
       "unknown_host": "Nie można rozwiązać {arg0}: nieznany host"
     },
     "records": {
@@ -66,6 +67,7 @@
     "missing_file_name_after_redirect_in": "Brak nazwy pliku po przekierowaniu wejścia",
     "missing_file_name_after_redirect_out": "Brak nazwy pliku po przekierowaniu wyjścia",
     "missing_positional_argument": "Brak argumentu pozycyjnego: {arg0}",
+    "network_unavailable": "Sieć jest niedostępna na tym urządzeniu",
     "option_does_not_require_a_value": "Opcja nie wymaga wartości",
     "option_requires_a_value": "Opcja wymaga wartości",
     "syntax_error_at_byte": "Błąd składni przy bajcie {arg0}: {arg1}",

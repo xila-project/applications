@@ -7,6 +7,7 @@
   },
   "dns": {
     "errors": {
+      "resolution_failed": "Não foi possível resolver os registros {arg0} do domínio '{arg1}'",
       "unknown_host": "Não foi possível resolver {arg0}: host desconhecido"
     },
     "records": {
@@ -64,6 +65,7 @@
     "missing_file_name_after_redirect_in": "Nome do arquivo ausente após o redirecionamento de entrada",
     "missing_file_name_after_redirect_out": "Nome do arquivo ausente após o redirecionamento de saída",
     "missing_positional_argument": "Argumento posicional ausente: {arg0}",
+    "network_unavailable": "A rede não está disponível neste dispositivo",
     "option_does_not_require_a_value": "A opção não requer valor",
     "option_requires_a_value": "A opção requer um valor",
     "syntax_error_at_byte": "Erro de sintaxe no byte {arg0}: {arg1}",

@@ -7,6 +7,7 @@
   },
   "dns": {
     "errors": {
+      "resolution_failed": "Die {arg0}-Einträge für die Domain '{arg1}' konnten nicht aufgelöst werden",
       "unknown_host": "{arg0} kann nicht aufgelöst werden: Unbekannter Host"
     },
     "records": {
@@ -64,6 +65,7 @@
     "missing_file_name_after_redirect_in": "Dateiname nach Eingabeumleitung fehlt",
     "missing_file_name_after_redirect_out": "Dateiname nach Ausgabeumleitung fehlt",
     "missing_positional_argument": "Positionsargument fehlt: {arg0}",
+    "network_unavailable": "Das Netzwerk ist auf diesem Gerät nicht verfügbar",
     "option_does_not_require_a_value": "Option benötigt keinen Wert",
     "option_requires_a_value": "Option benötigt einen Wert",
     "syntax_error_at_byte": "Syntaxfehler bei Byte {arg0}: {arg1}",

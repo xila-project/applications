@@ -64,6 +64,8 @@ pub enum Error<'a> {
     FailedToHidePassword(virtual_file_system::Error),
     /// Echo stays off after the password was read.
     FailedToRestoreTerminalEcho(virtual_file_system::Error),
+    #[cfg(feature = "network")]
+    NetworkUnavailable,
 }
 
 impl<A: getargs::Argument> From<getargs::Error<A>> for Error<'_> {
@@ -320,6 +322,10 @@ impl Display for Error<'_> {
                     "{}",
                     t!("errors.failed_to_read_directory_entry", arg0 = error)
                 )
+            }
+            #[cfg(feature = "network")]
+            Error::NetworkUnavailable => {
+                write!(formatter, "{}", t!("errors.network_unavailable"))
             }
             #[cfg(feature = "network")]
             Error::FailedToResolve(error) => {
