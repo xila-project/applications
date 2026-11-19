@@ -504,6 +504,7 @@ mod tests {
             virtual_file_system: vfs,
             graphics_manager: None,
             network_manager: None,
+            formats: &[],
             time_manager,
         }));
         let mut wasi = WasiContext {
@@ -644,6 +645,7 @@ mod tests {
             virtual_file_system: vfs,
             graphics_manager: None,
             network_manager: None,
+            formats: &[],
             time_manager,
         }));
         let mut wasi = WasiContext {
