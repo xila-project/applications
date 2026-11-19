@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static const char *status_name(XilaStatus status) {
+static const char *status_name(XilaStatus status, char hex[static 11]) {
     switch (status) {
 #define STATUS(name) case XILA_STATUS_##name: return #name
         STATUS(OK); STATUS(INVALID_ARGUMENT); STATUS(NOT_FOUND);
@@ -15,7 +15,9 @@ static const char *status_name(XilaStatus status) {
         STATUS(RESOURCE_BUSY); STATUS(FILE_TOO_LARGE); STATUS(INVALID_PATH);
         STATUS(NAME_TOO_LONG); STATUS(WRITE_ZERO);
 #undef STATUS
-        default: return "UNKNOWN";
+        default:
+            (void)snprintf(hex, 11, "0x%08" PRIx32, (uint32_t)status);
+            return hex;
     }
 }
 
@@ -37,7 +39,9 @@ static int32_t failure(const XilaStartup *startup, const char *operation, XilaSt
     XilaFile *error = startup->standard_error;
     (void)write_all(api, error, operation, strlen(operation));
     (void)write_all(api, error, ": ", 2);
-    (void)write_all(api, error, status_name(status), strlen(status_name(status)));
+    char hex[11];
+    const char *name = status_name(status, hex);
+    (void)write_all(api, error, name, strlen(name));
     (void)write_all(api, error, "\n", 1);
     return 1;
 }
@@ -59,6 +63,7 @@ int32_t c_demo_main(const XilaStartup *startup) {
         PRINT("\n");
     }
     char line[128];
+    char hex[11];
     uint32_t version = api->version;
     (void)snprintf(line, sizeof(line), "ABI: %" PRIu32 ".%" PRIu32 "\n",
                    version >> 16, version & UINT32_C(65535));
@@ -66,10 +71,10 @@ int32_t c_demo_main(const XilaStartup *startup) {
     uint64_t monotonic = 0;
     int64_t realtime = 0;
     status = api->time_monotonic(&monotonic);
-    (void)snprintf(line, sizeof(line), "monotonic: %s (%" PRIu64 " ns)\n", status_name(status), monotonic);
+    (void)snprintf(line, sizeof(line), "monotonic: %s (%" PRIu64 " ns)\n", status_name(status, hex), monotonic);
     PRINT(line);
     status = api->time_realtime(&realtime);
-    (void)snprintf(line, sizeof(line), "realtime: %s (%" PRId64 " ns)\n", status_name(status), realtime);
+    (void)snprintf(line, sizeof(line), "realtime: %s (%" PRId64 " ns)\n", status_name(status, hex), realtime);
     PRINT(line);
 
     XilaFile *file = NULL;
