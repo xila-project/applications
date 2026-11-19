@@ -24,6 +24,7 @@ pub const WINDOWS_PARENT_CHILD_CHANGED: graphics::EventKind = graphics::EventKin
 pub struct Desk {
     context: &'static xila::executable::ExecutableContext,
     graphics_manager: &'static graphics::Manager,
+    windows_parent: *mut lvgl::lv_obj_t,
     window: OwnedWindow,
     tile_view: *mut lvgl::lv_obj_t,
     drawer_tile: *mut lvgl::lv_obj_t,
@@ -35,6 +36,28 @@ pub struct Desk {
     dock_menu_maximize_button: Option<*mut lvgl::lv_obj_t>,
     dock_menu_close_button: Option<*mut lvgl::lv_obj_t>,
     shortcuts: BTreeMap<*mut lvgl::lv_obj_t, String>,
+}
+
+impl Drop for Desk {
+    fn drop(&mut self) {
+        // `Drop::drop` runs before field drops, so `self.window` is still live.
+        // Detach `event_handler` from `windows_parent` before `OwnedWindow::drop`
+        // deletes the desk window and emits `CHILD_DELETED` up to the screen.
+        let windows_parent = self.windows_parent;
+        let window = self.window.as_object_mutable();
+        let _ = self.graphics_manager.lock_function_sync(|| {
+            // SAFETY: the graphics lock is held, and `windows_parent` (the
+            // active screen) outlives `Desk`.
+            unsafe {
+                lvgl::lv_obj_remove_event_cb_with_user_data(
+                    windows_parent,
+                    Some(event_handler),
+                    window.cast(),
+                );
+            }
+            Ok(())
+        });
+    }
 }
 
 unsafe extern "C" fn event_handler(event: *mut lvgl::lv_event_t) {
@@ -111,13 +134,10 @@ impl Desk {
             unsafe {
                 // Edge-to-edge window content: the shared window class already
                 // flattens border and radius, only the container padding remains.
-                lvgl::lv_obj_set_style_pad_all(window.as_mut(), 0, lvgl::LV_STATE_DEFAULT);
-
-                lvgl::lv_obj_add_event_cb(
-                    windows_parent,
-                    Some(event_handler),
-                    EventKind::All as u32,
-                    window.as_object_mutable() as *mut _ as *mut _,
+                lvgl::lv_obj_set_style_pad_all(
+                    window.as_object_mutable(),
+                    0,
+                    lvgl::LV_STATE_DEFAULT,
                 );
             }
 
@@ -125,8 +145,12 @@ impl Desk {
             unsafe {
                 // Outline the logo in the background of the window, in the
                 // palette's input color like the outline controls.
-                let logo =
-                    Logo::new_with_style(window.as_mut(), 4, Color::BLACK, LogoStyle::Outline)?;
+                let logo = Logo::new_with_style(
+                    window.as_object_mutable(),
+                    4,
+                    Color::BLACK,
+                    LogoStyle::Outline,
+                )?;
                 logo.follow_palette_color(theme::PaletteColor::Input);
                 let logo_inner_object = logo.get_inner_object();
                 forget(logo); // Prevent the logo from being dropped
@@ -140,7 +164,7 @@ impl Desk {
 
             // - Create a tile view
             let tile_view = unsafe {
-                let tile_view = lvgl::lv_tileview_create(window.as_mut());
+                let tile_view = lvgl::lv_tileview_create(window.as_object_mutable());
 
                 if tile_view.is_null() {
                     return Err(Error::FailedToCreateObject);
@@ -220,11 +244,23 @@ impl Desk {
             let main_button =
                 unsafe { create_show_applications_button(dock, Self::MAIN_BUTTON_SIZE)? };
 
+            // Register on `windows_parent` only once every fallible setup step
+            // has succeeded, so `Desk::drop` is guaranteed to detach it.
+            unsafe {
+                lvgl::lv_obj_add_event_cb(
+                    windows_parent,
+                    Some(event_handler),
+                    EventKind::All as u32,
+                    window.as_object_mutable().cast(),
+                );
+            }
+
             let shortcuts = BTreeMap::new();
 
             let desk: Desk = Self {
                 context,
                 graphics_manager: graphics::ffi_manager(),
+                windows_parent,
                 window,
                 tile_view,
                 desk_tile,

@@ -674,7 +674,7 @@ mod tests {
             assert_eq!(clicked_list_button(list, &second), None);
             drop(clicks);
 
-            window.delete();
+            lvgl::lv_obj_delete(window.as_object_mutable());
         }
     }
 

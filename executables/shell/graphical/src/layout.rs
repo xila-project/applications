@@ -29,8 +29,9 @@ const KEYBOARD_SIZE_RATIO: f64 = 3.0 / 1.0;
 pub struct Layout {
     context: &'static xila::executable::ExecutableContext,
     window: *mut lvgl::lv_obj_t,
-    _header: *mut lvgl::lv_obj_t,
-    _body: *mut lvgl::lv_obj_t,
+    header: *mut lvgl::lv_obj_t,
+    body: *mut lvgl::lv_obj_t,
+    keyboard: *mut lvgl::lv_obj_t,
     clock: *mut lvgl::lv_obj_t,
     clock_string: String,
     _battery: *mut lvgl::lv_obj_t,
@@ -40,7 +41,46 @@ pub struct Layout {
 
 impl Drop for Layout {
     fn drop(&mut self) {
-        unsafe { lvgl::lv_obj_delete(self.window) }
+        // `self.window` is the display's active screen, not a container owned
+        // by `Layout`. Hand future windows back to that screen before taking
+        // the graphics lock so concurrent `create_window` calls cannot attach
+        // new windows to `self.body` as it is torn down.
+        let graphics_manager = graphics::ffi_manager();
+        let screen = self.window;
+        // SAFETY: `screen` is the display's active screen, which is owned by
+        // the display, is not inside a window, and is never deleted by
+        // `Layout::drop`, so it stays alive while it holds windows.
+        let _ = xila::task::block_on(unsafe { graphics_manager.set_window_parent(screen) });
+        let _ = graphics_manager.lock_function_sync(|| {
+            // SAFETY: the graphics lock is held. Detach `Layout`'s callbacks
+            // from the screen before deleting `keyboard`, move every remaining
+            // window out of `body` onto `screen` so each window's
+            // `OwnedWindow` remains its sole deleter, and delete only the
+            // widgets `Layout::new` created.
+            unsafe {
+                lvgl::lv_obj_remove_event_cb_with_user_data(
+                    screen,
+                    Some(screen_event_handler),
+                    self.keyboard.cast(),
+                );
+                lvgl::lv_obj_remove_event_cb_with_user_data(
+                    screen,
+                    Some(keyboard_event_handler),
+                    self.keyboard.cast(),
+                );
+                loop {
+                    let window = lvgl::lv_obj_get_child(self.body, 0);
+                    if window.is_null() {
+                        break;
+                    }
+                    lvgl::lv_obj_set_parent(window, screen);
+                }
+                lvgl::lv_obj_delete(self.header);
+                lvgl::lv_obj_delete(self.body);
+                lvgl::lv_obj_delete(self.keyboard);
+            }
+            Ok(())
+        });
     }
 }
 
@@ -257,6 +297,21 @@ impl Layout {
         });
     }
 
+    #[cfg(test)]
+    pub(crate) fn header_object(&self) -> *mut lvgl::lv_obj_t {
+        self.header
+    }
+
+    #[cfg(test)]
+    pub(crate) fn body_object(&self) -> *mut lvgl::lv_obj_t {
+        self.body
+    }
+
+    #[cfg(test)]
+    pub(crate) fn keyboard_object(&self) -> *mut lvgl::lv_obj_t {
+        self.keyboard
+    }
+
     pub fn get_windows_parent(&self) -> *mut lvgl::lv_obj_t {
         self.window
     }
@@ -389,7 +444,7 @@ impl Layout {
             };
 
             // - Create a keyboard
-            unsafe {
+            let keyboard = unsafe {
                 let keyboard = lvgl::lv_keyboard_create(window);
 
                 if keyboard.is_null() {
@@ -424,13 +479,16 @@ impl Layout {
                         keyboard as *mut _,
                     );
                 }
+
+                keyboard
             };
 
             Self {
                 context,
                 window,
-                _header: header,
-                _body: body,
+                header,
+                body,
+                keyboard,
                 clock,
                 clock_string: String::with_capacity(6),
                 _battery: battery,
@@ -439,7 +497,10 @@ impl Layout {
             }
         });
 
-        graphics_manager.set_window_parent(layout._body).await?;
+        // SAFETY: the body is not inside a window, and it lives as long as
+        // the layout, which hands the windows still inside it back to the
+        // screen before deleting it.
+        unsafe { graphics_manager.set_window_parent(layout.body) }.await?;
 
         Ok(layout)
     }
