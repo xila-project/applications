@@ -15,21 +15,6 @@ pub enum PollError {
     Overflow,
 }
 
-impl From<PollError> for i32 {
-    fn from(error: PollError) -> Self {
-        use super::Error;
-
-        match error {
-            PollError::Fault => Error::Fault,
-            PollError::Invalid => Error::Inval,
-            PollError::Io => Error::Io,
-            PollError::NotSupported => Error::Notsup,
-            PollError::Overflow => Error::Overflow,
-        }
-        .into()
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Subscription {
     pub userdata: u64,
