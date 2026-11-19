@@ -2,7 +2,9 @@
 #![cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 extern crate alloc;
 
-use abi_application::{Directory, File, XILA_RIGHT_READ, XILA_RIGHT_WRITE, XilaStartup, run_main};
+use abi_application::{
+    Directory, File, Heap, XILA_RIGHT_READ, XILA_RIGHT_WRITE, XilaStartup, run_main,
+};
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::{fmt::Write, num::NonZeroUsize};
 use executable::{ExecutableTrait, Standard};
@@ -52,10 +54,14 @@ pub async fn main(
     abi_application::initialize(context.time_manager);
     let arguments: Vec<_> = arguments.iter().map(String::as_str).collect();
     let (input, output, error) = standard.split();
+    // `run_main` runs on this task, not on an abandonable coroutine stack, so
+    // the heap can live here and frees every block left when it drops.
+    let mut heap = Heap::new();
     // SAFETY: the linked entry borrows startup objects only until it returns.
     let result = unsafe {
         run_main(
             c_demo_main,
+            &mut heap,
             &arguments,
             Some(File::new(input.into_synchronous_file())),
             Some(File::new(output.into_synchronous_file())),
