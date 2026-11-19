@@ -89,11 +89,6 @@
     "external_executable_description": "ejecutable externo; la ayuda la proporciona el ejecutable.",
     "run_script_usage": "Uso: shell -s RUTA"
   },
-  "legacy": {
-    "dns_records_line": "Registros {arg0} para el dominio '{arg1}':",
-    "ping_reply_line": "{arg0} bytes de {arg1}: icmp_seq={arg2} tiempo={arg3:.2} ms",
-    "ping_request_line": "PING {arg0} ({arg1}): {arg2} bytes de datos"
-  },
   "listing": {
     "columns": {
       "accessed": "Acceso",

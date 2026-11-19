@@ -16,7 +16,7 @@ use core::{
     task::Poll,
     time::Duration,
 };
-use xila::graphics::{Manager, lvgl};
+use xila::graphics::{Manager, Window, lvgl};
 
 /// Text of a label, or `None` for a null object.
 unsafe fn label_text(label: *mut lvgl::lv_obj_t) -> Option<&'static [u8]> {
@@ -79,19 +79,28 @@ async fn press(manager: &Manager, key: &str) {
     }
 }
 
-/// Waits until the compact keypad shows the page containing `key`.
-async fn wait_for_key(manager: &Manager, key: &str) {
+/// Waits for the page markers and for the guest to drain the window event queue.
+async fn wait_for_keys(manager: &Manager, keys: &[&str]) {
     for _ in 0..200 {
         let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
         {
             let _lock = manager.synchronous_lock();
-            if unsafe { visible_keys(root, key) }.len() == 1 {
+            // The identifier points to the live window while the lock is held.
+            let ready = unsafe {
+                keys.iter().all(|key| visible_keys(root, key).len() == 1)
+                    && Window::from_raw(root)
+                        .unwrap()
+                        .as_ref()
+                        .peek_event()
+                        .is_none()
+            };
+            if ready {
                 return;
             }
         }
         xila::task::sleep(Duration::from_millis(5)).await;
     }
-    panic!("Calculator did not show key {key:?}");
+    panic!("Calculator keypad did not become ready with keys {keys:?}");
 }
 
 async fn wait_for_display(manager: &Manager, expected: &str) {
@@ -114,6 +123,15 @@ async fn wait_for_display(manager: &Manager, expected: &str) {
 
 #[xila::task::test(task_path=xila::task)]
 async fn real_calculator_guest_evaluates_buttons_and_closes_on_wasmi() {
+    run_calculator(&[]).await;
+}
+
+#[xila::task::test(task_path=xila::task)]
+async fn real_calculator_guest_evaluates_buttons_with_small_fuel_slices() {
+    run_calculator(&["--instruction-limit", "20000"]).await;
+}
+
+async fn run_calculator(options: &[&str]) {
     let mut standard = testing::initialize(false, false).await;
     let manager = support::manager().await;
     let context = support::context(&standard, Some(manager));
@@ -135,16 +153,19 @@ async fn real_calculator_guest_evaluates_buttons_and_closes_on_wasmi() {
     )
     .await
     .unwrap();
+    let mut arguments: Vec<_> = options.iter().map(|&option| option.into()).collect();
+    arguments.push("/applications/executables/calculator.wasm".into());
     let handle = xila::executable::execute(
         context,
         "/applications/executables/wasm",
-        vec!["/applications/executables/calculator.wasm".into()],
+        arguments,
         standard,
         None,
     )
     .await
     .unwrap();
     wait_for_display(manager, "0").await;
+    wait_for_keys(manager, &["="]).await;
     // Keys are real theme-styled buttons, found by their visible label.
     for (key, expected) in [("1", "1"), ("+", "1+"), ("2", "1+2"), ("=", "3")] {
         press(manager, key).await;
@@ -153,11 +174,13 @@ async fn real_calculator_guest_evaluates_buttons_and_closes_on_wasmi() {
     // The 320x240 test display uses the compact layout: `fn` pages to the
     // functions and `123` pages back to the digits.
     press(manager, "fn").await;
-    wait_for_key(manager, "sqrt").await;
+    // The scientific page has the 123 key and creates its Clear key last.
+    // The guest then drains the events queued during creation.
+    wait_for_keys(manager, &["123", "C"]).await;
     press(manager, "sqrt").await;
     wait_for_display(manager, "sqrt(").await;
     press(manager, "123").await;
-    wait_for_key(manager, "7").await;
+    wait_for_keys(manager, &["7"]).await;
     let root = manager.get_window_identifier(0).await.unwrap();
     manager.send_window_close_request(root).await.unwrap();
     let mut join = core::pin::pin!(handle.join());

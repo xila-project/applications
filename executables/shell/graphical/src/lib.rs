@@ -64,7 +64,7 @@ pub async fn main(
             }
         };
 
-    Shell::new(standard, show_keyboard).await.main().await
+    Shell::new(standard, show_keyboard).await?.main().await
 }
 
 // Fields drop in order: `_home` first (its button lives on `lv_layer_top()`
@@ -91,13 +91,27 @@ impl ExecutableTrait for ShellExecutable {
 }
 
 impl Shell {
-    pub async fn new(standard: Standard<'static>, show_keyboard: bool) -> Self {
+    pub async fn new(standard: Standard<'static>, show_keyboard: bool) -> error::Result<Self> {
+        let login = Login::new(standard.context);
+        Self::new_with_login(standard, show_keyboard, login).await
+    }
+
+    async fn new_with_login(
+        standard: Standard<'static>,
+        show_keyboard: bool,
+        login: impl core::future::Future<Output = error::Result<Login>>,
+    ) -> error::Result<Self> {
         let context = standard.context;
-        let layout = Layout::new(context, show_keyboard).await.unwrap();
+        let layout = Layout::new(context, show_keyboard)
+            .await
+            .inspect_err(|error| {
+                xila::log::error!("Failed to initialize shell layout: {error:?}")
+            })?;
+        let login = Box::new(login.await.inspect_err(|error| {
+            xila::log::error!("Failed to initialize graphical login: {error:?}")
+        })?);
 
-        let login = Box::new(Login::new(context).await.unwrap());
-
-        Self {
+        Ok(Self {
             context,
             _standard: standard,
             layout,
@@ -105,7 +119,7 @@ impl Shell {
             running: true,
             _home: None,
             login: Some(login),
-        }
+        })
     }
 
     pub async fn main(&mut self) -> Result<(), NonZeroUsize> {
@@ -343,7 +357,7 @@ mod tests {
                 .unwrap();
 
             let context = standard.context;
-            let mut shell = Shell::new(standard, true).await;
+            let mut shell = Shell::new(standard, true).await.unwrap();
             let mut desk = Box::new(
                 Desk::new(context, shell.layout.get_windows_parent())
                     .await
@@ -564,31 +578,43 @@ mod tests {
         }
 
         #[xila::task::test(task_path = xila::task)]
-        async fn login_setup_failure_deletes_window_without_deadlocking() {
+        async fn shell_startup_failure_cleans_up_login_and_layout() {
             static LOGIN_FAIL_DELETE: &str = "login_fail_delete";
 
             let standard = testing::initialize(false, false).await;
             let manager = headless_graphics_manager().await;
             let baseline_windows = manager.get_window_count().await.unwrap();
+            let screen = manager.get_current_screen().unwrap();
+            let screen_counts = || {
+                manager
+                    .lock_function_sync(|| unsafe {
+                        Ok((
+                            lvgl::lv_obj_get_child_count(screen),
+                            lvgl::lv_obj_get_event_count(screen),
+                        ))
+                    })
+                    .unwrap()
+            };
+            let baseline_screen = screen_counts();
 
             EVENT_LOG.lock().unwrap().clear();
 
-            let context = standard.context;
-            let error = run_with_timeout("Login::new_with", Duration::from_secs(5), move || {
-                xila::task::block_on(Login::new_with(context, manager, |window| {
-                    unsafe {
-                        let child = lvgl::lv_obj_create(window.as_object_mutable());
-                        assert!(!child.is_null());
-                        attach_probe(
-                            window.as_object_mutable(),
-                            lvgl::lv_event_code_t_LV_EVENT_DELETE,
-                            &LOGIN_FAIL_DELETE,
-                        );
-                    }
-                    Err(Error::FailedToCreateObject)
-                }))
-                .err()
-            });
+            let error =
+                run_with_timeout("Shell::new_with_login", Duration::from_secs(5), move || {
+                    let login = Login::new_with(standard.context, manager, |window| {
+                        unsafe {
+                            let child = lvgl::lv_obj_create(window.as_object_mutable());
+                            assert!(!child.is_null());
+                            attach_probe(
+                                window.as_object_mutable(),
+                                lvgl::lv_event_code_t_LV_EVENT_DELETE,
+                                &LOGIN_FAIL_DELETE,
+                            );
+                        }
+                        Err(Error::FailedToCreateObject)
+                    });
+                    xila::task::block_on(Shell::new_with_login(standard, true, login)).err()
+                });
 
             assert!(matches!(error, Some(Error::FailedToCreateObject)));
             assert_eq!(
@@ -601,6 +627,7 @@ mod tests {
                 "graphics lock must be released after Login setup error"
             );
             assert_eq!(manager.get_window_count().await.unwrap(), baseline_windows);
+            assert_eq!(screen_counts(), baseline_screen);
         }
     }
 }
