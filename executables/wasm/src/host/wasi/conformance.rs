@@ -749,6 +749,85 @@ impl Guest {
     }
 }
 
+struct FailingDevice(xila::file_system::Error);
+
+impl xila::file_system::MountOperations for FailingDevice {}
+impl xila::file_system::DirectCharacterDevice for FailingDevice {}
+
+impl xila::file_system::DirectBaseOperations for FailingDevice {
+    fn read(
+        &self,
+        _: &mut core::task::Context<'_>,
+        _: &mut [u8],
+        _: xila::file_system::Size,
+    ) -> core::task::Poll<xila::file_system::Result<usize>> {
+        core::task::Poll::Ready(Err(xila::file_system::Error::UnsupportedOperation))
+    }
+
+    fn write(
+        &self,
+        _: &mut core::task::Context<'_>,
+        _: &[u8],
+        _: xila::file_system::Size,
+    ) -> core::task::Poll<xila::file_system::Result<usize>> {
+        core::task::Poll::Ready(Err(self.0))
+    }
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn fd_write_preserves_wrapped_filesystem_errnos() {
+    use xila::file_system::{Error as Fs, Path};
+
+    let mut guest = Guest::new().await;
+    for (index, (source, expected)) in [
+        (Fs::InvalidIdentifier, 8), // BADF
+        (Fs::InvalidMode, 8),
+        (Fs::InvalidPath, 28), // INVAL
+        (Fs::InvalidFlags, 28),
+        (Fs::TooManyOpenFiles, 41), // NFILE
+        (Fs::NoMemory, 48),         // NOMEM
+        (Fs::InputOutput, 29),      // IO
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let name = format!("device-{index}");
+        let path = format!("/sandbox/{name}");
+        guest
+            .vfs
+            .mount_character_device(guest.task, Path::from_str(&path), FailingDevice(source))
+            .await
+            .unwrap();
+        let fd = guest.open(&name, WRITE).unwrap();
+        assert_eq!(guest.write(fd, b"x"), expected, "{source:?}");
+        assert_eq!(guest.call("fd_close", &[i(fd)]), 0);
+    }
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn path_open_reports_invalid_append_access_as_inval() {
+    let mut guest = Guest::new().await;
+    guest.create("file");
+    let [pointer, length] = guest.text(0, "file");
+    assert_eq!(
+        guest.call(
+            "path_open",
+            &[
+                i(ROOT),
+                i(0),
+                pointer,
+                length,
+                i(0),
+                l(READ),
+                l(0),
+                i(APPEND),
+                i(1100)
+            ],
+        ),
+        28, // INVAL
+    );
+}
+
 #[xila::task::test(task_path = xila::task)]
 async fn fd_fdstat_set_flags_changes_append_and_nonblocking() {
     let mut guest = Guest::new().await;

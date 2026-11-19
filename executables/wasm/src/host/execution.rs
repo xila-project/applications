@@ -127,7 +127,7 @@ pub async fn run(
                                 }
                                 let now = match clock_now(context, required) {
                                     Ok(now) => now,
-                                    Err(error) => break error as i32,
+                                    Err(error) => break i32::from(error),
                                 };
                                 let delay = poll.delay(now);
                                 if !delay.is_zero() {
@@ -141,7 +141,7 @@ pub async fn run(
                                 }
                                 let now = match clock_now(context, required) {
                                     Ok(now) => now,
-                                    Err(error) => break error as i32,
+                                    Err(error) => break i32::from(error),
                                 };
                                 match poll.complete(
                                     &mut GuestMemory::new(memory.data_mut(&mut *store)),
@@ -149,7 +149,7 @@ pub async fn run(
                                 ) {
                                     Ok(0) => continue,
                                     Ok(_) => break 0,
-                                    Err(error) => break error as i32,
+                                    Err(error) => break i32::from(error),
                                 }
                             }
                         }

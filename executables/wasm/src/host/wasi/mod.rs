@@ -21,3 +21,20 @@ pub(crate) mod types;
 
 pub use context::*;
 pub use error::Error;
+
+// Kept out of poll_memory.rs, which the translation test crate also compiles
+// without the WASI error type.
+impl From<poll_memory::PollError> for i32 {
+    fn from(error: poll_memory::PollError) -> Self {
+        use poll_memory::PollError;
+
+        match error {
+            PollError::Fault => Error::Fault,
+            PollError::Invalid => Error::Inval,
+            PollError::Io => Error::Io,
+            PollError::NotSupported => Error::Notsup,
+            PollError::Overflow => Error::Overflow,
+        }
+        .into()
+    }
+}

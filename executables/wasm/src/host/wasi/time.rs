@@ -79,10 +79,10 @@ define_wasi_module! {
         let resolution = match clock_id {
             0 => manager.realtime_resolution(),
             1 => manager.monotonic_resolution(),
-            _ => return Ok(58),
+            _ => return Ok(Error::Notsup.into()),
         };
         let Ok(resolution) = u64::try_from(resolution.as_nanos()) else {
-            return Ok(61);
+            return Ok(Error::Overflow.into());
         };
         borrow_memory(&memory, &mut caller)
             .write(GuestPointer::new(resolution_ptr), resolution)
@@ -101,7 +101,7 @@ define_wasi_module! {
         let manager = caller.data().context.time_manager;
         let now = match crate::host::execution::clock_value(manager, clock_id as usize) {
             Ok(now) => now,
-            Err(error) => return Ok(error as i32),
+            Err(error) => return Ok(i32::from(error)),
         };
         borrow_memory(&memory, &mut caller)
             .write(GuestPointer::new(time_ptr), now)
