@@ -7,6 +7,11 @@
   },
   "dns": {
     "errors": {
+      "domain_name_too_long": "Nie można rozwiązać {arg0}: nazwa domeny jest za długa",
+      "invalid_domain_name": "Nie można rozwiązać {arg0}: nazwa domeny jest nieprawidłowa",
+      "no_free_query_slot": "Nie można rozwiązać {arg0}: wszystkie miejsca na zapytania DNS są zajęte",
+      "no_network_interface": "Nie można rozwiązać {arg0}: brak dostępnego interfejsu sieciowego",
+      "resolution_failed": "Nie udało się rozwiązać rekordów {arg0} dla domeny '{arg1}'",
       "unknown_host": "Nie można rozwiązać {arg0}: nieznany host"
     },
     "records": {
@@ -45,7 +50,6 @@
     "failed_to_remove_environment_variable": "Nie udało się usunąć zmiennej środowiskowej: {arg0}",
     "failed_to_rename_path": "Nie udało się zmienić nazwy ścieżki: {arg0}",
     "failed_to_resolve_domain": "Nie udało się rozwiązać domeny: {arg0}",
-    "failed_to_resolve_domain_for_records": "Nie udało się rozwiązać domeny '{arg0}' dla {arg1} rekordów: {arg2}",
     "failed_to_restore_terminal_echo": "Nie udało się ponownie włączyć echa terminala: {arg0}",
     "failed_to_set_current_directory": "Nie udało się ustawić bieżącego katalogu: {arg0}",
     "failed_to_set_environment_variable": "Nie udało się ustawić zmiennej środowiskowej: {arg0}",
@@ -66,6 +70,7 @@
     "missing_file_name_after_redirect_in": "Brak nazwy pliku po przekierowaniu wejścia",
     "missing_file_name_after_redirect_out": "Brak nazwy pliku po przekierowaniu wyjścia",
     "missing_positional_argument": "Brak argumentu pozycyjnego: {arg0}",
+    "network_unavailable": "Sieć jest niedostępna na tym urządzeniu",
     "option_does_not_require_a_value": "Opcja nie wymaga wartości",
     "option_requires_a_value": "Opcja wymaga wartości",
     "syntax_error_at_byte": "Błąd składni przy bajcie {arg0}: {arg1}",

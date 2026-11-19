@@ -7,6 +7,11 @@
   },
   "dns": {
     "errors": {
+      "domain_name_too_long": "{arg0} を解決できません: ドメイン名が長すぎます",
+      "invalid_domain_name": "{arg0} を解決できません: ドメイン名が無効です",
+      "no_free_query_slot": "{arg0} を解決できません: DNS クエリ用の空きスロットがありません",
+      "no_network_interface": "{arg0} を解決できません: 使用可能なネットワークインターフェースがありません",
+      "resolution_failed": "ドメイン '{arg1}' の {arg0} レコードを解決できませんでした",
       "unknown_host": "{arg0} を解決できません: 不明なホスト"
     },
     "records": {
@@ -43,7 +48,6 @@
     "failed_to_remove_environment_variable": "環境変数の削除に失敗しました: {arg0}",
     "failed_to_rename_path": "パスの名前変更に失敗しました: {arg0}",
     "failed_to_resolve_domain": "ドメインの名前解決に失敗しました: {arg0}",
-    "failed_to_resolve_domain_for_records": "ドメイン '{arg0}' の {arg1} レコードを解決できませんでした: {arg2}",
     "failed_to_restore_terminal_echo": "端末のエコーを再び有効にできませんでした: {arg0}",
     "failed_to_set_current_directory": "カレントディレクトリの設定に失敗しました: {arg0}",
     "failed_to_set_environment_variable": "環境変数の設定に失敗しました: {arg0}",
@@ -64,6 +68,7 @@
     "missing_file_name_after_redirect_in": "入力リダイレクトの後にファイル名がありません",
     "missing_file_name_after_redirect_out": "出力リダイレクトの後にファイル名がありません",
     "missing_positional_argument": "位置引数がありません: {arg0}",
+    "network_unavailable": "このデバイスではネットワークを利用できません",
     "option_does_not_require_a_value": "このオプションに値は必要ありません",
     "option_requires_a_value": "このオプションには値が必要です",
     "syntax_error_at_byte": "バイト {arg0} の構文エラー: {arg1}",

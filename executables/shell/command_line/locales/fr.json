@@ -7,6 +7,11 @@
   },
   "dns": {
     "errors": {
+      "domain_name_too_long": "Impossible de résoudre {arg0} : le nom de domaine est trop long",
+      "invalid_domain_name": "Impossible de résoudre {arg0} : le nom de domaine est invalide",
+      "no_free_query_slot": "Impossible de résoudre {arg0} : tous les emplacements de requête DNS sont occupés",
+      "no_network_interface": "Impossible de résoudre {arg0} : aucune interface réseau n’est disponible",
+      "resolution_failed": "Impossible de résoudre les enregistrements {arg0} du domaine '{arg1}'",
       "unknown_host": "Impossible de résoudre {arg0}: Hôte inconnu"
     },
     "records": {
@@ -43,7 +48,6 @@
     "failed_to_remove_environment_variable": "Échec de la suppression de la variable d'environnement: {arg0}",
     "failed_to_rename_path": "Échec du renommage du chemin: {arg0}",
     "failed_to_resolve_domain": "Échec de la résolution du domaine: {arg0}",
-    "failed_to_resolve_domain_for_records": "Échec de la résolution du domaine '{arg0}' pour les enregistrements {arg1}: {arg2}",
     "failed_to_restore_terminal_echo": "Échec de la réactivation de l'écho du terminal : {arg0}",
     "failed_to_set_current_directory": "Échec de la définition du répertoire courant: {arg0}",
     "failed_to_set_environment_variable": "Échec de la définition de la variable d'environnement: {arg0}",
@@ -64,6 +68,7 @@
     "missing_file_name_after_redirect_in": "Nom de fichier manquant après la redirection d'entrée",
     "missing_file_name_after_redirect_out": "Nom de fichier manquant après la redirection de sortie",
     "missing_positional_argument": "Argument positionnel manquant: {arg0}",
+    "network_unavailable": "Le réseau n’est pas disponible sur cet appareil",
     "option_does_not_require_a_value": "L'option ne nécessite pas de valeur",
     "option_requires_a_value": "L'option nécessite une valeur",
     "syntax_error_at_byte": "Erreur de syntaxe à l’octet {arg0} : {arg1}",

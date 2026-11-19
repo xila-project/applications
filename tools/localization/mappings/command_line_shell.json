@@ -31,7 +31,6 @@
     "Failed to remove directory: {}": "errors.failed_to_remove_directory",
     "Failed to remove environment variable: {}": "errors.failed_to_remove_environment_variable",
     "Failed to rename path: {}": "errors.failed_to_rename_path",
-    "Failed to resolve domain '{}' for {} records: {}": "errors.failed_to_resolve_domain_for_records",
     "Failed to resolve domain: {}": "errors.failed_to_resolve_domain",
     "Failed to set current directory: {}": "errors.failed_to_set_current_directory",
     "Failed to set environment variable: {}": "errors.failed_to_set_environment_variable",

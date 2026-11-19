@@ -514,6 +514,97 @@ mod tests {
         }
     }
 
+    #[cfg(all(
+        feature = "network",
+        any(target_os = "linux", target_os = "macos", target_os = "windows")
+    ))]
+    #[xila::task::test(task_path = xila::task)]
+    async fn network_commands_report_a_missing_network_manager() {
+        use alloc::string::ToString;
+
+        let standard = testing::initialize(false, false).await;
+        let mut context = HelpContext {
+            executable_context: Some(standard.context),
+            ..Default::default()
+        };
+
+        for name in ["dns_resolve", "ping"] {
+            let mut options = getargs::Options::new(["example.org"].into_iter());
+            let error = super::dispatch_user_command(
+                resolve_user_command(name).unwrap(),
+                &mut context,
+                &mut options,
+                &[],
+            )
+            .await
+            .unwrap_err();
+
+            assert!(matches!(error, crate::Error::NetworkUnavailable));
+            assert_eq!(
+                error.to_string(),
+                xila::internationalization::t!("errors.network_unavailable").to_string()
+            );
+        }
+    }
+
+    #[cfg(all(
+        feature = "network",
+        any(target_os = "linux", target_os = "macos", target_os = "windows")
+    ))]
+    #[xila::task::test(task_path = xila::task)]
+    async fn dns_reports_no_available_network_interface() {
+        let standard = testing::initialize(false, true).await;
+        let mut context = HelpContext {
+            executable_context: Some(standard.context),
+            ..Default::default()
+        };
+        let mut options = getargs::Options::new(["-a", "example.org"].into_iter());
+
+        super::dispatch_user_command(UserCommandKind::DnsResolve, &mut context, &mut options, &[])
+            .await
+            .unwrap();
+
+        assert_eq!(
+            context.output,
+            alloc::format!(
+                "{}\n",
+                xila::internationalization::t!(
+                    "dns.errors.no_network_interface",
+                    arg0 = "example.org"
+                )
+            )
+        );
+    }
+
+    #[cfg(all(
+        feature = "network",
+        any(target_os = "linux", target_os = "macos", target_os = "windows")
+    ))]
+    #[xila::task::test(task_path = xila::task)]
+    async fn ping_reports_no_available_network_interface() {
+        let standard = testing::initialize(false, true).await;
+        let mut context = HelpContext {
+            executable_context: Some(standard.context),
+            ..Default::default()
+        };
+        let mut options = getargs::Options::new(["example.org"].into_iter());
+
+        super::dispatch_user_command(UserCommandKind::Ping, &mut context, &mut options, &[])
+            .await
+            .unwrap();
+
+        assert_eq!(
+            context.output,
+            alloc::format!(
+                "{}\n",
+                xila::internationalization::t!(
+                    "dns.errors.no_network_interface",
+                    arg0 = "example.org"
+                )
+            )
+        );
+    }
+
     #[xila::task::test(task_path = xila::task)]
     async fn sleep_yields_then_completes_without_accessing_os_services() {
         use core::{

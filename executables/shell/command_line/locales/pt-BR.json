@@ -7,6 +7,11 @@
   },
   "dns": {
     "errors": {
+      "domain_name_too_long": "Não foi possível resolver {arg0}: o nome de domínio é muito longo",
+      "invalid_domain_name": "Não foi possível resolver {arg0}: o nome de domínio é inválido",
+      "no_free_query_slot": "Não foi possível resolver {arg0}: todos os espaços para consultas DNS estão ocupados",
+      "no_network_interface": "Não foi possível resolver {arg0}: nenhuma interface de rede está disponível",
+      "resolution_failed": "Não foi possível resolver os registros {arg0} do domínio '{arg1}'",
       "unknown_host": "Não foi possível resolver {arg0}: host desconhecido"
     },
     "records": {
@@ -43,7 +48,6 @@
     "failed_to_remove_environment_variable": "Não foi possível remover a variável de ambiente: {arg0}",
     "failed_to_rename_path": "Não foi possível renomear o caminho: {arg0}",
     "failed_to_resolve_domain": "Não foi possível resolver o domínio: {arg0}",
-    "failed_to_resolve_domain_for_records": "Não foi possível resolver o domínio '{arg0}' para {arg1} registros: {arg2}",
     "failed_to_restore_terminal_echo": "Não foi possível reativar o eco do terminal: {arg0}",
     "failed_to_set_current_directory": "Não foi possível definir o diretório atual: {arg0}",
     "failed_to_set_environment_variable": "Não foi possível definir a variável de ambiente: {arg0}",
@@ -64,6 +68,7 @@
     "missing_file_name_after_redirect_in": "Nome do arquivo ausente após o redirecionamento de entrada",
     "missing_file_name_after_redirect_out": "Nome do arquivo ausente após o redirecionamento de saída",
     "missing_positional_argument": "Argumento posicional ausente: {arg0}",
+    "network_unavailable": "A rede não está disponível neste dispositivo",
     "option_does_not_require_a_value": "A opção não requer valor",
     "option_requires_a_value": "A opção requer um valor",
     "syntax_error_at_byte": "Erro de sintaxe no byte {arg0}: {arg1}",
