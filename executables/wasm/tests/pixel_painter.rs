@@ -208,7 +208,7 @@ async fn real_painter_guest_draws_saves_opens_and_preserves_work_on_errors() {
     xila::task::sleep(Duration::from_millis(50)).await;
     action(manager, 2).await;
     status(manager, "status.saved").await;
-    let path = "/users/0/applications/pixel_painter/data/drawing.xpnt";
+    let path = "/users/root/applications/pixel_painter/data/drawing.xpnt";
     let mut saved = Vec::new();
     File::read_from_path(vfs, task, path, &mut saved)
         .await

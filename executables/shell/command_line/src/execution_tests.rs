@@ -1109,7 +1109,12 @@ async fn mv_checks_write_permission_on_both_parent_directories() {
         shell
             .context
             .users_manager
-            .add_user(user, name, GroupIdentifier::ROOT)
+            .add_user(
+                user,
+                name,
+                GroupIdentifier::ROOT,
+                &alloc::format!("/users/{name}"),
+            )
             .await
             .unwrap();
     }

@@ -122,7 +122,7 @@ async fn guest_opens_pages_edits_and_saves_large_file() {
     vfs.ensure_user_application_directories(task, xila::users::UserIdentifier::ROOT, "text_editor")
         .await
         .unwrap();
-    let path = "/users/0/applications/text_editor/data/document.txt";
+    let path = "/users/root/applications/text_editor/data/document.txt";
     let original = "a".repeat(9000);
     let mut source = File::open(
         vfs,
@@ -235,7 +235,7 @@ async fn guest_opens_pages_edits_and_saves_large_file() {
     let exit = handle.join().await;
     assert_eq!(exit, 0);
     let directory =
-        SynchronousDirectory::open(vfs, task, "/users/0/applications/text_editor/data").unwrap();
+        SynchronousDirectory::open(vfs, task, "/users/root/applications/text_editor/data").unwrap();
     let names: Vec<_> = directory.map(|entry| entry.name).collect();
     assert!(names.iter().any(|name| name == "document.txt"));
     assert!(
