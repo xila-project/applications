@@ -2,6 +2,7 @@
 name = "xila-wasm-translation-tests"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.97"
 publish = false
 
 # Test the actual translation sources without building the OS/runtime integration.

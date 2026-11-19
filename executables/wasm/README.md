@@ -89,18 +89,18 @@ memory.
 From the Core repository root on Linux, set `XILA_APPLICATIONS_MANIFEST` to the pinned Applications checkout’s `Cargo.toml`:
 
 ```sh
-rustup target add --toolchain stable wasm32-wasip1
+rustup target add --toolchain 1.97.0 wasm32-wasip1
 export XILA_APPLICATIONS_MANIFEST=/absolute/path/to/applications/Cargo.toml
 
 # Headless acceptance: builds the real guest, enters 1 + 2 = through LVGL
 # button events, checks the displayed result, requests close, checks cleanup.
-cargo +stable test -p xila-wasm --features graphics \
+cargo +1.97.0 test -p xila-wasm --features graphics \
   --target x86_64-unknown-linux-gnu --test calculator
 
 # Interactive native display. Click calculator buttons; press Enter in the
 # launching terminal to request close and let the test finish successfully.
 cd /absolute/path/to/applications
-RUSTUP_TOOLCHAIN=stable cargo test --manifest-path executables/calculator/Cargo.toml \
+cargo +1.97.0 test --manifest-path executables/calculator/Cargo.toml \
   --target x86_64-unknown-linux-gnu --test calculator_test \
   -- --ignored --nocapture
 ```
@@ -112,9 +112,9 @@ The guest handles that event as a numeric code, not an invalid Rust enum variant
 Other focused tests:
 
 ```sh
-cargo +stable test -p xila-graphics-bindgen --target x86_64-unknown-linux-gnu
-cargo +stable test -p xila-wasm --features graphics --target x86_64-unknown-linux-gnu
-cargo +stable test -p xila-wasm --no-default-features \
+cargo +1.97.0 test -p xila-graphics-bindgen --target x86_64-unknown-linux-gnu
+cargo +1.97.0 test -p xila-wasm --features graphics --target x86_64-unknown-linux-gnu
+cargo +1.97.0 test -p xila-wasm --no-default-features \
   --features host,graphics,memory_64 --target x86_64-unknown-linux-gnu
 ```
 
@@ -187,7 +187,9 @@ rendering feature appropriate to the platform (e.g.
 `xila/graphics_rendering_xrgb8888` for a standalone host library check). Normal
 non-graphical runtime use does not enable graphics.
 
-Guest-only consumers must disable defaults to avoid enabling the host runtime:
+Guest-only consumers must disable defaults to avoid enabling the host runtime.
+Set `default-features = false` on the workspace dependency before inheriting
+it in guest members:
 
 ```toml
 wasm = { workspace = true, default-features = false, features = ["guest", "graphics", "memory_32"] }

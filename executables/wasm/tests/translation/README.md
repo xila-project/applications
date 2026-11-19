@@ -51,8 +51,8 @@ encodings with zeroed padding, independently of their native Rust layouts.
 From the repository root:
 
 ```sh
-cargo +stable test --manifest-path executables/wasm/tests/translation/Cargo.toml
-cargo +stable test --manifest-path executables/wasm/tests/translation/Cargo.toml --no-default-features --features memory_64
+cargo +1.97.0 test --manifest-path executables/wasm/tests/translation/Cargo.toml
+cargo +1.97.0 test --manifest-path executables/wasm/tests/translation/Cargo.toml --no-default-features --features memory_64
 ```
 
 Tests cover independent little-endian scalar and WASI-record fixtures, padding,
@@ -81,7 +81,7 @@ Requires `cargo-llvm-cov` and the stable `llvm-tools-preview` component. Run for
 both `memory_32` and `memory_64`:
 
 ```sh
-cargo +stable llvm-cov \
+cargo +1.97.0 llvm-cov \
   --manifest-path executables/wasm/tests/translation/Cargo.toml \
   --no-default-features --features memory_32 \
   --ignore-filename-regex '(tests\.rs|tests/translation/src/lib\.rs)$' \

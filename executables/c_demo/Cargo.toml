@@ -2,6 +2,7 @@
 name = "xila-c-demo"
 version = "0.1.0"
 edition = "2024"
+rust-version.workspace = true
 description = "Built-in native C ABI demonstration"
 license = "Apache-2.0"
 
