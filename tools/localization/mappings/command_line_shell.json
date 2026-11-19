@@ -62,7 +62,6 @@
     "Option does not require a value": "errors.option_does_not_require_a_value",
     "Option requires a value": "errors.option_requires_a_value",
     "PING data bytes": "ping.request.payload_byte_unit",
-    "PING {} ({}): {} data bytes": "legacy.ping_request_line",
     "Password: ": "authentication.prompts.password",
     "Permissions": "listing.columns.permissions",
     "Request timeout for icmp_seq {}": "ping.errors.request_timeout",
@@ -75,13 +74,6 @@
     "User": "listing.columns.user",
     "User name: ": "authentication.prompts.username",
     "external executable; usage is provided by the executable.": "help.external_executable_description",
-    "time": "ping.reply.time_label",
-    "{} bytes from {}: icmp_seq={} time={:.2} ms": "legacy.ping_reply_line",
-    "{} record(s) for domain '{}':": "legacy.dns_records_line"
-  },
-  "pre_existing_unused_only_in_spanish": [
-    "legacy.ping_reply_line",
-    "legacy.dns_records_line",
-    "legacy.ping_request_line"
-  ]
+    "time": "ping.reply.time_label"
+  }
 }

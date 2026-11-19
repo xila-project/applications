@@ -1,8 +1,8 @@
 {
   "authentication": {
     "prompts": {
-      "password": "Mot de passe: ",
-      "username": "Nom d'utilisateur: "
+      "password": "Mot de passe : ",
+      "username": "Nom d’utilisateur : "
     }
   },
   "dns": {
@@ -11,7 +11,7 @@
       "invalid_domain_name": "Impossible de résoudre {arg0} : le nom de domaine est invalide",
       "no_free_query_slot": "Impossible de résoudre {arg0} : tous les emplacements de requête DNS sont occupés",
       "no_network_interface": "Impossible de résoudre {arg0} : aucune interface réseau n’est disponible",
-      "resolution_failed": "Impossible de résoudre les enregistrements {arg0} du domaine '{arg1}'",
+      "resolution_failed": "Impossible de résoudre les enregistrements {arg0} du domaine « {arg1} »",
       "unknown_host": "Impossible de résoudre {arg0} : hôte inconnu"
     },
     "records": {
@@ -21,59 +21,59 @@
       }
     },
     "status": {
-      "no_records_found": "Aucun enregistrement {arg0} trouvé pour le domaine '{arg1}'"
+      "no_records_found": "Aucun enregistrement {arg0} trouvé pour le domaine « {arg1} »"
     }
   },
   "errors": {
-    "argument_parsing_error": "Erreur d'analyse des arguments: {arg0}",
-    "authentication_failed": "Échec de l'authentification: {arg0}",
-    "failed_to_create_directory": "Échec de la création du répertoire: {arg0}",
-    "failed_to_create_socket": "Échec de la création du socket: {arg0}",
+    "argument_parsing_error": "Erreur d’analyse des arguments : {arg0}",
+    "authentication_failed": "Échec de l’authentification : {arg0}",
+    "failed_to_create_directory": "Échec de la création du répertoire : {arg0}",
+    "failed_to_create_socket": "Échec de la création du socket : {arg0}",
     "failed_to_create_symbolic_link": "Échec de la création du lien symbolique : {arg0}",
-    "failed_to_execute_command": "Échec de l'exécution de la commande",
-    "failed_to_get_environment_variable": "Échec de la récupération de la variable d'environnement",
-    "failed_to_get_metadata": "Échec de la récupération des métadonnées: {arg0}",
-    "failed_to_get_task_identifier": "Échec de la récupération de l'identifiant de la tâche",
+    "failed_to_execute_command": "Échec de l’exécution de la commande",
+    "failed_to_get_environment_variable": "Échec de la récupération de la variable d’environnement",
+    "failed_to_get_metadata": "Échec de la récupération des métadonnées : {arg0}",
+    "failed_to_get_task_identifier": "Échec de la récupération de l’identifiant de la tâche",
     "failed_to_get_task_user": "Échec de récupération de l’utilisateur de la tâche : {arg0}",
     "failed_to_hide_password": "Échec du masquage du mot de passe : {arg0}",
     "failed_to_join_path": "Échec de la jonction du chemin",
     "failed_to_join_task": "Échec de la jonction de la tâche",
-    "failed_to_open_directory": "Échec de l'ouverture du répertoire: {arg0}",
-    "failed_to_open_file": "Échec de l'ouverture du fichier: {arg0}",
-    "failed_to_read_directory_entry": "Échec de la lecture de l'entrée du répertoire: {arg0}",
-    "failed_to_read_environment_variable": "Échec de la lecture de la variable d'environnement: {arg0}",
+    "failed_to_open_directory": "Échec de l’ouverture du répertoire : {arg0}",
+    "failed_to_open_file": "Échec de l’ouverture du fichier : {arg0}",
+    "failed_to_read_directory_entry": "Échec de la lecture de l’entrée du répertoire : {arg0}",
+    "failed_to_read_environment_variable": "Échec de la lecture de la variable d’environnement : {arg0}",
     "failed_to_read_file": "Impossible de lire le fichier : {arg0}",
     "failed_to_read_symbolic_link": "Échec de la lecture du lien symbolique : {arg0}",
-    "failed_to_remove_directory": "Échec de la suppression du répertoire: {arg0}",
-    "failed_to_remove_environment_variable": "Échec de la suppression de la variable d'environnement: {arg0}",
-    "failed_to_rename_path": "Échec du renommage du chemin: {arg0}",
-    "failed_to_resolve_domain": "Échec de la résolution du domaine: {arg0}",
-    "failed_to_restore_terminal_echo": "Échec de la réactivation de l'écho du terminal : {arg0}",
-    "failed_to_set_current_directory": "Échec de la définition du répertoire courant: {arg0}",
-    "failed_to_set_environment_variable": "Échec de la définition de la variable d'environnement: {arg0}",
+    "failed_to_remove_directory": "Échec de la suppression du répertoire : {arg0}",
+    "failed_to_remove_environment_variable": "Échec de la suppression de la variable d’environnement : {arg0}",
+    "failed_to_rename_path": "Échec du renommage du chemin : {arg0}",
+    "failed_to_resolve_domain": "Échec de la résolution du domaine : {arg0}",
+    "failed_to_restore_terminal_echo": "Échec de la réactivation de l’écho du terminal : {arg0}",
+    "failed_to_set_current_directory": "Échec de la définition du répertoire courant : {arg0}",
+    "failed_to_set_environment_variable": "Échec de la définition de la variable d’environnement : {arg0}",
     "failed_to_set_permissions": "Impossible de modifier les permissions : {arg0}",
-    "failed_to_set_shell_nesting_depth": "Échec de la définition de la profondeur d'imbrication du shell",
-    "failed_to_set_task_user": "Échec de la définition de l'utilisateur de la tâche: {arg0}",
+    "failed_to_set_shell_nesting_depth": "Échec de la définition de la profondeur d’imbrication du shell",
+    "failed_to_set_task_user": "Échec de la définition de l’utilisateur de la tâche : {arg0}",
     "failed_to_tokenize_command_line": "Échec de la tokenisation de la ligne de commande",
     "failed_to_write_file": "Échec de l’écriture du fichier : {arg0}",
     "format_failed": "Erreur de formatage",
     "invalid_argument": "Argument invalide",
-    "invalid_number_of_arguments": "Nombre d'arguments invalide",
+    "invalid_number_of_arguments": "Nombre d’arguments invalide",
     "invalid_option": "Option invalide",
     "invalid_path": "Chemin invalide",
     "invalid_utf_8_input": "Entrée UTF-8 invalide",
-    "lifecycle_request_failed": "Échec de la demande d'arrêt ou de redémarrage : {arg0}",
+    "lifecycle_request_failed": "Échec de la demande d’arrêt ou de redémarrage : {arg0}",
     "line_too_long": "Ligne trop longue",
-    "maximum_nested_shell_depth_exceeded": "Profondeur maximale d'imbrication du shell dépassée",
-    "missing_file_name_after_redirect_in": "Nom de fichier manquant après la redirection d'entrée",
+    "maximum_nested_shell_depth_exceeded": "Profondeur maximale d’imbrication du shell dépassée",
+    "missing_file_name_after_redirect_in": "Nom de fichier manquant après la redirection d’entrée",
     "missing_file_name_after_redirect_out": "Nom de fichier manquant après la redirection de sortie",
-    "missing_positional_argument": "Argument positionnel manquant: {arg0}",
+    "missing_positional_argument": "Argument positionnel manquant : {arg0}",
     "network_unavailable": "Le réseau n’est pas disponible sur cet appareil",
-    "option_does_not_require_a_value": "L'option ne nécessite pas de valeur",
-    "option_requires_a_value": "L'option nécessite une valeur",
+    "option_does_not_require_a_value": "L’option ne nécessite pas de valeur",
+    "option_requires_a_value": "L’option nécessite une valeur",
     "syntax_error_at_byte": "Erreur de syntaxe à l’octet {arg0} : {arg1}",
     "too_many_background_jobs": "Trop de tâches en arrière-plan",
-    "with_details": "Erreur: {arg0}"
+    "with_details": "Erreur : {arg0}"
   },
   "execution": {
     "errors": {
@@ -86,7 +86,7 @@
     "available_executables_title": "Exécutables présents dans Paths :",
     "built_in_commands_title": "Commandes intégrées :",
     "execute_command_usage": "Utilisation : shell -c COMMANDE",
-    "external_executable_description": "exécutable externe ; l'aide est fournie par l'exécutable.",
+    "external_executable_description": "exécutable externe ; l’aide est fournie par l’exécutable.",
     "run_script_usage": "Utilisation : shell -s CHEMIN"
   },
   "listing": {
@@ -94,7 +94,7 @@
       "accessed": "Accédé",
       "created": "Créé",
       "group": "Groupe",
-      "inode": "Nœud d'index",
+      "inode": "Nœud d’index",
       "kind": "Type",
       "links": "Liens",
       "modified": "Modifié",
@@ -106,7 +106,7 @@
   },
   "ping": {
     "errors": {
-      "request_timeout": "Délai d'attente dépassé pour icmp_seq {arg0}"
+      "request_timeout": "Délai d’attente dépassé pour icmp_seq {arg0}"
     },
     "reply": {
       "byte_unit": {
