@@ -21,6 +21,14 @@ use xila::{file_system::Kind, graphics::symbol};
 
 pub const WINDOWS_PARENT_CHILD_CHANGED: graphics::EventKind = graphics::EventKind::Custom2;
 
+pub(crate) struct DeskWidgets {
+    tile_view: *mut lvgl::lv_obj_t,
+    desk_tile: *mut lvgl::lv_obj_t,
+    drawer_tile: *mut lvgl::lv_obj_t,
+    dock: *mut lvgl::lv_obj_t,
+    main_button: *mut lvgl::lv_obj_t,
+}
+
 pub struct Desk {
     context: &'static xila::executable::ExecutableContext,
     graphics_manager: &'static graphics::Manager,
@@ -125,124 +133,31 @@ impl Desk {
         windows_parent: *mut lvgl::lv_obj_t,
     ) -> Result<Self> {
         let graphics = graphics::ffi_manager();
+        Self::new_with(context, graphics, windows_parent, Self::build_widgets).await
+    }
+
+    pub(crate) async fn new_with(
+        context: &'static xila::executable::ExecutableContext,
+        graphics: &'static graphics::Manager,
+        windows_parent: *mut lvgl::lv_obj_t,
+        build: impl FnOnce(&mut OwnedWindow) -> Result<DeskWidgets>,
+    ) -> Result<Self> {
         let desk = graphics::lock!(graphics, {
             // - Create a window
             let mut window = graphics.create_window().await?;
 
-            window.set_icon("De", Color::BLACK);
-
-            unsafe {
-                // Edge-to-edge window content: the shared window class already
-                // flattens border and radius, only the container padding remains.
-                lvgl::lv_obj_set_style_pad_all(
-                    window.as_object_mutable(),
-                    0,
-                    lvgl::LV_STATE_DEFAULT,
-                );
-            }
-
-            // - Create the logo
-            unsafe {
-                // Outline the logo in the background of the window, in the
-                // palette's input color like the outline controls.
-                let logo = Logo::new_with_style(
-                    window.as_object_mutable(),
-                    4,
-                    Color::BLACK,
-                    LogoStyle::Outline,
-                )?;
-                logo.follow_palette_color(theme::PaletteColor::Input);
-                let logo_inner_object = logo.get_inner_object();
-                forget(logo); // Prevent the logo from being dropped
-
-                lvgl::lv_obj_set_align(logo_inner_object, lvgl::lv_align_t_LV_ALIGN_CENTER);
-                lvgl::lv_obj_add_flag(
-                    logo_inner_object,
-                    lvgl::lv_obj_flag_t_LV_OBJ_FLAG_OVERFLOW_VISIBLE,
-                );
-            }
-
-            // - Create a tile view
-            let tile_view = unsafe {
-                let tile_view = lvgl::lv_tileview_create(window.as_object_mutable());
-
-                if tile_view.is_null() {
-                    return Err(Error::FailedToCreateObject);
+            let widgets = match build(&mut window) {
+                Ok(widgets) => widgets,
+                Err(error) => {
+                    // SAFETY: the graphics lock is held, and this function owns
+                    // `window`. Delete it directly so `OwnedWindow::drop` does
+                    // not deadlock on the non-re-entrant lock already held here.
+                    unsafe {
+                        lvgl::lv_obj_delete(window.into_raw().as_ptr().cast());
+                    }
+                    return Err(error);
                 }
-
-                lvgl::lv_obj_set_style_bg_opa(tile_view, lvgl::LV_OPA_0, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_scrollbar_mode(
-                    tile_view,
-                    lvgl::lv_scrollbar_mode_t_LV_SCROLLBAR_MODE_OFF,
-                );
-
-                tile_view
             };
-
-            // - Create the desk tile
-            let desk_tile = unsafe {
-                let desk =
-                    lvgl::lv_tileview_add_tile(tile_view, 0, 0, lvgl::lv_dir_t_LV_DIR_BOTTOM);
-
-                if desk.is_null() {
-                    return Err(Error::FailedToCreateObject);
-                }
-
-                desk
-            };
-
-            // - Create the drawer tile
-            let drawer_tile = unsafe {
-                let drawer = lvgl::lv_tileview_add_tile(tile_view, 0, 1, lvgl::lv_dir_t_LV_DIR_TOP);
-
-                if drawer.is_null() {
-                    return Err(Error::FailedToCreateObject);
-                }
-
-                lvgl::lv_obj_set_flex_flow(drawer, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW_WRAP);
-                // Side padding centers as many whole columns as fit, so the
-                // last row stays aligned with the others.
-                lvgl::lv_obj_update_layout(tile_view);
-                let (side, gap) = Self::drawer_grid(lvgl::lv_obj_get_width(tile_view));
-                lvgl::lv_obj_set_style_pad_hor(drawer, side, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_style_pad_ver(drawer, 16, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_style_pad_column(drawer, gap, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_style_pad_row(drawer, gap, lvgl::LV_STATE_DEFAULT);
-
-                drawer
-            };
-
-            // - Create a dock
-            let dock = unsafe {
-                let dock = lvgl::lv_obj_create(desk_tile);
-
-                if dock.is_null() {
-                    return Err(Error::FailedToCreateObject);
-                }
-
-                theme::set_surface(dock, theme::Surface::Muted);
-
-                lvgl::lv_obj_set_align(dock, lvgl::lv_align_t_LV_ALIGN_BOTTOM_MID);
-                // Float above the home indicator instead of sitting under it.
-                lvgl::lv_obj_set_y(dock, -Self::DOCK_BOTTOM_MARGIN);
-                lvgl::lv_obj_set_size(dock, lvgl::LV_SIZE_CONTENT, lvgl::LV_SIZE_CONTENT);
-                lvgl::lv_obj_set_flex_flow(dock, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW);
-                // Floating dock bar: the theme container style supplies the card
-                // padding, radius, border and icon gap; only the surface is set.
-                // Center items so the smaller main button aligns with the icons.
-                lvgl::lv_obj_set_flex_align(
-                    dock,
-                    lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
-                    lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
-                    lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
-                );
-
-                dock
-            };
-
-            // - Create the main button
-            let main_button =
-                unsafe { create_show_applications_button(dock, Self::MAIN_BUTTON_SIZE)? };
 
             // Register on `windows_parent` only once every fallible setup step
             // has succeeded, so `Desk::drop` is guaranteed to detach it.
@@ -255,29 +170,144 @@ impl Desk {
                 );
             }
 
-            let shortcuts = BTreeMap::new();
-
-            let desk: Desk = Self {
+            Self {
                 context,
-                graphics_manager: graphics::ffi_manager(),
+                graphics_manager: graphics,
                 windows_parent,
                 window,
-                tile_view,
-                desk_tile,
-                drawer_tile,
-                dock,
-                main_button,
+                tile_view: widgets.tile_view,
+                desk_tile: widgets.desk_tile,
+                drawer_tile: widgets.drawer_tile,
+                dock: widgets.dock,
+                main_button: widgets.main_button,
                 dock_menu: None,
                 dock_menu_target_window: None,
                 dock_menu_maximize_button: None,
                 dock_menu_close_button: None,
-                shortcuts,
-            };
-
-            desk
+                shortcuts: BTreeMap::new(),
+            }
         });
 
         Ok(desk)
+    }
+
+    fn build_widgets(window: &mut OwnedWindow) -> Result<DeskWidgets> {
+        window.set_icon("De", Color::BLACK);
+
+        unsafe {
+            // Edge-to-edge window content: the shared window class already
+            // flattens border and radius, only the container padding remains.
+            lvgl::lv_obj_set_style_pad_all(window.as_object_mutable(), 0, lvgl::LV_STATE_DEFAULT);
+        }
+
+        // - Create the logo
+        unsafe {
+            // Outline the logo in the background of the window, in the
+            // palette's input color like the outline controls.
+            let logo = Logo::new_with_style(
+                window.as_object_mutable(),
+                4,
+                Color::BLACK,
+                LogoStyle::Outline,
+            )?;
+            logo.follow_palette_color(theme::PaletteColor::Input);
+            let logo_inner_object = logo.get_inner_object();
+            forget(logo); // Prevent the logo from being dropped
+
+            lvgl::lv_obj_set_align(logo_inner_object, lvgl::lv_align_t_LV_ALIGN_CENTER);
+            lvgl::lv_obj_add_flag(
+                logo_inner_object,
+                lvgl::lv_obj_flag_t_LV_OBJ_FLAG_OVERFLOW_VISIBLE,
+            );
+        }
+
+        // - Create a tile view
+        let tile_view = unsafe {
+            let tile_view = lvgl::lv_tileview_create(window.as_object_mutable());
+
+            if tile_view.is_null() {
+                return Err(Error::FailedToCreateObject);
+            }
+
+            lvgl::lv_obj_set_style_bg_opa(tile_view, lvgl::LV_OPA_0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_scrollbar_mode(
+                tile_view,
+                lvgl::lv_scrollbar_mode_t_LV_SCROLLBAR_MODE_OFF,
+            );
+
+            tile_view
+        };
+
+        // - Create the desk tile
+        let desk_tile = unsafe {
+            let desk = lvgl::lv_tileview_add_tile(tile_view, 0, 0, lvgl::lv_dir_t_LV_DIR_BOTTOM);
+
+            if desk.is_null() {
+                return Err(Error::FailedToCreateObject);
+            }
+
+            desk
+        };
+
+        // - Create the drawer tile
+        let drawer_tile = unsafe {
+            let drawer = lvgl::lv_tileview_add_tile(tile_view, 0, 1, lvgl::lv_dir_t_LV_DIR_TOP);
+
+            if drawer.is_null() {
+                return Err(Error::FailedToCreateObject);
+            }
+
+            lvgl::lv_obj_set_flex_flow(drawer, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW_WRAP);
+            // Side padding centers as many whole columns as fit, so the
+            // last row stays aligned with the others.
+            lvgl::lv_obj_update_layout(tile_view);
+            let (side, gap) = Self::drawer_grid(lvgl::lv_obj_get_width(tile_view));
+            lvgl::lv_obj_set_style_pad_hor(drawer, side, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_pad_ver(drawer, 16, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_pad_column(drawer, gap, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_pad_row(drawer, gap, lvgl::LV_STATE_DEFAULT);
+
+            drawer
+        };
+
+        // - Create a dock
+        let dock = unsafe {
+            let dock = lvgl::lv_obj_create(desk_tile);
+
+            if dock.is_null() {
+                return Err(Error::FailedToCreateObject);
+            }
+
+            theme::set_surface(dock, theme::Surface::Muted);
+
+            lvgl::lv_obj_set_align(dock, lvgl::lv_align_t_LV_ALIGN_BOTTOM_MID);
+            // Float above the home indicator instead of sitting under it.
+            lvgl::lv_obj_set_y(dock, -Self::DOCK_BOTTOM_MARGIN);
+            lvgl::lv_obj_set_size(dock, lvgl::LV_SIZE_CONTENT, lvgl::LV_SIZE_CONTENT);
+            lvgl::lv_obj_set_flex_flow(dock, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW);
+            // Floating dock bar: the theme container style supplies the card
+            // padding, radius, border and icon gap; only the surface is set.
+            // Center items so the smaller main button aligns with the icons.
+            lvgl::lv_obj_set_flex_align(
+                dock,
+                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
+                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
+                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
+            );
+
+            dock
+        };
+
+        // - Create the main button
+        let main_button = unsafe { create_show_applications_button(dock, Self::MAIN_BUTTON_SIZE)? };
+
+        Ok(DeskWidgets {
+            tile_view,
+            desk_tile,
+            drawer_tile,
+            dock,
+            main_button,
+        })
     }
 
     unsafe fn create_drawer_shortcut(

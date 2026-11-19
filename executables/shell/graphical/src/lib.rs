@@ -226,10 +226,14 @@ mod tests {
             shared::AnyByLayout,
         };
 
+        use core::time::Duration;
+
         use crate::{
             Shell,
             desk::{Desk, WINDOWS_PARENT_CHILD_CHANGED},
+            error::Error,
             home::Home,
+            login::Login,
         };
 
         struct HeadlessScreen;
@@ -484,6 +488,119 @@ mod tests {
                     Ok(())
                 })
                 .unwrap();
+        }
+
+        fn run_with_timeout<T: Send + 'static>(
+            name: &str,
+            timeout: Duration,
+            work: impl FnOnce() -> T + Send + 'static,
+        ) -> T {
+            let (sender, receiver) = std::sync::mpsc::channel();
+            let handle = std::thread::spawn(move || {
+                let _ = sender.send(work());
+            });
+            let result = receiver.recv_timeout(timeout).unwrap_or_else(|_| {
+                // A deadlocked worker keeps the graphics lock forever, so later
+                // tests in this binary would block on it: exit instead of panicking.
+                std::eprintln!("{name} hung (likely deadlocked on the graphics lock)");
+                std::process::exit(1)
+            });
+            handle.join().unwrap();
+            result
+        }
+
+        #[xila::task::test(task_path = xila::task)]
+        async fn desk_setup_failure_deletes_window_without_deadlocking() {
+            static DESK_FAIL_DELETE: &str = "desk_fail_delete";
+
+            let standard = testing::initialize(false, false).await;
+            let manager = headless_graphics_manager().await;
+            let screen = manager.get_current_screen().unwrap();
+            let baseline_windows = manager.get_window_count().await.unwrap();
+            let baseline_screen_events = manager
+                .lock_function_sync(|| unsafe { Ok(lvgl::lv_obj_get_event_count(screen)) })
+                .unwrap();
+
+            EVENT_LOG.lock().unwrap().clear();
+
+            let context = standard.context;
+            let windows_parent = screen as usize;
+            let error = run_with_timeout("Desk::new_with", Duration::from_secs(5), move || {
+                xila::task::block_on(Desk::new_with(
+                    context,
+                    manager,
+                    windows_parent as *mut lvgl::lv_obj_t,
+                    |window| {
+                        unsafe {
+                            let child = lvgl::lv_obj_create(window.as_object_mutable());
+                            assert!(!child.is_null());
+                            attach_probe(
+                                window.as_object_mutable(),
+                                lvgl::lv_event_code_t_LV_EVENT_DELETE,
+                                &DESK_FAIL_DELETE,
+                            );
+                        }
+                        Err(Error::FailedToCreateObject)
+                    },
+                ))
+                .err()
+            });
+
+            assert!(matches!(error, Some(Error::FailedToCreateObject)));
+            assert_eq!(
+                EVENT_LOG.lock().unwrap().as_slice(),
+                &["desk_fail_delete"],
+                "failed Desk setup must delete its partially constructed window once"
+            );
+            assert!(
+                manager.try_lock().is_some(),
+                "graphics lock must be released after Desk setup error"
+            );
+            assert_eq!(manager.get_window_count().await.unwrap(), baseline_windows);
+            let screen_events = manager
+                .lock_function_sync(|| unsafe { Ok(lvgl::lv_obj_get_event_count(screen)) })
+                .unwrap();
+            assert_eq!(screen_events, baseline_screen_events);
+        }
+
+        #[xila::task::test(task_path = xila::task)]
+        async fn login_setup_failure_deletes_window_without_deadlocking() {
+            static LOGIN_FAIL_DELETE: &str = "login_fail_delete";
+
+            let standard = testing::initialize(false, false).await;
+            let manager = headless_graphics_manager().await;
+            let baseline_windows = manager.get_window_count().await.unwrap();
+
+            EVENT_LOG.lock().unwrap().clear();
+
+            let context = standard.context;
+            let error = run_with_timeout("Login::new_with", Duration::from_secs(5), move || {
+                xila::task::block_on(Login::new_with(context, manager, |window| {
+                    unsafe {
+                        let child = lvgl::lv_obj_create(window.as_object_mutable());
+                        assert!(!child.is_null());
+                        attach_probe(
+                            window.as_object_mutable(),
+                            lvgl::lv_event_code_t_LV_EVENT_DELETE,
+                            &LOGIN_FAIL_DELETE,
+                        );
+                    }
+                    Err(Error::FailedToCreateObject)
+                }))
+                .err()
+            });
+
+            assert!(matches!(error, Some(Error::FailedToCreateObject)));
+            assert_eq!(
+                EVENT_LOG.lock().unwrap().as_slice(),
+                &["login_fail_delete"],
+                "failed Login setup must delete its partially constructed window once"
+            );
+            assert!(
+                manager.try_lock().is_some(),
+                "graphics lock must be released after Login setup error"
+            );
+            assert_eq!(manager.get_window_count().await.unwrap(), baseline_windows);
         }
     }
 }
