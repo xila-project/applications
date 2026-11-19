@@ -46,6 +46,14 @@ pub struct FileItem {
 impl FileManager {
     pub async fn new(context: &'static xila::executable::ExecutableContext) -> Result<Self> {
         let graphics_manager = graphics::ffi_manager();
+        Self::new_at(context, graphics_manager, PathOwned::root()).await
+    }
+
+    async fn new_at(
+        context: &'static xila::executable::ExecutableContext,
+        graphics_manager: &'static graphics::Manager,
+        initial_path: PathOwned,
+    ) -> Result<Self> {
         let manager = graphics::lock!(graphics_manager, {
             let mut window = graphics_manager.create_window().await?;
 
@@ -68,38 +76,52 @@ impl FileManager {
                 running: true,
             };
 
-            // Set up window layout for flex
-            unsafe {
-                lvgl::lv_obj_set_layout(
-                    manager.window.as_object_mutable(),
-                    lvgl::lv_layout_t_LV_LAYOUT_FLEX,
-                );
-                lvgl::lv_obj_set_flex_flow(
-                    manager.window.as_object_mutable(),
-                    lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN,
-                );
-                lvgl::lv_obj_set_style_pad_all(
-                    manager.window.as_object_mutable(),
-                    0,
-                    lvgl::LV_STATE_DEFAULT,
-                );
-                // Toolbar, status line and list form one continuous surface.
-                lvgl::lv_obj_set_style_pad_row(
-                    manager.window.as_object_mutable(),
-                    0,
-                    lvgl::LV_STATE_DEFAULT,
-                );
+            if let Err(error) = manager.setup_ui(initial_path).await {
+                // SAFETY: the graphics lock is held, and `manager` owns the
+                // window. Delete it directly so `OwnedWindow::drop` does not
+                // deadlock on the non-re-entrant lock already held here.
+                unsafe {
+                    lvgl::lv_obj_delete(manager.window.into_raw().as_ptr().cast());
+                }
+                return Err(error);
             }
-
-            manager.create_toolbar().await?;
-            manager.create_status()?;
-            manager.create_file_list().await?;
-            manager.open(PathOwned::root()).await?;
 
             manager
         });
 
         Ok(manager)
+    }
+
+    async fn setup_ui(&mut self, initial_path: PathOwned) -> Result<()> {
+        // Set up window layout for flex
+        unsafe {
+            lvgl::lv_obj_set_layout(
+                self.window.as_object_mutable(),
+                lvgl::lv_layout_t_LV_LAYOUT_FLEX,
+            );
+            lvgl::lv_obj_set_flex_flow(
+                self.window.as_object_mutable(),
+                lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN,
+            );
+            lvgl::lv_obj_set_style_pad_all(
+                self.window.as_object_mutable(),
+                0,
+                lvgl::LV_STATE_DEFAULT,
+            );
+            // Toolbar, status line and list form one continuous surface.
+            lvgl::lv_obj_set_style_pad_row(
+                self.window.as_object_mutable(),
+                0,
+                lvgl::LV_STATE_DEFAULT,
+            );
+        }
+
+        self.create_toolbar().await?;
+        self.create_status()?;
+        self.create_file_list().await?;
+        self.open(initial_path).await?;
+
+        Ok(())
     }
 
     pub async fn handle_events(&mut self) -> bool {
@@ -644,6 +666,10 @@ mod tests {
     /// button's address.
     #[test]
     fn a_stale_click_cannot_pick_a_rebuilt_list_entry() {
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+        let _test_lock = xila::task::test_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         unsafe {
             lvgl::lv_init();
             lvgl::lv_display_create(320, 240);
@@ -687,5 +713,138 @@ mod tests {
         assert_eq!(format_size(250_000), "244 KiB");
         assert_eq!(format_size(5 * 1024 * 1024), "5 MiB");
         assert_eq!(format_size(3 * 1024 * 1024 * 1024 / 2), "1.5 GiB");
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    mod setup_failure {
+        use alloc::boxed::Box;
+        use core::{
+            task::{Context, Poll},
+            time::Duration,
+        };
+        use std::sync::OnceLock;
+        use xila::{
+            file_system::{
+                self, ControlCommand, ControlCommandIdentifier, DirectBaseOperations,
+                DirectCharacterDevice, MountOperations, PathOwned, Size,
+            },
+            graphics::{self, GET_RESOLUTION, Point, SET_DRAWING_AREA, WAS_RESIZED},
+            shared::AnyByLayout,
+        };
+
+        use super::super::FileManager;
+
+        struct HeadlessScreen;
+        impl MountOperations for HeadlessScreen {}
+        impl DirectCharacterDevice for HeadlessScreen {}
+        impl DirectBaseOperations for HeadlessScreen {
+            fn read(
+                &self,
+                _: &mut Context<'_>,
+                _: &mut [u8],
+                _: Size,
+            ) -> Poll<file_system::Result<usize>> {
+                Poll::Ready(Err(file_system::Error::UnsupportedOperation))
+            }
+
+            fn write(
+                &self,
+                _: &mut Context<'_>,
+                bytes: &[u8],
+                _: Size,
+            ) -> Poll<file_system::Result<usize>> {
+                Poll::Ready(Ok(bytes.len()))
+            }
+
+            fn control(
+                &self,
+                _: &mut Context<'_>,
+                command: ControlCommandIdentifier,
+                _: &AnyByLayout,
+                output: &mut AnyByLayout,
+            ) -> Poll<file_system::Result<()>> {
+                Poll::Ready(match command {
+                    GET_RESOLUTION::IDENTIFIER => GET_RESOLUTION::cast_output(output)
+                        .map(|resolution| *resolution = Point::new(320, 240)),
+                    WAS_RESIZED::IDENTIFIER => {
+                        WAS_RESIZED::cast_output(output).map(|resized| *resized = false)
+                    }
+                    SET_DRAWING_AREA::IDENTIFIER => Ok(()),
+                    _ => Err(file_system::Error::UnsupportedOperation),
+                })
+            }
+        }
+
+        async fn headless_graphics_manager() -> &'static graphics::Manager {
+            static MANAGER: OnceLock<&'static graphics::Manager> = OnceLock::new();
+            if let Some(manager) = MANAGER.get() {
+                return manager;
+            }
+            let time = Box::leak(Box::new(
+                xila::time::Manager::new(&testing::TimeDevice).unwrap(),
+            ));
+            let manager: &'static graphics::Manager = Box::leak(Box::new(
+                graphics::initialize_with_input_devices(time, &HeadlessScreen, &[], 1024, false)
+                    .await,
+            ));
+            graphics::set_ffi_manager(manager);
+            MANAGER.get_or_init(|| manager)
+        }
+
+        #[test]
+        fn file_manager_setup_failure_deletes_window_without_deadlocking() {
+            let _test_lock = xila::task::test_lock()
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let (sender, receiver) = std::sync::mpsc::channel();
+            let handle = std::thread::spawn(move || {
+                let task_manager = xila::task::reset_test_manager();
+                let executor = xila::task::instantiate_test_executor!();
+                let mut spawner_id = 0;
+                executor.run(|spawner, exec| {
+                    spawner_id = task_manager.register_spawner(spawner).unwrap();
+                    xila::task::block_on(async move {
+                        task_manager
+                            .spawn_on(
+                                spawner,
+                                xila::task::Manager::ROOT_TASK_IDENTIFIER,
+                                "file_manager_setup_failure",
+                                Some(spawner_id),
+                                async move |_| {
+                                    let standard = testing::initialize(false, false).await;
+                                    let manager = headless_graphics_manager().await;
+                                    let baseline_windows =
+                                        manager.get_window_count().await.unwrap();
+                                    let path = PathOwned::new("/does-not-exist".into()).unwrap();
+                                    let result =
+                                        FileManager::new_at(standard.context, manager, path).await;
+                                    assert!(
+                                        result.is_err(),
+                                        "opening a nonexistent initial path must fail"
+                                    );
+                                    assert!(
+                                        manager.try_lock().is_some(),
+                                        "graphics lock must be released after FileManager setup error"
+                                    );
+                                    assert_eq!(
+                                        manager.get_window_count().await.unwrap(),
+                                        baseline_windows
+                                    );
+                                    let _ = sender.send(());
+                                    exec.stop();
+                                },
+                            )
+                            .await
+                    })
+                    .unwrap();
+                });
+                let _ = task_manager.unregister_spawner(spawner_id);
+            });
+
+            receiver
+                .recv_timeout(Duration::from_secs(5))
+                .expect("FileManager::new_at hung (likely deadlocked on the graphics lock)");
+            handle.join().unwrap();
+        }
     }
 }

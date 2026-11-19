@@ -10,6 +10,14 @@ use xila::graphics::{
 use xila::internationalization::t;
 use xila::synchronization::{blocking_mutex::raw::CriticalSectionRawMutex, rwlock::RwLock};
 
+struct TerminalWidgets {
+    buffer: String,
+    display: *mut lvgl::lv_obj_t,
+    input: *mut lvgl::lv_obj_t,
+    send: *mut lvgl::lv_obj_t,
+    clear: *mut lvgl::lv_obj_t,
+}
+
 pub(crate) struct Inner {
     window: OwnedWindow,
     buffer: String,
@@ -36,131 +44,35 @@ impl Terminal {
     const HOME: &'static str = "\x1B[H";
 
     pub async fn new(graphics_manager: &'static graphics::Manager) -> Result<Self> {
+        Self::new_with(graphics_manager, Self::build_widgets).await
+    }
+
+    async fn new_with(
+        graphics_manager: &'static graphics::Manager,
+        build: impl FnOnce(&mut OwnedWindow) -> Result<TerminalWidgets>,
+    ) -> Result<Self> {
         let inner = graphics::lock!(graphics_manager, {
             let mut window = graphics_manager.create_window().await?;
-            unsafe {
-                window.set_icon(">_", Color::BLACK);
-
-                lvgl::lv_obj_set_flex_flow(
-                    window.as_object_mutable(),
-                    lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN,
-                );
-                // Edge-to-edge window chrome: the shared window class already
-                // flattens border and radius, only the container padding remains.
-                lvgl::lv_obj_set_style_pad_all(
-                    window.as_object_mutable(),
-                    0,
-                    lvgl::LV_STATE_DEFAULT,
-                );
-            }
-
-            let compact = unsafe {
-                lvgl::lv_obj_update_layout(window.as_object_mutable());
-                lvgl::lv_obj_set_style_pad_row(
-                    window.as_object_mutable(),
-                    0,
-                    lvgl::LV_STATE_DEFAULT,
-                );
-                lvgl::lv_obj_get_width(window.as_object_mutable()) < 560
-            };
-            let spacing = if compact { 6 } else { 10 };
-
-            let container = unsafe {
-                let container = lvgl::lv_obj_create(window.as_object_mutable());
-
-                lvgl::lv_obj_set_width(container, lvgl::lv_pct(100));
-                lvgl::lv_obj_set_flex_grow(container, 1);
-                lvgl::lv_obj_set_flex_flow(container, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
-                // The output sits on the darker background surface, inset from
-                // the window edges, without the card border and radius.
-                graphics::theme::set_surface(container, graphics::theme::Surface::Background);
-                lvgl::lv_obj_set_style_pad_all(container, spacing, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_style_border_width(container, 0, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_style_radius(container, 0, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_scroll_snap_y(
-                    container,
-                    lvgl::lv_scroll_snap_t_LV_SCROLL_SNAP_END,
-                );
-
-                container
-            };
-
-            let mut buffer = String::with_capacity(80 * 24);
-            buffer.push('\0'); // Initialize with null terminator for LVGL
-
-            let display = unsafe {
-                let label = lvgl::lv_label_create(container);
-
-                if label.is_null() {
-                    return Err(crate::error::Error::FailedToCreateObject);
+            let widgets = match build(&mut window) {
+                Ok(widgets) => widgets,
+                Err(error) => {
+                    // SAFETY: the graphics lock is held, and this function owns
+                    // `window`. Delete it directly so `OwnedWindow::drop` does
+                    // not deadlock on the non-re-entrant lock already held here.
+                    unsafe {
+                        lvgl::lv_obj_delete(window.into_raw().as_ptr().cast());
+                    }
+                    return Err(error);
                 }
-
-                lvgl::lv_obj_set_width(label, lvgl::lv_pct(100));
-                lvgl::lv_label_set_text_static(label, buffer.as_ptr() as *const core::ffi::c_char);
-                lvgl::lv_obj_set_style_text_font(
-                    label,
-                    get_font_monospace_medium(),
-                    lvgl::LV_STATE_DEFAULT,
-                );
-
-                label
-            };
-
-            // Command bar: the field, then Clear and the primary Send action.
-            let (input, send, clear) = unsafe {
-                let bar = lvgl::lv_obj_create(window.as_object_mutable());
-                if bar.is_null() {
-                    return Err(crate::error::Error::FailedToCreateObject);
-                }
-                lvgl::lv_obj_set_size(bar, lvgl::lv_pct(100), lvgl::LV_SIZE_CONTENT);
-                lvgl::lv_obj_set_flex_flow(bar, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW);
-                lvgl::lv_obj_set_flex_align(
-                    bar,
-                    lvgl::lv_flex_align_t_LV_FLEX_ALIGN_START,
-                    lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
-                    lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
-                );
-                lvgl::lv_obj_set_style_pad_all(bar, spacing, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_style_pad_column(bar, spacing, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_style_border_width(bar, 0, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_set_style_radius(bar, 0, lvgl::LV_STATE_DEFAULT);
-                lvgl::lv_obj_remove_flag(bar, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_SCROLLABLE);
-
-                let input = lvgl::lv_textarea_create(bar);
-
-                if input.is_null() {
-                    return Err(crate::error::Error::FailedToCreateObject);
-                }
-
-                lvgl::lv_textarea_set_placeholder_text(
-                    input,
-                    t!(c"input.command_placeholder").as_ptr(),
-                );
-                lvgl::lv_obj_set_flex_grow(input, 1);
-                lvgl::lv_textarea_set_one_line(input, true);
-                lvgl::lv_obj_set_style_text_font(
-                    input,
-                    get_font_monospace_medium(),
-                    lvgl::LV_STATE_DEFAULT,
-                );
-
-                let clear = Self::icon_button(bar, lvgl::LV_SYMBOL_TRASH)?;
-                lvgl::lv_theme_shadcn_set_variant(
-                    clear,
-                    lvgl::lv_theme_shadcn_variant_t_LV_THEME_SHADCN_VARIANT_OUTLINE,
-                );
-                let send = Self::icon_button(bar, lvgl::LV_SYMBOL_NEW_LINE)?;
-
-                (input, send, clear)
             };
 
             Inner {
                 window,
-                buffer,
-                display,
-                input,
-                send,
-                clear,
+                buffer: widgets.buffer,
+                display: widgets.display,
+                input: widgets.input,
+                send: widgets.send,
+                clear: widgets.clear,
                 validated_input: VecDeque::with_capacity(128),
             }
         });
@@ -170,6 +82,124 @@ impl Terminal {
             input_closed: portable_atomic::AtomicBool::new(false),
             inner: RwLock::new(inner),
             graphics_manager,
+        })
+    }
+
+    fn build_widgets(window: &mut OwnedWindow) -> Result<TerminalWidgets> {
+        unsafe {
+            window.set_icon(">_", Color::BLACK);
+
+            lvgl::lv_obj_set_flex_flow(
+                window.as_object_mutable(),
+                lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN,
+            );
+            // Edge-to-edge window chrome: the shared window class already
+            // flattens border and radius, only the container padding remains.
+            lvgl::lv_obj_set_style_pad_all(window.as_object_mutable(), 0, lvgl::LV_STATE_DEFAULT);
+        }
+
+        let compact = unsafe {
+            lvgl::lv_obj_update_layout(window.as_object_mutable());
+            lvgl::lv_obj_set_style_pad_row(window.as_object_mutable(), 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_get_width(window.as_object_mutable()) < 560
+        };
+        let spacing = if compact { 6 } else { 10 };
+
+        let container = unsafe {
+            let container = lvgl::lv_obj_create(window.as_object_mutable());
+            if container.is_null() {
+                return Err(crate::error::Error::FailedToCreateObject);
+            }
+
+            lvgl::lv_obj_set_width(container, lvgl::lv_pct(100));
+            lvgl::lv_obj_set_flex_grow(container, 1);
+            lvgl::lv_obj_set_flex_flow(container, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
+            // The output sits on the darker background surface, inset from
+            // the window edges, without the card border and radius.
+            graphics::theme::set_surface(container, graphics::theme::Surface::Background);
+            lvgl::lv_obj_set_style_pad_all(container, spacing, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_border_width(container, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_radius(container, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_scroll_snap_y(container, lvgl::lv_scroll_snap_t_LV_SCROLL_SNAP_END);
+
+            container
+        };
+
+        let mut buffer = String::with_capacity(80 * 24);
+        buffer.push('\0'); // Initialize with null terminator for LVGL
+
+        let display = unsafe {
+            let label = lvgl::lv_label_create(container);
+
+            if label.is_null() {
+                return Err(crate::error::Error::FailedToCreateObject);
+            }
+
+            lvgl::lv_obj_set_width(label, lvgl::lv_pct(100));
+            lvgl::lv_label_set_text_static(label, buffer.as_ptr() as *const core::ffi::c_char);
+            lvgl::lv_obj_set_style_text_font(
+                label,
+                get_font_monospace_medium(),
+                lvgl::LV_STATE_DEFAULT,
+            );
+
+            label
+        };
+
+        // Command bar: the field, then Clear and the primary Send action.
+        let (input, send, clear) = unsafe {
+            let bar = lvgl::lv_obj_create(window.as_object_mutable());
+            if bar.is_null() {
+                return Err(crate::error::Error::FailedToCreateObject);
+            }
+            lvgl::lv_obj_set_size(bar, lvgl::lv_pct(100), lvgl::LV_SIZE_CONTENT);
+            lvgl::lv_obj_set_flex_flow(bar, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_ROW);
+            lvgl::lv_obj_set_flex_align(
+                bar,
+                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_START,
+                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
+                lvgl::lv_flex_align_t_LV_FLEX_ALIGN_CENTER,
+            );
+            lvgl::lv_obj_set_style_pad_all(bar, spacing, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_pad_column(bar, spacing, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_border_width(bar, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_set_style_radius(bar, 0, lvgl::LV_STATE_DEFAULT);
+            lvgl::lv_obj_remove_flag(bar, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_SCROLLABLE);
+
+            let input = lvgl::lv_textarea_create(bar);
+
+            if input.is_null() {
+                return Err(crate::error::Error::FailedToCreateObject);
+            }
+
+            lvgl::lv_textarea_set_placeholder_text(
+                input,
+                t!(c"input.command_placeholder").as_ptr(),
+            );
+            lvgl::lv_obj_set_flex_grow(input, 1);
+            lvgl::lv_textarea_set_one_line(input, true);
+            lvgl::lv_obj_set_style_text_font(
+                input,
+                get_font_monospace_medium(),
+                lvgl::LV_STATE_DEFAULT,
+            );
+
+            let clear = Self::icon_button(bar, lvgl::LV_SYMBOL_TRASH)?;
+            lvgl::lv_theme_shadcn_set_variant(
+                clear,
+                lvgl::lv_theme_shadcn_variant_t_LV_THEME_SHADCN_VARIANT_OUTLINE,
+            );
+            let send = Self::icon_button(bar, lvgl::LV_SYMBOL_NEW_LINE)?;
+
+            (input, send, clear)
+        };
+
+        Ok(TerminalWidgets {
+            buffer,
+            display,
+            input,
+            send,
+            clear,
         })
     }
 
@@ -354,5 +384,112 @@ impl Terminal {
             self.input_waiters.wake_all();
         }
         Ok(running)
+    }
+}
+
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
+mod setup_failure_tests {
+    use alloc::boxed::Box;
+    use core::{
+        task::{Context, Poll},
+        time::Duration,
+    };
+    use std::sync::OnceLock;
+    use xila::{
+        file_system::{
+            self, ControlCommand, ControlCommandIdentifier, DirectBaseOperations,
+            DirectCharacterDevice, MountOperations, Size,
+        },
+        graphics::{self, GET_RESOLUTION, Point, SET_DRAWING_AREA, WAS_RESIZED, lvgl},
+        shared::AnyByLayout,
+    };
+
+    use super::{Error, Terminal};
+
+    struct HeadlessScreen;
+    impl MountOperations for HeadlessScreen {}
+    impl DirectCharacterDevice for HeadlessScreen {}
+    impl DirectBaseOperations for HeadlessScreen {
+        fn read(
+            &self,
+            _: &mut Context<'_>,
+            _: &mut [u8],
+            _: Size,
+        ) -> Poll<file_system::Result<usize>> {
+            Poll::Ready(Err(file_system::Error::UnsupportedOperation))
+        }
+
+        fn write(
+            &self,
+            _: &mut Context<'_>,
+            bytes: &[u8],
+            _: Size,
+        ) -> Poll<file_system::Result<usize>> {
+            Poll::Ready(Ok(bytes.len()))
+        }
+
+        fn control(
+            &self,
+            _: &mut Context<'_>,
+            command: ControlCommandIdentifier,
+            _: &AnyByLayout,
+            output: &mut AnyByLayout,
+        ) -> Poll<file_system::Result<()>> {
+            Poll::Ready(match command {
+                GET_RESOLUTION::IDENTIFIER => GET_RESOLUTION::cast_output(output)
+                    .map(|resolution| *resolution = Point::new(320, 240)),
+                WAS_RESIZED::IDENTIFIER => {
+                    WAS_RESIZED::cast_output(output).map(|resized| *resized = false)
+                }
+                SET_DRAWING_AREA::IDENTIFIER => Ok(()),
+                _ => Err(file_system::Error::UnsupportedOperation),
+            })
+        }
+    }
+
+    async fn headless_graphics_manager() -> &'static graphics::Manager {
+        static MANAGER: OnceLock<&'static graphics::Manager> = OnceLock::new();
+        if let Some(manager) = MANAGER.get() {
+            return manager;
+        }
+        let time = Box::leak(Box::new(
+            xila::time::Manager::new(&testing::TimeDevice).unwrap(),
+        ));
+        let manager: &'static graphics::Manager = Box::leak(Box::new(
+            graphics::initialize_with_input_devices(time, &HeadlessScreen, &[], 1024, false).await,
+        ));
+        graphics::set_ffi_manager(manager);
+        MANAGER.get_or_init(|| manager)
+    }
+
+    #[xila::task::test(task_path = xila::task)]
+    async fn terminal_setup_failure_deletes_window_without_deadlocking() {
+        let manager = headless_graphics_manager().await;
+        let baseline_windows = manager.get_window_count().await.unwrap();
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let handle = std::thread::spawn(move || {
+            let result = xila::task::block_on(Terminal::new_with(manager, |window| {
+                let child = unsafe { lvgl::lv_obj_create(window.as_object_mutable()) };
+                assert!(!child.is_null());
+                Err(Error::FailedToCreateObject)
+            }));
+            let _ = sender.send(result.err());
+        });
+
+        let error = receiver
+            .recv_timeout(Duration::from_secs(5))
+            .expect("Terminal::new_with hung (likely deadlocked on the graphics lock)");
+        handle.join().unwrap();
+
+        assert!(matches!(error, Some(Error::FailedToCreateObject)));
+        assert!(
+            manager.try_lock().is_some(),
+            "graphics lock must be released after Terminal setup error"
+        );
+        assert_eq!(manager.get_window_count().await.unwrap(), baseline_windows);
     }
 }

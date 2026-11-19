@@ -4,7 +4,16 @@ extern crate alloc;
 #[cfg(test)]
 extern crate std;
 
-#[cfg(all(test, target_os = "linux"))]
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
+extern crate abi_definitions;
+
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
 testing::instantiate_global_allocator!();
 
 xila::internationalization::i18n!("locales");

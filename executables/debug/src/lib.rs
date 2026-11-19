@@ -33,6 +33,47 @@ impl ExecutableTrait for DebugExecutable {
     }
 }
 
+async fn create_debug_window(
+    graphics: &'static graphics::Manager,
+) -> Result<graphics::OwnedWindow, NonZeroUsize> {
+    create_debug_window_with(graphics, build_debug_window).await
+}
+
+async fn create_debug_window_with(
+    graphics: &'static graphics::Manager,
+    build: impl FnOnce(&mut graphics::OwnedWindow) -> Result<(), NonZeroUsize>,
+) -> Result<graphics::OwnedWindow, NonZeroUsize> {
+    graphics::lock!(graphics, {
+        let mut window = graphics.create_window().await.map_err(|_| code(1))?;
+        if let Err(error) = build(&mut window) {
+            // SAFETY: the graphics lock is held, and this function owns
+            // `window`. Delete it directly so `OwnedWindow::drop` does not
+            // deadlock on the non-re-entrant lock already held here.
+            unsafe {
+                graphics::lvgl::lv_obj_delete(window.into_raw().as_ptr().cast());
+            }
+            return Err(error);
+        }
+        Ok(window)
+    })
+}
+
+fn build_debug_window(window: &mut graphics::OwnedWindow) -> Result<(), NonZeroUsize> {
+    window.set_icon("Db", graphics::Color::BLACK);
+    let label = unsafe { graphics::lvgl::lv_label_create(window.as_object_mutable()) };
+    if label.is_null() {
+        return Err(code(1));
+    }
+    unsafe {
+        graphics::lvgl::lv_label_set_text(
+            label,
+            c"Debug agent is ready. Use xila-debug from the host.".as_ptr(),
+        );
+        graphics::lvgl::lv_obj_center(label);
+    }
+    Ok(())
+}
+
 async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), NonZeroUsize> {
     let context = standard.context;
     let graphics = graphics::ffi_manager();
@@ -40,23 +81,7 @@ async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), 
     let mut window = if background {
         None
     } else {
-        Some({
-            let _lock = graphics.lock().await;
-            let mut window = graphics.create_window().await.map_err(|_| code(1))?;
-            window.set_icon("Db", graphics::Color::BLACK);
-            let label = unsafe { graphics::lvgl::lv_label_create(window.as_object_mutable()) };
-            if label.is_null() {
-                return Err(code(1));
-            }
-            unsafe {
-                graphics::lvgl::lv_label_set_text(
-                    label,
-                    c"Debug agent is ready. Use xila-debug from the host.".as_ptr(),
-                );
-                graphics::lvgl::lv_obj_center(label);
-            }
-            window
-        })
+        Some(create_debug_window(graphics).await?)
     };
 
     let vfs = context.virtual_file_system;
@@ -410,4 +435,151 @@ fn error_response(code: &str, message: &str) -> serde_json::Value {
 
 fn code(value: u8) -> NonZeroUsize {
     NonZeroUsize::new(value as usize).unwrap()
+}
+
+#[cfg(all(
+    test,
+    any(target_os = "linux", target_os = "macos", target_os = "windows")
+))]
+mod window_setup_tests {
+    extern crate std;
+
+    use alloc::boxed::Box;
+    use core::{
+        ptr::NonNull,
+        task::{Context, Poll},
+        time::Duration,
+    };
+    use std::alloc::{GlobalAlloc, System};
+    use std::sync::OnceLock;
+    use xila::{
+        file_system::{
+            self, ControlCommand, ControlCommandIdentifier, DirectBaseOperations,
+            DirectCharacterDevice, MountOperations, Size,
+        },
+        graphics::{self, GET_RESOLUTION, Point, SET_DRAWING_AREA, WAS_RESIZED},
+        memory::{CapabilityFlags, Layout, ManagerTrait},
+        shared::AnyByLayout,
+        time::MonotonicClock,
+    };
+
+    use super::{code, create_debug_window_with};
+
+    struct TestMemoryManager;
+
+    impl ManagerTrait for TestMemoryManager {
+        unsafe fn allocate(&self, _: CapabilityFlags, layout: Layout) -> Option<NonNull<u8>> {
+            NonNull::new(unsafe { System.alloc(layout) })
+        }
+
+        unsafe fn deallocate(&self, pointer: NonNull<u8>, layout: Layout) {
+            unsafe { System.dealloc(pointer.as_ptr(), layout) };
+        }
+
+        fn get_used(&self) -> usize {
+            0
+        }
+
+        fn get_free(&self) -> usize {
+            isize::MAX as usize
+        }
+    }
+
+    static TEST_MEMORY_MANAGER: TestMemoryManager = TestMemoryManager;
+
+    #[global_allocator]
+    #[unsafe(no_mangle)]
+    pub static __XILA_MEMORY_MANAGER: xila::memory::Manager<'static> =
+        xila::memory::Manager::new(&TEST_MEMORY_MANAGER);
+
+    struct FixedClock;
+    impl MonotonicClock for FixedClock {
+        fn now(&self) -> Duration {
+            Duration::ZERO
+        }
+    }
+
+    struct HeadlessScreen;
+    impl MountOperations for HeadlessScreen {}
+    impl DirectCharacterDevice for HeadlessScreen {}
+    impl DirectBaseOperations for HeadlessScreen {
+        fn read(
+            &self,
+            _: &mut Context<'_>,
+            _: &mut [u8],
+            _: Size,
+        ) -> Poll<file_system::Result<usize>> {
+            Poll::Ready(Err(file_system::Error::UnsupportedOperation))
+        }
+
+        fn write(
+            &self,
+            _: &mut Context<'_>,
+            bytes: &[u8],
+            _: Size,
+        ) -> Poll<file_system::Result<usize>> {
+            Poll::Ready(Ok(bytes.len()))
+        }
+
+        fn control(
+            &self,
+            _: &mut Context<'_>,
+            command: ControlCommandIdentifier,
+            _: &AnyByLayout,
+            output: &mut AnyByLayout,
+        ) -> Poll<file_system::Result<()>> {
+            Poll::Ready(match command {
+                GET_RESOLUTION::IDENTIFIER => GET_RESOLUTION::cast_output(output)
+                    .map(|resolution| *resolution = Point::new(320, 240)),
+                WAS_RESIZED::IDENTIFIER => {
+                    WAS_RESIZED::cast_output(output).map(|resized| *resized = false)
+                }
+                SET_DRAWING_AREA::IDENTIFIER => Ok(()),
+                _ => Err(file_system::Error::UnsupportedOperation),
+            })
+        }
+    }
+
+    fn headless_graphics_manager() -> &'static graphics::Manager {
+        static MANAGER: OnceLock<&'static graphics::Manager> = OnceLock::new();
+        MANAGER.get_or_init(|| {
+            let time = Box::leak(Box::new(xila::time::Manager::with_clock(&FixedClock)));
+            let manager: &'static graphics::Manager = Box::leak(Box::new(xila::task::block_on(
+                graphics::initialize_with_input_devices(time, &HeadlessScreen, &[], 1024, false),
+            )));
+            graphics::set_ffi_manager(manager);
+            manager
+        })
+    }
+
+    #[test]
+    fn debug_window_setup_failure_deletes_window_without_deadlocking() {
+        let manager = headless_graphics_manager();
+        let baseline_windows = xila::task::block_on(manager.get_window_count()).unwrap();
+
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let handle = std::thread::spawn(move || {
+            let result = xila::task::block_on(create_debug_window_with(manager, |window| {
+                let child = unsafe { graphics::lvgl::lv_obj_create(window.as_object_mutable()) };
+                assert!(!child.is_null());
+                Err(code(1))
+            }));
+            let _ = sender.send(result.err());
+        });
+
+        let error = receiver
+            .recv_timeout(Duration::from_secs(5))
+            .expect("create_debug_window_with hung (likely deadlocked on the graphics lock)");
+        handle.join().unwrap();
+
+        assert_eq!(error, Some(code(1)));
+        assert!(
+            manager.try_lock().is_some(),
+            "graphics lock must be released after debug window setup error"
+        );
+        assert_eq!(
+            xila::task::block_on(manager.get_window_count()).unwrap(),
+            baseline_windows
+        );
+    }
 }
