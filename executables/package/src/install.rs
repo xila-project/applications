@@ -13,7 +13,7 @@ use alloc::{
     vec::Vec,
 };
 use portable_atomic::{AtomicUsize, Ordering};
-use tar_no_std::{StreamEvent, TarStreamParser};
+use tar_no_std::{BLOCKSIZE, StreamEvent, TarStreamParser};
 use xila::{
     file_system::{AccessFlags, CreateFlags, Flags, Kind, Path, Permissions},
     task::TaskIdentifier,
@@ -25,7 +25,6 @@ use xila_package_manifest::{
 use xila_package_reader::StreamingVerifier;
 use xila_package_verification::{PublicKey, Sha256Verifier};
 
-const BLOCK_BYTES: usize = 512;
 /// Same as `Path::APPLICATION_BUNDLES`; a `&str` because `Path::as_str` is not `const`.
 pub const INSTALLED_ROOT: &str = "/applications/bundles";
 pub const DEFAULT_TRUSTED_KEY: &str = "/configuration/system/packages/trusted.pub";
@@ -110,7 +109,7 @@ async fn write_all(file: &mut File<'_>, bytes: &[u8]) -> Result<(), String> {
 
 /// Read an entire 512-byte TAR block while handling short VFS reads.
 /// Partial blocks are always rejected, never treated as a clean EOF.
-async fn next_block(file: &mut File<'_>, output: &mut [u8; BLOCK_BYTES]) -> Result<bool, String> {
+async fn next_block(file: &mut File<'_>, output: &mut [u8; BLOCKSIZE]) -> Result<bool, String> {
     let mut received = 0;
     while received < output.len() {
         let n = file
@@ -233,7 +232,7 @@ async fn extract(
         let mut verifier = StreamingVerifier::new(trusted);
         let mut parser = TarStreamParser::new();
         let mut active: Option<File<'static>> = None;
-        let mut block = [0u8; BLOCK_BYTES];
+        let mut block = [0u8; BLOCKSIZE];
 
         let result = async {
             while next_block(&mut source, &mut block).await? {
@@ -249,21 +248,20 @@ async fn extract(
                     .map_err(|e| format!("TAR parsing failed: {e:?}"))?;
 
                 match event {
-                    Some(StreamEvent::Entry(entry)) => {
+                    Some(StreamEvent::Entry { filename, size, .. }) => {
                         close_output(vfs, &mut active).await?;
-                        let name = entry.filename();
-                        let path = name.as_str().map_err(|_| "invalid TAR filename")?;
+                        let path = filename.as_str().map_err(|_| "invalid TAR filename")?;
                         let file = open_target(vfs, task, staging, path).await?;
                         active = Some(file);
-                        if entry.payload_size() == 0 {
+                        if size == 0 {
                             close_output(vfs, &mut active).await?;
                         }
                     }
-                    Some(StreamEvent::Data { bytes, remaining }) => {
+                    Some(StreamEvent::Data { data, remaining }) => {
                         let output = active
                             .as_mut()
                             .ok_or_else(|| "TAR payload without an open file".to_string())?;
-                        write_all(output, bytes).await?;
+                        write_all(output, data).await?;
                         if remaining == 0 {
                             close_output(vfs, &mut active).await?;
                         }
@@ -468,7 +466,7 @@ pub async fn archive_sha256(
         .map_err(|e| error("cannot open package archive", e))?;
     let operation = async {
         let mut hasher = Sha256Verifier::new();
-        let mut buffer = [0u8; BLOCK_BYTES];
+        let mut buffer = [0u8; BLOCKSIZE];
         loop {
             let count = file
                 .read(&mut buffer)

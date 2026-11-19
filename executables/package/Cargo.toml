@@ -19,7 +19,7 @@ xila-package-verification = { git = "https://github.com/xila-project/package_man
   "sha256",
   "ed25519",
 ] }
-tar-no-std = { git = "https://github.com/AlixANNERAUD/tar-no-std", rev = "ecdd39990ae4143d36b7f2adcf3eff2f971fea11", default-features = false }
+tar-no-std = { version = "0.6.0", default-features = false }
 
 [lib]
 name = "package"
