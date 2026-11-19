@@ -2,6 +2,7 @@
 name = "xila-package-application"
 version = "0.1.0"
 edition = "2024"
+rust-version.workspace = true
 description = "Native, CLI-only Xila package installer (verified once at installation)"
 license = "Apache-2.0"
 

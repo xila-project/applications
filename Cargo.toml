@@ -12,7 +12,7 @@ strip = false
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.90.0"
+rust-version = "1.97"
 repository = "https://github.com/xila-project/core"
 
 [workspace.dependencies]
@@ -60,7 +60,7 @@ drivers_core = { package = "xila-drivers-core", git = "https://github.com/xila-p
 file_manager = { package = "xila-file-manager", path = "executables/file_manager" }
 command_line_shell = { package = "xila-command-line-shell", path = "executables/shell/command_line" }
 graphical_shell = { package = "xila-graphical-shell", path = "executables/shell/graphical" }
-wasm = { package = "xila-wasm", path = "executables/wasm" }
+wasm = { package = "xila-wasm", path = "executables/wasm", default-features = false }
 terminal = { package = "xila-terminal", path = "executables/terminal" }
 settings = { package = "xila-settings", path = "executables/settings" }
 debug_application = { package = "xila-debug-application", path = "executables/debug" }

@@ -87,7 +87,7 @@ jobs:
       - name: "Setup | Rust toolchain for ABI"
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.100.0
+          toolchain: "1.97.0"
       - name: "Test | ABI translation"
         run: cargo test --locked --manifest-path executables/wasm/tests/translation/Cargo.toml --no-default-features --features ${{ matrix.memory }}
   localization:
@@ -141,13 +141,13 @@ jobs:
       id-token: write
     secrets:
       XILA_DEV_SIGNING_SEED_B64: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.XILA_DEV_SIGNING_SEED_B64 || '' }}
-    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@277d017c2da182b7d72081e4ca1dd555425c35bf
+    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@dfc80e508bf7e808226b78c936a9fbb19780057a
     with:
       wasm-artifact: wasi-applications
       wasm-path: ${{ matrix.app }}.wasm
       manifest-path: packaging/${{ matrix.app }}.json
       shortcut-path: executables/${{ matrix.app }}/shortcut.json
-      builder-ref: 277d017c2da182b7d72081e4ca1dd555425c35bf
+      builder-ref: dfc80e508bf7e808226b78c936a9fbb19780057a
       artifact-name: package-${{ matrix.app }}
       publish-release: false
       sign-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
