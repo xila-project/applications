@@ -35,6 +35,8 @@ jobs:
           cache-generation: v1-apps-wasi
       - name: "Setup | Clang and linker dependencies"
         run: mise run ci:packages-linker
+      - name: "Test | WASI graphics C header"
+        run: mise run ci:test-guest-header
       - name: "Lint | WASI guests"
         run: mise run ci:clippy-guest
       - name: "Build | WASI applications"

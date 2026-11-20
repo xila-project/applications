@@ -26,6 +26,11 @@ run = "taplo format --check"
 [tasks."check:guest"]
 extends = "ci:rust-wasi"
 
+[tasks."ci:test-guest-header"]
+extends = "ci:rust-wasi"
+env.XILA_CHECK_WASM_GRAPHICS_HEADER = "1"
+run = "cargo check --locked --target wasm32-wasip1 -p xila-wasm --no-default-features --features default_guest"
+
 [tasks."build:applications"]
 extends = "ci:rust-wasi"
 
