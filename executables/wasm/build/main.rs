@@ -28,7 +28,8 @@ fn generate() {
     .expect("failed to write the event contract");
     #[cfg(feature = "guest")]
     {
-        let catalog = graphics_bindgen::abi::catalog().expect("invalid LVGL graphics ABI");
+        let catalog = graphics_bindgen::abi::catalog(lvgl_rust_sys::_bindgen_raw_src())
+            .expect("invalid LVGL graphics ABI");
         let registry = graphics_bindgen::abi::registry(&catalog)
             .unwrap_or_else(|error| panic!("invalid graphics registry: {error}"));
         std::fs::write(

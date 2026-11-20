@@ -20,6 +20,8 @@
 extern crate alloc;
 
 // Core owns the event contract; the build script copies its source here.
+/// Xila's guest event contract, independent of LVGL's native discriminants.
+/// Keep the event order stable; the host translates at its boundary.
 #[cfg(feature = "graphics")]
 mod graphics_event {
     include!(concat!(env!("OUT_DIR"), "/event_code.rs"));
