@@ -10,6 +10,8 @@ mod offset;
 mod path;
 mod poll;
 pub mod poll_memory;
+#[cfg(test)]
+mod poll_tests;
 mod process;
 mod random;
 pub mod register;

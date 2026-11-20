@@ -78,6 +78,7 @@ pub struct ClockPoll {
     clocks: Vec<Clock>,
     events: GuestSlice<PollEvent>,
     written: GuestPointer<WasmUsize>,
+    has_zero_relative_timeout: bool,
 }
 
 impl ClockPoll {
@@ -101,6 +102,7 @@ impl ClockPoll {
             .ok_or(PollError::Fault)?;
         let mut clocks = Vec::with_capacity(count as usize);
         let mut readings = [None; 2];
+        let mut has_zero_relative_timeout = false;
         for subscription in subscriptions {
             if subscription.tag != 0 || subscription.clock > 1 {
                 return Err(PollError::NotSupported);
@@ -112,6 +114,7 @@ impl ClockPoll {
             let deadline = if subscription.flags == 1 {
                 subscription.timeout
             } else {
+                has_zero_relative_timeout |= subscription.timeout == 0;
                 let current = match readings[id] {
                     Some(current) => current,
                     None => {
@@ -134,7 +137,12 @@ impl ClockPoll {
             clocks,
             events,
             written,
+            has_zero_relative_timeout,
         })
+    }
+
+    pub fn has_zero_relative_timeout(&self) -> bool {
+        self.has_zero_relative_timeout
     }
 
     /// Clocks used by this poll, including absolute subscriptions.
