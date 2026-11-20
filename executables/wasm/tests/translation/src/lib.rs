@@ -38,13 +38,6 @@ extern crate alloc;
 #[path = "../../../src/host/translation/mod.rs"]
 pub mod translation;
 
-#[path = "../../../src/host/graphics/error.rs"]
-pub mod error;
-#[path = "../../../src/host/graphics/marshal.rs"]
-pub mod marshal;
-#[cfg(test)]
-#[path = "../../../src/host/graphics/marshal_tests.rs"]
-mod marshal_tests;
 #[path = "../../../src/host/wasi/poll_memory.rs"]
 pub mod poll_memory;
 #[cfg(test)]

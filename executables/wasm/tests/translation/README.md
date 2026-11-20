@@ -61,13 +61,6 @@ ranges, overflow, failed writes without side effects, overlapping sequential
 outputs, full-range reverse mapping, zero-copy byte access, and real Wasmi
 callbacks with present/missing/wrong-kind memory exports.
 
-The harness also includes the production graphics C-string/button-map adapters.
-It checks bounded scans, unaligned guest pointer tables, invalid pointers, map
-limits (64 entries including the sentinel, 1024 bytes per string, 8192 retained
-bytes), null/empty-string sentinels, and retained native pointer validity after
-moving the owner or modifying/dropping guest memory. Miri checks those native
-pointer dereferences independently of LVGL or a Wasmi store.
-
 Clock polling tests include the explicit 48-byte subscription and 32-byte event
 layouts, zeroed padding, relative/absolute deadlines, multiple subscriptions,
 unsupported kinds/clocks, output overlap, overflow, and the 64-subscription cap.

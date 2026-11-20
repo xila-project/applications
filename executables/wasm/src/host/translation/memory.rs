@@ -15,6 +15,11 @@ impl<'a> GuestMemory<'a> {
         Self { bytes }
     }
 
+    /// The whole linear memory, for transports that translate offsets themselves.
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        self.bytes
+    }
+
     fn range<T: GuestValue>(&self, slice: GuestSlice<T>) -> Option<Range<usize>> {
         if T::SIZE == 0 || (slice.offset == 0 && !slice.is_empty()) {
             return None;
