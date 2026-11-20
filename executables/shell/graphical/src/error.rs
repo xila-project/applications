@@ -21,17 +21,17 @@ pub enum Error {
     FailedToSetTaskUser(task::Error),
     FailedToDeserializeShortcut(miniserde::Error),
     FailedToGetCurrentTaskIdentifier(task::Error),
-    FailedToReadShortcutDirectory(virtual_file_system::Error),
+    FailedToReadShortcutDirectory(virtual_file_system::IoErrorKind),
     FailedToGetShortcutFilePath,
-    FailedToReadShortcutFile(virtual_file_system::Error),
+    FailedToReadShortcutFile(virtual_file_system::IoErrorKind),
     FailedToOpenStandardFile(executable::Error),
     FailedToExecuteShortcut(executable::Error),
     NullCharacterInString(alloc::ffi::NulError),
     MissingArguments,
     InvalidOption,
     InvalidNumberOfArguments,
-    FailedToAddShortcut(virtual_file_system::Error),
-    FailedToOpenDirectory(virtual_file_system::Error),
+    FailedToAddShortcut(virtual_file_system::IoErrorKind),
+    FailedToOpenDirectory(virtual_file_system::IoErrorKind),
 }
 
 impl Error {

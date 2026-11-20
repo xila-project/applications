@@ -260,12 +260,14 @@ impl WifiPanel {
         };
         if let Err(error) = result {
             self.message = Some(
+                // Transient: the controller has a command pending
+                // (`AlreadyInProgress`) or is not ready (`WouldBlock`), so
+                // retrying shortly can succeed. `ResourceBusy` is exclusive
+                // access, which waiting does not release: a plain failure.
                 if matches!(
                     error,
-                    xila::virtual_file_system::Error::RessourceBusy
-                        | xila::virtual_file_system::Error::FileSystem(
-                            xila::file_system::Error::RessourceBusy
-                        )
+                    xila::virtual_file_system::IoErrorKind::WouldBlock
+                        | xila::virtual_file_system::IoErrorKind::AlreadyInProgress
                 ) {
                     t!(c"wifi.busy")
                 } else {
@@ -278,7 +280,7 @@ impl WifiPanel {
     fn connect_selected(&mut self) -> xila::virtual_file_system::Result<()> {
         let ap = self.selected()?;
         if !self.capabilities.supports(ap.authentication) {
-            return Err(xila::file_system::Error::UnsupportedOperation.into());
+            return Err(xila::file_system::IoErrorKind::Unsupported);
         }
         // Borrow widget bytes only for construction; the driver receives a bounded owned copy.
         let secret =

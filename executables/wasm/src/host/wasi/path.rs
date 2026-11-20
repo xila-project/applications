@@ -1,7 +1,9 @@
 use alloc::vec::Vec;
 use wasmi::Caller;
 use xila::{
-    file_system::{AccessFlags, CreateFlags, Flags, Kind, Path, PathOwned, StateFlags, Time},
+    file_system::{
+        AccessFlags, CreateFlags, Flags, IoErrorKind, Kind, Path, PathOwned, StateFlags, Time,
+    },
     task,
 };
 
@@ -13,7 +15,7 @@ use crate::{
         wasi::{
             Error,
             context::{DirectoryVariant, FileSystemItem, FileVariant},
-            error::{WasiResult, vfs_error, wrap_function},
+            error::{WasiResult, kind_error, wrap_function},
             rights::right,
             time::{realtime_nanoseconds, requested_times},
             types::Filestat,
@@ -180,7 +182,7 @@ pub(super) fn set_directory_times(
     let relative = guest_relative(&root, &directory)?;
     let vfs = caller.data().context.virtual_file_system;
     task::block_on(vfs.set_times_beneath(task, &relative, true, &root, access, modification))
-        .map_err(vfs_error)
+        .map_err(kind_error)
 }
 
 /// `lookupflags`: the only defined bit is `SYMLINK_FOLLOW`.
@@ -205,11 +207,11 @@ define_wasi_module! {
             }
             let relative = target.relative()?;
             let vfs = caller.data().context.virtual_file_system;
-            let statistics = task::block_on(vfs.get_statistics_beneath(target.task, &relative, false, &target.root)).map_err(vfs_error)?;
+            let statistics = task::block_on(vfs.get_statistics_beneath(target.task, &relative, false, &target.root)).map_err(kind_error)?;
             if statistics.kind != Kind::Directory {
                 return Err(Error::Notdir.into());
             }
-            task::block_on(vfs.remove_beneath(target.task, relative, &target.root)).map_err(vfs_error)?;
+            task::block_on(vfs.remove_beneath(target.task, relative, &target.root)).map_err(kind_error)?;
             Ok(())
         })
     }
@@ -224,7 +226,7 @@ define_wasi_module! {
                 return Err(Error::Busy.into());
             }
             let vfs = caller.data().context.virtual_file_system;
-            task::block_on(vfs.rename_beneath(source.task, &source.relative()?, &destination.relative()?, &source.root, &destination.root)).map_err(vfs_error)?;
+            task::block_on(vfs.rename_beneath(source.task, &source.relative()?, &destination.relative()?, &source.root, &destination.root)).map_err(kind_error)?;
             Ok(())
         })
     }
@@ -241,8 +243,8 @@ define_wasi_module! {
             let vfs = caller.data().context.virtual_file_system;
             task::block_on(vfs.link_beneath(source.task, &source.relative()?, follow, &destination.relative()?, &source.root, &destination.root)).map_err(|error| match error {
                 // Linking a directory is EPERM, not the EISDIR a read of one reports.
-                xila::virtual_file_system::Error::FileSystem(xila::file_system::Error::IsDirectory) => Error::Perm,
-                error => vfs_error(error),
+                IoErrorKind::IsADirectory => Error::Perm,
+                error => kind_error(error),
             })?;
             Ok(())
         })
@@ -258,10 +260,10 @@ define_wasi_module! {
             let relative = target.relative()?;
             if access.is_none() && modification.is_none() {
                 // Nothing to change, but the path must still name something.
-                task::block_on(vfs.get_statistics_beneath(target.task, &relative, follow, &target.root)).map_err(vfs_error)?;
+                task::block_on(vfs.get_statistics_beneath(target.task, &relative, follow, &target.root)).map_err(kind_error)?;
                 return Ok(());
             }
-            task::block_on(vfs.set_times_beneath(target.task, &relative, follow, &target.root, access, modification)).map_err(vfs_error)?;
+            task::block_on(vfs.set_times_beneath(target.task, &relative, follow, &target.root, access, modification)).map_err(kind_error)?;
             Ok(())
         })
     }
@@ -274,7 +276,7 @@ define_wasi_module! {
             let (task_id, directory, root) = base_path(&caller, fd)?;
             let relative = core::str::from_utf8(&path_bytes).map_err(|_| Error::Ilseq)?;
             let absolute_path = resolve_guest_path(&directory, relative)?;
-            task::block_on(caller.data().context.virtual_file_system.create_directory_beneath(task_id, &guest_relative(&root, &absolute_path)?, &root)).map_err(vfs_error)?;
+            task::block_on(caller.data().context.virtual_file_system.create_directory_beneath(task_id, &guest_relative(&root, &absolute_path)?, &root)).map_err(kind_error)?;
             Ok(())
         })
     }
@@ -290,7 +292,7 @@ define_wasi_module! {
             let link = core::str::from_utf8(&link).map_err(|_| Error::Ilseq)?;
             let link = resolve_guest_path(&directory, link)?;
             check_guest_symlink_target(&root, &link, target)?;
-            task::block_on(caller.data().context.virtual_file_system.create_symlink_beneath(task_id, Path::from_str(target), guest_relative(&root, &link)?, &root)).map_err(vfs_error)?;
+            task::block_on(caller.data().context.virtual_file_system.create_symlink_beneath(task_id, Path::from_str(target), guest_relative(&root, &link)?, &root)).map_err(kind_error)?;
             Ok(())
         })
     }
@@ -307,7 +309,7 @@ define_wasi_module! {
             let output = GuestSlice::new(buf_ptr, buf_len);
             let used = GuestPointer::<WasmUsize>::new(used_ptr);
             let mut target = alloc::vec![0; 4096];
-            let length = task::block_on(caller.data().context.virtual_file_system.read_symlink_beneath(task_id, guest_relative(&root, &absolute_path)?, &mut target, &root)).map_err(vfs_error)?;
+            let length = task::block_on(caller.data().context.virtual_file_system.read_symlink_beneath(task_id, guest_relative(&root, &absolute_path)?, &mut target, &root)).map_err(kind_error)?;
             let mut guest = borrow_memory(&memory, &mut caller);
             guest.validate_pointer(used).ok_or(Error::Fault)?;
             let copied = core::cmp::min(length, buf_len as usize);
@@ -326,11 +328,11 @@ define_wasi_module! {
             let relative = core::str::from_utf8(&path_bytes).map_err(|_| Error::Ilseq)?;
             let absolute_path = resolve_guest_path(&directory, relative)?;
             let vfs = caller.data().context.virtual_file_system;
-            let statistics = task::block_on(vfs.get_statistics_beneath(task_id, &guest_relative(&root, &absolute_path)?, false, &root)).map_err(vfs_error)?;
+            let statistics = task::block_on(vfs.get_statistics_beneath(task_id, &guest_relative(&root, &absolute_path)?, false, &root)).map_err(kind_error)?;
             if statistics.kind == xila::file_system::Kind::Directory {
                 return Err(Error::Isdir.into());
             }
-            task::block_on(vfs.remove_beneath(task_id, guest_relative(&root, &absolute_path)?, &root)).map_err(vfs_error)?;
+            task::block_on(vfs.remove_beneath(task_id, guest_relative(&root, &absolute_path)?, &root)).map_err(kind_error)?;
             Ok(())
         })
     }
@@ -374,16 +376,15 @@ define_wasi_module! {
                         }
                     }
                     Ok(_) => {}
-                    Err(xila::virtual_file_system::Error::FileSystem(xila::file_system::Error::NotFound))
-                        if oflags & 1 != 0 => {}
-                    Err(error) => return Err(vfs_error(error).into()),
+                    Err(IoErrorKind::NotFound) if oflags & 1 != 0 => {}
+                    Err(error) => return Err(kind_error(error).into()),
                 }
             }
             let item = if oflags & 2 != 0 {
-                let directory_handle = task::block_on(vfs.open_directory_beneath(task_id, &confined_relative, &root)).map(|dir| dir.into_synchronous_directory()).map_err(vfs_error)?;
+                let directory_handle = task::block_on(vfs.open_directory_beneath(task_id, &confined_relative, &root)).map(|dir| dir.into_synchronous_directory()).map_err(kind_error)?;
                 FileSystemItem::Directory(DirectoryVariant { confinement_root: Some(root), directory: directory_handle, path: absolute_path })
             } else {
-                let file = task::block_on(vfs.open_beneath(&confined_relative, Flags::new(access, create, state), task_id, &root)).map(|file| file.into_synchronous_file()).map_err(vfs_error)?;
+                let file = task::block_on(vfs.open_beneath(&confined_relative, Flags::new(access, create, state), task_id, &root)).map(|file| file.into_synchronous_file()).map_err(kind_error)?;
                 FileSystemItem::File(FileVariant { file })
             };
             let new_fd = caller.data_mut().wasi.insert_file_system_item(item).ok_or(Error::Mfile)?;
@@ -409,7 +410,7 @@ define_wasi_module! {
                 task::block_on(vfs.get_statistics_beneath(task_id, &guest_relative(&root, &absolute_path)?, true, &root))
             } else {
                 task::block_on(vfs.get_statistics_beneath(task_id, &guest_relative(&root, &absolute_path)?, false, &root))
-            }.map_err(vfs_error)?;
+            }.map_err(kind_error)?;
             let filestat = make_filestat(&stats);
             let memory = get_memory(&caller).ok_or(Error::Fault)?;
             borrow_memory(&memory, &mut caller).write(GuestPointer::new(buf_ptr), filestat).ok_or(Error::Fault)?;

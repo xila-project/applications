@@ -8,7 +8,7 @@ use crate::{
         translation::{GuestPointer, GuestSlice, WasmUsize, borrow_memory, get_memory},
         wasi::{
             Error,
-            error::{WasiResult, vfs_error, wrap_function},
+            error::{WasiResult, kind_error, wrap_function},
             rights::right,
         },
     },
@@ -47,9 +47,9 @@ define_wasi_module! {
             let start = usize::try_from(cookie).map_err(|_| Error::Inval)?;
             let entries = {
                 let dir = caller.data_mut().wasi.get_synchronous_directory(fd as u32).ok_or(Error::Badf)?;
-                dir.rewind().map_err(vfs_error)?;
+                dir.rewind().map_err(kind_error)?;
                 let mut entries = Vec::new();
-                while let Some(entry) = dir.read().map_err(vfs_error)? { entries.push(entry); }
+                while let Some(entry) = dir.read().map_err(kind_error)? { entries.push(entry); }
                 entries
             };
             if start > entries.len() { return Err(Error::Inval.into()); }

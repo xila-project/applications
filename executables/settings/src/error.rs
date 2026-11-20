@@ -14,15 +14,15 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[repr(u8)]
 pub enum Error {
     Graphics(graphics::Error) = 1,
-    VirtualFileSystem(virtual_file_system::Error),
+    VirtualFileSystem(virtual_file_system::IoErrorKind),
     FailedToCreateObject,
     FailedToGetChild,
     FailedToSetEnvironmentVariable(task::Error),
     InvalidUtf8(core::str::Utf8Error),
     FailedToSetTaskUser(task::Error),
     FailedToGetCurrentTaskIdentifier(task::Error),
-    FailedToReadDirectory(file_system::Error),
-    FailedToOpenStandardFile(file_system::Error),
+    FailedToReadDirectory(file_system::IoErrorKind),
+    FailedToOpenStandardFile(file_system::IoErrorKind),
     NullCharacterInString(alloc::ffi::NulError),
     FailedToCreateUiElement,
     Authentication(authentication::Error),
@@ -47,8 +47,8 @@ impl From<graphics::Error> for Error {
     }
 }
 
-impl From<virtual_file_system::Error> for Error {
-    fn from(error: virtual_file_system::Error) -> Self {
+impl From<virtual_file_system::IoErrorKind> for Error {
+    fn from(error: virtual_file_system::IoErrorKind) -> Self {
         Error::VirtualFileSystem(error)
     }
 }

@@ -239,6 +239,13 @@ impl GraphicsState {
         if self.side.is_some() {
             return Ok(());
         }
+        // The free observer is process-wide and every VM's state installs the
+        // same function: `Busy` means an earlier VM already did. Install it
+        // before registering this VM's side table so a failure leaves no state.
+        match lv.set_free_observer(freed) {
+            Ok(()) | Err(safe::Error::Busy) => {}
+            Err(_) => return Err(GraphicsError::NativeFailure),
+        }
         let side = Box::new(UnsafeCell::new(Side::default()));
         // SAFETY: called only inside the manager session under the graphics lock.
         let sides = unsafe { &mut *SIDES.0.get() };
@@ -247,7 +254,6 @@ impl GraphicsState {
         }
         sides.push(side.get());
         self.side = Some(side);
-        lv.set_free_observer(Some(freed));
         Ok(())
     }
 

@@ -24,7 +24,7 @@ pub(crate) async fn write_all(file: &mut File<'_>, mut bytes: &[u8]) -> Result<(
         let count = file.write(bytes).await.map_err(Error::FailedToWriteFile)?;
         if count == 0 {
             return Err(Error::FailedToWriteFile(
-                xila::virtual_file_system::Error::FailedToWrite,
+                xila::virtual_file_system::IoErrorKind::WriteZero,
             ));
         }
         bytes = &bytes[count..];

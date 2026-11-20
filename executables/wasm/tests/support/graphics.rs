@@ -48,7 +48,7 @@ impl DirectBaseOperations for HeadlessDevice {
                     *graphics::WAS_RESIZED::cast_output(output)? = false
                 }
                 graphics::SET_DRAWING_AREA::IDENTIFIER => (),
-                _ => return Err(file_system::Error::UnsupportedOperation),
+                _ => return Err(file_system::IoErrorKind::Unsupported),
             }
             Ok(())
         })

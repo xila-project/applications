@@ -11,7 +11,7 @@ use crate::{
         wasi::{
             Error,
             context::{FileSystemItem, WasiContext},
-            error::{CombinedError, WasiResult, status, vfs_error, wrap_function},
+            error::{CombinedError, WasiResult, kind_error, status, wrap_function},
             rights::right,
         },
     },
@@ -96,7 +96,7 @@ fn transfer(
         let moved = match moved {
             Ok(moved) => moved,
             Err(_) if total > 0 => break,
-            Err(error) => return Err(vfs_error(error).into()),
+            Err(error) => return Err(kind_error(error).into()),
         };
         total = total.checked_add(moved as u64).ok_or(Error::Overflow)?;
         if moved < end - start {
@@ -133,7 +133,7 @@ define_wasi_module! {
                 .ok_or(Error::Fault)?;
             let position = positioned(&mut caller.data_mut().wasi, fd)?
                 .set_position(&Position::Current(0))
-                .map_err(vfs_error)?;
+                .map_err(kind_error)?;
             borrow_memory(&memory, &mut caller)
                 .write(GuestPointer::new(output), position)
                 .ok_or(Error::Fault)?;

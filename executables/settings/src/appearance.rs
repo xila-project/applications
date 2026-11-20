@@ -161,7 +161,7 @@ mod tests {
                     *GET_RESOLUTION::cast_output(output)? = xila::graphics::Point::new(800, 600);
                     Ok(())
                 } else {
-                    Err(xila::file_system::Error::UnsupportedOperation)
+                    Err(xila::file_system::IoErrorKind::Unsupported)
                 }
             })
         }

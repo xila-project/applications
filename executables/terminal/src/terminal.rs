@@ -224,11 +224,8 @@ impl Terminal {
     }
 
     pub fn print(&self, text: &str) -> Result<()> {
-        let mut inner = self.inner.try_write().map_err(|_| Error::RessourceBusy)?;
-        let _lock = self
-            .graphics_manager
-            .try_lock()
-            .ok_or(Error::RessourceBusy)?;
+        let mut inner = self.inner.try_write().map_err(|_| Error::WouldBlock)?;
+        let _lock = self.graphics_manager.try_lock().ok_or(Error::WouldBlock)?;
 
         Self::print_internal(&mut inner, text)?;
 
@@ -289,7 +286,7 @@ impl Terminal {
     }
 
     pub fn read_input(&self, buffer: &mut [u8]) -> Result<usize> {
-        let mut inner = self.inner.try_write().map_err(|_| Error::RessourceBusy)?;
+        let mut inner = self.inner.try_write().map_err(|_| Error::WouldBlock)?;
 
         let mut read = 0;
 
@@ -419,7 +416,7 @@ mod setup_failure_tests {
             _: &mut [u8],
             _: Size,
         ) -> Poll<file_system::Result<usize>> {
-            Poll::Ready(Err(file_system::Error::UnsupportedOperation))
+            Poll::Ready(Err(file_system::IoErrorKind::Unsupported))
         }
 
         fn write(
@@ -445,7 +442,7 @@ mod setup_failure_tests {
                     WAS_RESIZED::cast_output(output).map(|resized| *resized = false)
                 }
                 SET_DRAWING_AREA::IDENTIFIER => Ok(()),
-                _ => Err(file_system::Error::UnsupportedOperation),
+                _ => Err(file_system::IoErrorKind::Unsupported),
             })
         }
     }

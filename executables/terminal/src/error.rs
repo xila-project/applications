@@ -11,10 +11,11 @@ pub enum Error {
     Graphics(graphics::Error) = 1,
     FailedToCreateObject,
     Utf8(Utf8Error),
-    FailedToMountDevice(virtual_file_system::Error),
+    FailedToMountDevice(virtual_file_system::IoErrorKind),
     FailedToGetTaskIdentifier(task::Error),
     FailedToExecute(executable::Error),
-    RessourceBusy,
+    /// A non-blocking lock was contended: retry once the terminal is ready.
+    WouldBlock,
 }
 
 impl Error {
@@ -35,8 +36,8 @@ impl From<task::Error> for Error {
     }
 }
 
-impl From<virtual_file_system::Error> for Error {
-    fn from(error: virtual_file_system::Error) -> Self {
+impl From<virtual_file_system::IoErrorKind> for Error {
+    fn from(error: virtual_file_system::IoErrorKind) -> Self {
         Self::FailedToMountDevice(error)
     }
 }
@@ -86,7 +87,7 @@ impl Display for Error {
                     t!("errors.failed_to_execute", arg0 = error)
                 )
             }
-            Self::RessourceBusy => {
+            Self::WouldBlock => {
                 write!(formatter, "{}", t!("errors.resource_busy"))
             }
         }

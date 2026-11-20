@@ -10,16 +10,15 @@ pub type Result<T> = core::result::Result<T, Error>;
 #[repr(u8)]
 pub enum Error {
     Graphics(graphics::Error) = 1,
-    FileSystem(virtual_file_system::Error),
-    VirtualFileSystem(virtual_file_system::Error),
+    FileSystem(virtual_file_system::IoErrorKind),
     FailedToCreateObject,
     FailedToGetChild,
     FailedToSetEnvironmentVariable(task::Error),
     InvalidUtf8(core::str::Utf8Error),
     FailedToSetTaskUser(task::Error),
     FailedToGetCurrentTaskIdentifier(task::Error),
-    FailedToReadDirectory(virtual_file_system::Error),
-    FailedToOpenStandardFile(virtual_file_system::Error),
+    FailedToReadDirectory(virtual_file_system::IoErrorKind),
+    FailedToOpenStandardFile(virtual_file_system::IoErrorKind),
     NullCharacterInString(alloc::ffi::NulError),
     MissingArguments,
 }
@@ -42,8 +41,8 @@ impl From<graphics::Error> for Error {
     }
 }
 
-impl From<virtual_file_system::Error> for Error {
-    fn from(error: virtual_file_system::Error) -> Self {
+impl From<virtual_file_system::IoErrorKind> for Error {
+    fn from(error: virtual_file_system::IoErrorKind) -> Self {
         Error::FileSystem(error)
     }
 }
@@ -71,9 +70,6 @@ impl Display for Error {
         match self {
             Error::Graphics(error) => write!(formatter, "Graphics error: {error}"),
             Error::FileSystem(error) => write!(formatter, "File system error: {error}"),
-            Error::VirtualFileSystem(error) => {
-                write!(formatter, "Virtual file system error: {error}")
-            }
             Error::FailedToCreateObject => write!(formatter, "Failed to create object"),
             Error::FailedToGetChild => write!(formatter, "Failed to get child"),
             Error::FailedToSetEnvironmentVariable(error) => {

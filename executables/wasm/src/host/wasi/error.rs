@@ -1,4 +1,5 @@
 use crate::host::wasi;
+use xila::{file_system::IoErrorKind, io_error::PosixErrno};
 
 /// Preview 1 errno results are always a 32-bit ABI value for both guest pointer widths.
 pub type WasiResult = i32;
@@ -225,101 +226,205 @@ impl From<Error> for i32 {
     }
 }
 
-pub fn vfs_error(err: xila::virtual_file_system::Error) -> Error {
-    use xila::file_system::Error as Fs;
-    use xila::virtual_file_system::Error as Vfs;
-    match err {
-        Vfs::FileSystem(Fs::NotFound) => Error::Noent,
-        Vfs::FileSystem(Fs::AlreadyExists | Fs::DirectoryAlreadyExists) => Error::Exist,
-        Vfs::FileSystem(Fs::PermissionDenied) => Error::Access,
-        Vfs::FileSystem(Fs::NoSpaceLeft | Fs::FileSystemFull) => Error::Nospc,
-        Vfs::FileSystem(Fs::NotDirectory) => Error::Notdir,
-        Vfs::FileSystem(Fs::IsDirectory) => Error::Isdir,
-        // Nonblocking devices report transient contention or a full queue as
-        // `RessourceBusy`; guests must be able to retry it as EAGAIN.
-        Vfs::FileSystem(Fs::RessourceBusy) => Error::Again,
-        Vfs::UnsupportedOperation | Vfs::FileSystem(Fs::UnsupportedOperation) => Error::Notsup,
-        Vfs::FileSystem(Fs::DirectoryNotEmpty) => Error::Notempty,
-        Vfs::InvalidIdentifier
-        | Vfs::InvalidMode
-        | Vfs::FileSystem(Fs::InvalidIdentifier | Fs::InvalidMode) => Error::Badf,
-        Vfs::InvalidParameter
-        | Vfs::InvalidPath
-        | Vfs::InvalidOpen
-        | Vfs::FileSystem(Fs::InvalidParameter | Fs::InvalidPath | Fs::InvalidFlags) => {
-            Error::Inval
-        }
-        Vfs::FileSystem(Fs::NoMemory) => Error::Nomem,
-        Vfs::FileSystem(Fs::FileTooLarge) => Error::Fbig,
-        Vfs::FileSystem(Fs::NameTooLong) => Error::Nametoolong,
-        Vfs::CrossDevice => Error::Xdev,
-        Vfs::PathEscapesRoot => Error::Notcapable,
-        Vfs::PermissionDenied => Error::Access,
-        Vfs::NotADirectory => Error::Notdir,
-        Vfs::AlreadyExists => Error::Exist,
-        Vfs::RessourceBusy => Error::Again,
-        Vfs::TooManyOpenFiles | Vfs::FileSystem(Fs::TooManyOpenFiles) => Error::Nfile,
+/// The Preview 1 errno for a symbolic POSIX errno.
+///
+/// Preview 1 has no `EOPNOTSUPP` (it is `ENOTSUP`) and no `ENODATA`; a missing
+/// extended attribute or inode data is reported as `ENOENT`, the closest
+/// Preview 1 result for an absent item. A projection Core adds later falls back
+/// to `EIO` until it is mapped here (the exhaustiveness test below catches it).
+pub fn errno_error(errno: PosixErrno) -> Error {
+    match errno {
+        PosixErrno::E2BIG => Error::Toobig,
+        PosixErrno::EACCES => Error::Access,
+        PosixErrno::EADDRINUSE => Error::Addrinuse,
+        PosixErrno::EADDRNOTAVAIL => Error::Addrnotavail,
+        PosixErrno::EAFNOSUPPORT => Error::Afnosupport,
+        PosixErrno::EAGAIN => Error::Again,
+        PosixErrno::EALREADY => Error::Already,
+        PosixErrno::EBADF => Error::Badf,
+        PosixErrno::EBUSY => Error::Busy,
+        PosixErrno::ECHILD => Error::Child,
+        PosixErrno::ECONNABORTED => Error::Connaborted,
+        PosixErrno::ECONNREFUSED => Error::Connrefused,
+        PosixErrno::ECONNRESET => Error::Connreset,
+        PosixErrno::EDEADLK => Error::Deadlk,
+        PosixErrno::EDESTADDRREQ => Error::Destaddrreq,
+        PosixErrno::EEXIST => Error::Exist,
+        PosixErrno::EFBIG => Error::Fbig,
+        PosixErrno::EHOSTUNREACH => Error::Hostunreach,
+        PosixErrno::EINPROGRESS => Error::Inprogress,
+        PosixErrno::EINTR => Error::Intr,
+        PosixErrno::EINVAL => Error::Inval,
+        PosixErrno::EIO => Error::Io,
+        PosixErrno::EISCONN => Error::Isconn,
+        PosixErrno::EISDIR => Error::Isdir,
+        PosixErrno::ELOOP => Error::Loop,
+        PosixErrno::EMFILE => Error::Mfile,
+        PosixErrno::EMSGSIZE => Error::Msgsize,
+        PosixErrno::ENAMETOOLONG => Error::Nametoolong,
+        PosixErrno::ENETDOWN => Error::Netdown,
+        PosixErrno::ENETUNREACH => Error::Netunreach,
+        PosixErrno::ENFILE => Error::Nfile,
+        PosixErrno::ENOBUFS => Error::Nobufs,
+        PosixErrno::ENODATA | PosixErrno::ENOENT => Error::Noent,
+        PosixErrno::ENODEV => Error::Nodev,
+        PosixErrno::ENOEXEC => Error::Noexec,
+        PosixErrno::ENOMEM => Error::Nomem,
+        PosixErrno::ENOSPC => Error::Nospc,
+        PosixErrno::ENOSYS => Error::Nosys,
+        PosixErrno::ENOTCONN => Error::Notconn,
+        PosixErrno::ENOTDIR => Error::Notdir,
+        PosixErrno::ENOTEMPTY => Error::Notempty,
+        PosixErrno::ENOTSOCK => Error::Notsock,
+        PosixErrno::ENOTSUP | PosixErrno::EOPNOTSUPP => Error::Notsup,
+        PosixErrno::ENOTTY => Error::Notty,
+        PosixErrno::EOVERFLOW => Error::Overflow,
+        PosixErrno::EPERM => Error::Perm,
+        PosixErrno::EPIPE => Error::Pipe,
+        PosixErrno::EPROTO => Error::Proto,
+        PosixErrno::EPROTONOSUPPORT => Error::Protonosupport,
+        PosixErrno::EROFS => Error::Rofs,
+        PosixErrno::ESPIPE => Error::Spipe,
+        PosixErrno::ESRCH => Error::Srch,
+        PosixErrno::ESTALE => Error::Stale,
+        PosixErrno::ETIMEDOUT => Error::Timedout,
+        PosixErrno::EXDEV => Error::Xdev,
         _ => Error::Io,
+    }
+}
+
+/// The Preview 1 errno a host function reports for an I/O failure kind.
+///
+/// Built on [`IoErrorKind::posix_errno`]; the only departures are the WASI
+/// specifics: a path that escapes its preopened root is `ENOTCAPABLE`, not
+/// `EACCES`. `WouldBlock` is `EAGAIN` (retry after readiness) while
+/// `ResourceBusy` is `EBUSY` (administrative: waiting will not help).
+pub fn kind_error(kind: IoErrorKind) -> Error {
+    match kind {
+        IoErrorKind::PathEscapesRoot => Error::Notcapable,
+        kind => errno_error(kind.posix_errno()),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use xila::{file_system::Error as Fs, virtual_file_system::Error as Vfs};
 
     #[test]
-    fn filesystem_errors_preserve_guest_file_creation_semantics() {
-        assert!(matches!(
-            vfs_error(Vfs::FileSystem(Fs::NotFound)),
-            Error::Noent
-        ));
-        assert!(matches!(
-            vfs_error(Vfs::FileSystem(Fs::AlreadyExists)),
-            Error::Exist
-        ));
-        assert!(matches!(
-            vfs_error(Vfs::FileSystem(Fs::DirectoryAlreadyExists)),
-            Error::Exist
-        ));
-        assert!(matches!(
-            vfs_error(Vfs::FileSystem(Fs::PermissionDenied)),
-            Error::Access
-        ));
-        assert!(matches!(
-            vfs_error(Vfs::FileSystem(Fs::NoSpaceLeft)),
-            Error::Nospc
-        ));
+    fn every_kind_has_an_explicit_preview1_errno() {
+        for &kind in IoErrorKind::ALL {
+            let error = kind_error(kind);
+            assert!((1..=76).contains(&i32::from(error)), "{kind:?}");
+            // `Io` is only the result for an I/O-class kind, never an unmapped errno.
+            if error == Error::Io {
+                assert_eq!(kind.posix_errno(), PosixErrno::EIO, "{kind:?} fell through");
+            }
+        }
     }
 
     #[test]
-    fn unsupported_and_cross_mount_operations_have_distinct_errnos() {
-        assert_eq!(vfs_error(Vfs::UnsupportedOperation), Error::Notsup);
+    fn file_creation_and_lookup_semantics_are_preserved() {
+        assert_eq!(kind_error(IoErrorKind::NotFound), Error::Noent);
+        assert_eq!(kind_error(IoErrorKind::MissingPathComponent), Error::Noent);
+        assert_eq!(kind_error(IoErrorKind::MissingFinalEntry), Error::Noent);
+        assert_eq!(kind_error(IoErrorKind::AlreadyExists), Error::Exist);
+        assert_eq!(kind_error(IoErrorKind::PermissionDenied), Error::Access);
+        assert_eq!(kind_error(IoErrorKind::OperationNotPermitted), Error::Perm);
+        assert_eq!(kind_error(IoErrorKind::ReadOnlyFileSystem), Error::Rofs);
+        assert_eq!(kind_error(IoErrorKind::NotADirectory), Error::Notdir);
+        assert_eq!(kind_error(IoErrorKind::IsADirectory), Error::Isdir);
+        assert_eq!(kind_error(IoErrorKind::DirectoryNotEmpty), Error::Notempty);
+    }
+
+    #[test]
+    fn storage_and_memory_exhaustion_have_distinct_errnos() {
+        assert_eq!(kind_error(IoErrorKind::NoSpace), Error::Nospc);
+        assert_eq!(kind_error(IoErrorKind::OutOfMemory), Error::Nomem);
+        assert_eq!(kind_error(IoErrorKind::FileTooLarge), Error::Fbig);
+        assert_eq!(kind_error(IoErrorKind::NameTooLong), Error::Nametoolong);
+        assert_eq!(kind_error(IoErrorKind::ProcessFileLimit), Error::Mfile);
+        assert_eq!(kind_error(IoErrorKind::SystemFileLimit), Error::Nfile);
+    }
+
+    #[test]
+    fn descriptor_link_and_mount_failures_have_distinct_errnos() {
+        assert_eq!(kind_error(IoErrorKind::BadDescriptor), Error::Badf);
+        assert_eq!(kind_error(IoErrorKind::SymlinkLoop), Error::Loop);
+        assert_eq!(kind_error(IoErrorKind::CrossDevice), Error::Xdev);
+        assert_eq!(kind_error(IoErrorKind::InvalidSeek), Error::Spipe);
         assert_eq!(
-            vfs_error(Vfs::FileSystem(Fs::UnsupportedOperation)),
+            kind_error(IoErrorKind::InappropriateIoControl),
+            Error::Notty
+        );
+        assert_eq!(kind_error(IoErrorKind::DeviceUnavailable), Error::Nodev);
+        assert_eq!(kind_error(IoErrorKind::CorruptData), Error::Io);
+    }
+
+    #[test]
+    fn unsupported_and_unimplemented_operations_have_distinct_errnos() {
+        assert_eq!(kind_error(IoErrorKind::Unsupported), Error::Notsup);
+        assert_eq!(
+            kind_error(IoErrorKind::SocketOperationUnsupported),
             Error::Notsup
         );
-        assert_eq!(vfs_error(Vfs::CrossDevice), Error::Xdev);
+        assert_eq!(kind_error(IoErrorKind::NotImplemented), Error::Nosys);
+    }
+
+    #[test]
+    fn invalid_arguments_are_invalid_for_guests() {
+        for kind in [
+            IoErrorKind::InvalidArgument,
+            IoErrorKind::InvalidPath,
+            IoErrorKind::InvalidFlags,
+            IoErrorKind::InvalidState,
+        ] {
+            assert_eq!(kind_error(kind), Error::Inval, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn path_escapes_are_not_capable_instead_of_access_denied() {
+        assert_eq!(kind_error(IoErrorKind::PathEscapesRoot), Error::Notcapable);
         assert_eq!(
-            vfs_error(Vfs::FileSystem(Fs::DirectoryNotEmpty)),
-            Error::Notempty
+            IoErrorKind::PathEscapesRoot.posix_errno(),
+            PosixErrno::EACCES
         );
-        assert_eq!(vfs_error(Vfs::InvalidMode), Error::Badf);
-        assert_eq!(vfs_error(Vfs::FileSystem(Fs::FileTooLarge)), Error::Fbig);
     }
 
     #[test]
-    fn invalid_vfs_parameters_are_invalid_arguments_for_guests() {
-        assert_eq!(vfs_error(Vfs::InvalidParameter), Error::Inval);
+    fn readiness_is_retryable_but_administrative_busy_is_not() {
+        assert_eq!(kind_error(IoErrorKind::WouldBlock), Error::Again);
+        assert_eq!(kind_error(IoErrorKind::ResourceBusy), Error::Busy);
+        assert_eq!(kind_error(IoErrorKind::Interrupted), Error::Intr);
+        assert_eq!(kind_error(IoErrorKind::TimedOut), Error::Timedout);
     }
 
     #[test]
-    fn busy_devices_are_retryable_for_guests() {
-        // Device drivers return `file_system::Error`, which the VFS wraps.
-        assert!(matches!(
-            vfs_error(Vfs::FileSystem(Fs::RessourceBusy)),
-            Error::Again
-        ));
-        assert!(matches!(vfs_error(Vfs::RessourceBusy), Error::Again));
+    fn pipe_and_transport_failures_keep_their_errnos() {
+        assert_eq!(kind_error(IoErrorKind::BrokenPipe), Error::Pipe);
+        assert_eq!(
+            kind_error(IoErrorKind::ConnectionRefused),
+            Error::Connrefused
+        );
+        assert_eq!(kind_error(IoErrorKind::NetworkDown), Error::Netdown);
+        assert_eq!(kind_error(IoErrorKind::HostUnreachable), Error::Hostunreach);
+        assert_eq!(kind_error(IoErrorKind::NotASocket), Error::Notsock);
+    }
+
+    #[test]
+    fn preview1_numerics_are_fixed() {
+        // The Preview 1 ABI values are frozen: wasi-libc and guests hard-code them.
+        assert_eq!(i32::from(Error::Again), 6);
+        assert_eq!(i32::from(Error::Badf), 8);
+        assert_eq!(i32::from(Error::Busy), 10);
+        assert_eq!(i32::from(Error::Inval), 28);
+        assert_eq!(i32::from(Error::Io), 29);
+        assert_eq!(i32::from(Error::Loop), 32);
+        assert_eq!(i32::from(Error::Noent), 44);
+        assert_eq!(i32::from(Error::Nomem), 48);
+        assert_eq!(i32::from(Error::Nospc), 51);
+        assert_eq!(i32::from(Error::Notsup), 58);
+        assert_eq!(i32::from(Error::Xdev), 75);
+        assert_eq!(i32::from(Error::Notcapable), 76);
     }
 }

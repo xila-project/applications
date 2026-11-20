@@ -750,7 +750,7 @@ impl Guest {
     }
 }
 
-struct FailingDevice(xila::file_system::Error);
+struct FailingDevice(xila::file_system::IoErrorKind);
 
 impl xila::file_system::MountOperations for FailingDevice {}
 impl xila::file_system::DirectCharacterDevice for FailingDevice {}
@@ -762,7 +762,7 @@ impl xila::file_system::DirectBaseOperations for FailingDevice {
         _: &mut [u8],
         _: xila::file_system::Size,
     ) -> core::task::Poll<xila::file_system::Result<usize>> {
-        core::task::Poll::Ready(Err(xila::file_system::Error::UnsupportedOperation))
+        core::task::Poll::Ready(Err(xila::file_system::IoErrorKind::Unsupported))
     }
 
     fn write(
@@ -777,17 +777,26 @@ impl xila::file_system::DirectBaseOperations for FailingDevice {
 
 #[xila::task::test(task_path = xila::task)]
 async fn fd_write_preserves_wrapped_filesystem_errnos() {
-    use xila::file_system::{Error as Fs, Path};
+    use xila::file_system::{IoErrorKind as Io, Path};
 
     let mut guest = Guest::new().await;
     for (index, (source, expected)) in [
-        (Fs::InvalidIdentifier, 8), // BADF
-        (Fs::InvalidMode, 8),
-        (Fs::InvalidPath, 28), // INVAL
-        (Fs::InvalidFlags, 28),
-        (Fs::TooManyOpenFiles, 41), // NFILE
-        (Fs::NoMemory, 48),         // NOMEM
-        (Fs::InputOutput, 29),      // IO
+        (Io::BadDescriptor, 8), // BADF
+        (Io::InvalidPath, 28),  // INVAL
+        (Io::InvalidFlags, 28),
+        (Io::SystemFileLimit, 41),  // NFILE
+        (Io::ProcessFileLimit, 33), // MFILE
+        (Io::OutOfMemory, 48),      // NOMEM
+        (Io::NoSpace, 51),          // NOSPC
+        (Io::InputOutput, 29),      // IO
+        (Io::WouldBlock, 6),        // AGAIN: retry after readiness
+        (Io::ResourceBusy, 10),     // BUSY: administrative, do not retry
+        (Io::SymlinkLoop, 32),      // LOOP
+        (Io::CrossDevice, 75),      // XDEV
+        (Io::PathEscapesRoot, 76),  // NOTCAPABLE
+        (Io::Unsupported, 58),      // NOTSUP
+        (Io::NotImplemented, 52),   // NOSYS
+        (Io::BrokenPipe, 64),       // PIPE
     ]
     .into_iter()
     .enumerate()
