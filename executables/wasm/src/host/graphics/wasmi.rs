@@ -23,13 +23,15 @@ fn call(
         return GraphicsError::InvalidMemory as i32;
     };
     let context_manager = caller.data().context.graphics_manager;
-    let state_manager = caller.data().graphics.manager;
+    let state_manager = caller.data().graphics.manager();
     if !matches!((context_manager, state_manager), (Some(context), Some(state)) if core::ptr::eq(context, state))
     {
         return GraphicsError::Unavailable as i32;
     }
     let (bytes, store) = memory.data_and_store_mut(&mut caller);
-    store.graphics.file_system = Some((store.context.virtual_file_system, store.wasi.task));
+    store
+        .graphics
+        .set_file_system(store.context.virtual_file_system, store.wasi.task);
     dispatch(
         &mut store.graphics,
         &mut GuestMemory::new(bytes),

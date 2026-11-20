@@ -146,15 +146,19 @@ cargo test -p xila-wasm --features graphics,xila/graphics_rendering_xrgb8888 \
 ```
 
 - `subsystems/graphics/bindings_generator` discovers and orders one shared LVGL ABI
-  catalog; unsupported calls keep their IDs. Wasmi's supported-call table checks
-  full C signatures, not just argument counts. The catalog is compatible with
-  guest bindings built from the same LVGL revision/configuration, not a stable
-  cross-version ABI.
-- `src/host/graphics/{dispatch,objects,marshal}.rs` use explicit graphics state
-  and checked borrowed guest memory. They do not use Wasmi types or global
-  graphics-manager lookups. The thin `graphics/wasmi.rs` adapter alone handles
+  catalog; unsupported calls keep their IDs. The supported-call declaration
+  (`graphics_bindgen::abi`) checks full C signatures, not just argument counts,
+  and generates both the guest bindings and Core's host call table. The catalog
+  is compatible with guest bindings built from the same LVGL revision/configuration,
+  not a stable cross-version ABI.
+- Core's graphics executor (`graphics::call`, in `subsystems/graphics`) runs every
+  graphics call: it owns the graphics lock, each VM's object table, the event
+  queue and the extension calls. `src/host/graphics/mod.rs` is the Wasm transport
+  over it: it presents the guest's linear memory as a `LinearMemory` with the
+  guest's 32- or 64-bit word. It uses no Wasmi types and no global
+  graphics-manager lookups; the thin `graphics/wasmi.rs` adapter alone handles
   imports, exports, memory/store borrowing, and context capability checks.
-- Object handles are 32-bit `lvgl-rust` generational handles (16-bit slot +
+- Object handles (Core's `graphics::call::State`) are 32-bit `lvgl-rust` generational handles (16-bit slot +
   16-bit generation, 65,536 reuse generations per slot) tracked in a per-VM
   sorted `Vec<u32>` handle table. Every guest handle is verified by binary
   search in the calling VM's table before resolving it in `lvgl-rust`'s

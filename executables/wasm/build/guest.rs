@@ -351,10 +351,7 @@ pub fn generate(output_path: &Path, registry: &GraphicsRegistry<'_>) {
             // source files or recursively enabling this crate's host defaults.
             .with_src(&c_functions_generated_path)
             .with_src(&enumerations_generated_path)
-            .with_src(
-                std::path::PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap())
-                    .join("src/graphics_event.rs"),
-            )
+            .with_src(output_path.join("event_code.rs"))
             .with_src(
                 std::path::PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap())
                     .join("src/guest/graphics/prelude.rs"),
