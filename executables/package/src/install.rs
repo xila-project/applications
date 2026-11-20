@@ -41,7 +41,7 @@ async fn ensure_directory(
 ) -> Result<(), String> {
     match Directory::create(vfs, task, Path::from_str(path)).await {
         Ok(()) => Ok(()),
-        Err(xila::virtual_file_system::Error::AlreadyExists) => {
+        Err(xila::virtual_file_system::IoErrorKind::AlreadyExists) => {
             let stat = vfs
                 .get_link_statistics_for_task(task, &Path::from_str(path))
                 .await
@@ -424,7 +424,7 @@ async fn new_staging(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<St
                 }
                 return Ok(path);
             }
-            Err(xila::virtual_file_system::Error::AlreadyExists) => continue,
+            Err(xila::virtual_file_system::IoErrorKind::AlreadyExists) => continue,
             Err(e) => return Err(error("cannot create package staging directory", e)),
         }
     }
@@ -521,9 +521,7 @@ pub async fn install_verified(
             .get_link_statistics_for_task(task, &Path::from_str(&dest))
             .await
         {
-            Err(xila::virtual_file_system::Error::FileSystem(
-                xila::file_system::Error::NotFound,
-            )) => {}
+            Err(xila::virtual_file_system::IoErrorKind::NotFound) => {}
             Ok(_) => return Err(format!("package {} is already installed", manifest.name)),
             Err(e) => return Err(error("cannot inspect installation destination", e)),
         }

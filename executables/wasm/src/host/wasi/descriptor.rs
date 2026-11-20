@@ -13,7 +13,7 @@ use crate::{
         wasi::{
             Error,
             context::FileSystemItem,
-            error::{WasiResult, vfs_error, wrap_function},
+            error::{WasiResult, kind_error, wrap_function},
             path::set_directory_times,
             rights::{self, right},
             time::{realtime_nanoseconds, requested_times},
@@ -41,7 +41,7 @@ fn flush(caller: &mut Caller<'_, GlobalStore>, fd: i32, needed: u64) -> Result<(
     match caller.data_mut().wasi.files.get_mut(&(fd as u32)) {
         None => Err(Error::Badf),
         Some(item) => match item.as_synchronous_file_mut() {
-            Some(file) => file.flush().map_err(vfs_error),
+            Some(file) => file.flush().map_err(kind_error),
             None => Ok(()),
         },
     }
@@ -92,11 +92,11 @@ define_wasi_module! {
                 return Err(Error::Inval.into());
             }
             let end = (offset as u64).checked_add(length as u64).ok_or(Error::Fbig)?;
-            if !file.get_access().map_err(vfs_error)?.contains(AccessFlags::Write) {
+            if !file.get_access().map_err(kind_error)?.contains(AccessFlags::Write) {
                 return Err(Error::Badf.into());
             }
-            if end > file.get_statistics().map_err(vfs_error)?.size {
-                file.set_size(end).map_err(vfs_error)?;
+            if end > file.get_statistics().map_err(kind_error)?.size {
+                file.set_size(end).map_err(kind_error)?;
             }
             Ok(())
         })
@@ -106,7 +106,7 @@ define_wasi_module! {
         wrap_function!({
             caller.data().wasi.require_rights(fd, right::FD_FILESTAT_SET_SIZE)?;
             let mut caller = caller;
-            caller.data_mut().wasi.file(fd)?.set_size(size as u64).map_err(vfs_error)?;
+            caller.data_mut().wasi.file(fd)?.set_size(size as u64).map_err(kind_error)?;
             Ok(())
         })
     }
@@ -124,7 +124,7 @@ define_wasi_module! {
                 // address the directory by its path, still beneath its preopen.
                 set_directory_times(&caller, fd, access, modification)?;
             } else {
-                caller.data_mut().wasi.file(fd)?.set_times(access, modification).map_err(vfs_error)?;
+                caller.data_mut().wasi.file(fd)?.set_times(access, modification).map_err(kind_error)?;
             }
             Ok(())
         })
@@ -152,7 +152,7 @@ define_wasi_module! {
             if flags & fdflags::NONBLOCK != 0 {
                 state |= StateFlags::NonBlocking;
             }
-            file.set_state(state).map_err(vfs_error)?;
+            file.set_state(state).map_err(kind_error)?;
             Ok(())
         })
     }
@@ -215,7 +215,7 @@ define_wasi_module! {
                 | FileSystemItem::StandardError(file) => file.file.close(virtual_file_system),
                 FileSystemItem::Directory(directory) => directory.directory.close(virtual_file_system),
             }
-            .map_err(vfs_error)?;
+            .map_err(kind_error)?;
             Ok(())
         })
     }

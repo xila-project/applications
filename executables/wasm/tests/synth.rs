@@ -20,14 +20,14 @@ use core::{
 use std::sync::atomic::{AtomicUsize, Ordering};
 use xila::{
     file_system::{
-        BaseOperations, CharacterDevice, Context, ControlCommandIdentifier, Error, MountOperations,
-        Result, Size,
+        BaseOperations, CharacterDevice, Context, ControlCommandIdentifier, IoErrorKind,
+        MountOperations, Result, Size,
     },
     graphics::{Manager, lvgl},
 };
 
 /// Playback device that reports every third write and every third control as
-/// busy, as the real mixer does when its thread holds the nonblocking queue lock.
+/// `WouldBlock`, as the real mixer does when its thread holds the nonblocking queue lock.
 struct ContendedPlayback {
     device: audio::AudioStreamDevice,
     writes: AtomicUsize,
@@ -73,7 +73,7 @@ impl BaseOperations for ContendedPlayback {
         position: Size,
     ) -> Poll<Result<usize>> {
         if self.contended(&self.writes) {
-            return Poll::Ready(Err(Error::RessourceBusy));
+            return Poll::Ready(Err(IoErrorKind::WouldBlock));
         }
         self.device.write(context, cx, buffer, position)
     }
@@ -91,7 +91,7 @@ impl BaseOperations for ContendedPlayback {
         output: &mut xila::shared::AnyByLayout,
     ) -> Poll<Result<()>> {
         if self.contended(&self.controls) {
-            return Poll::Ready(Err(Error::RessourceBusy));
+            return Poll::Ready(Err(IoErrorKind::WouldBlock));
         }
         self.device.control(context, cx, command, input, output)
     }

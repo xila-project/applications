@@ -2,7 +2,7 @@ use getargs_derive::GetArgs;
 use xila::{
     file_system::Path,
     internationalization::t,
-    network::{self, DnsQueryKind, Duration, IcmpEndpoint},
+    network::{self, DnsQueryKind, Duration, IcmpEndpoint, ResolveError},
 };
 
 use crate::Error;
@@ -100,7 +100,7 @@ async fn ping_loop<C: CommandContext>(
                     ))
                     .await?;
             }
-            Err(network::Error::TimedOut) => {
+            Err(network::IoErrorKind::TimedOut) => {
                 context
                     .write_out_fmt(format_args!(
                         "{}\n",
@@ -150,6 +150,15 @@ where
     {
         Ok(Some(ip)) => ip,
         Ok(None) => {
+            return context
+                .write_out_fmt(format_args!(
+                    "{}\n",
+                    t!("dns.errors.unknown_host", arg0 = target)
+                ))
+                .await;
+        }
+        // A confirmed negative answer: the name does not exist.
+        Err(ResolveError::NoAnswer) => {
             return context
                 .write_out_fmt(format_args!(
                     "{}\n",

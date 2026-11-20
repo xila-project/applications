@@ -10,7 +10,7 @@ use crate::{
         wasi::{
             Error,
             context::{FileSystemItem, FileVariant},
-            error::{CombinedError, WasiResult, status, vfs_error, wrap_function},
+            error::{CombinedError, WasiResult, kind_error, status, wrap_function},
             rights::right,
             types::{Fdstat, Filestat, Prestat as PrestatAbi, PrestatDir},
         },
@@ -88,7 +88,7 @@ fn transfer(
     let file = caller.data_mut().wasi.file(fd)?;
     if !file
         .get_access()
-        .map_err(vfs_error)?
+        .map_err(kind_error)?
         .contains(needed_access)
     {
         return Err(Error::Badf.into());
@@ -122,7 +122,7 @@ fn transfer(
         let moved = match moved {
             Ok(moved) => moved,
             Err(_) if total > 0 => break,
-            Err(error) => return Err(vfs_error(error).into()),
+            Err(error) => return Err(kind_error(error).into()),
         };
         total = total.checked_add(moved as u64).ok_or(Error::Overflow)?;
         if moved < length {
@@ -197,7 +197,7 @@ define_wasi_module! {
             caller.data_mut().wasi.get_synchronous_file(fd)
                 .ok_or(Error::Badf)?
                 .control_raw(ControlCommandIdentifier::from_raw(command), input_layout, output_layout)
-                .map_err(vfs_error)?;
+                .map_err(kind_error)?;
 
             borrow_memory(&memory, &mut caller)
                 .bytes_mut(output_slice)
@@ -215,8 +215,8 @@ define_wasi_module! {
             caller.data_mut().wasi.prestats.remove(&(fd as u32));
             let vfs = caller.data().context.virtual_file_system;
             match item {
-                FileSystemItem::File(file) | FileSystemItem::StandardInput(file) | FileSystemItem::StandardOutput(file) | FileSystemItem::StandardError(file) => file.file.close(vfs).map_err(vfs_error)?,
-                FileSystemItem::Directory(dir) => dir.directory.close(vfs).map_err(vfs_error)?,
+                FileSystemItem::File(file) | FileSystemItem::StandardInput(file) | FileSystemItem::StandardOutput(file) | FileSystemItem::StandardError(file) => file.file.close(vfs).map_err(kind_error)?,
+                FileSystemItem::Directory(dir) => dir.directory.close(vfs).map_err(kind_error)?,
             }
             Ok(())
         })
@@ -232,7 +232,7 @@ define_wasi_module! {
             let position = match whence { 0 if offset >= 0 => Position::Start(offset as u64), 0 => Err(Error::Inval)?, 1 => Position::Current(offset), 2 => Position::End(offset), _ => Err(Error::Inval)? };
             let is_directory = caller.data().wasi.is_directory(fd as u32);
             let new_position = match caller.data_mut().wasi.get_synchronous_file(fd as u32) {
-                Some(file) => file.set_position(&position).map_err(vfs_error)?,
+                Some(file) => file.set_position(&position).map_err(kind_error)?,
                 None if is_directory => return Err(Error::Isdir.into()),
                 None => return Err(Error::Badf.into()),
             };
@@ -249,7 +249,7 @@ define_wasi_module! {
             let item = caller.data_mut().wasi.get_file_system_item(fd as u32).ok_or(Error::Badf)?;
             let filetype = item.file_type();
             let state = match item.as_synchronous_file_mut() {
-                Some(file) => file.get_state().map_err(vfs_error)?,
+                Some(file) => file.get_state().map_err(kind_error)?,
                 None => StateFlags::empty(),
             };
             let flags = (if state.contains(StateFlags::Append) { 1 } else { 0 }) | (if state.contains(StateFlags::NonBlocking) { 4 } else { 0 });
@@ -268,8 +268,8 @@ define_wasi_module! {
                 let item = caller.data_mut().wasi.get_file_system_item(fd as u32).ok_or(Error::Badf)?;
                 let filetype = item.file_type();
                 let metadata = match item {
-                    FileSystemItem::File(FileVariant { file }) | FileSystemItem::StandardInput(FileVariant { file }) | FileSystemItem::StandardOutput(FileVariant { file }) | FileSystemItem::StandardError(FileVariant { file }) => file.get_statistics().map_err(vfs_error)?,
-                    FileSystemItem::Directory(dir) => dir.directory.get_statistics().map_err(vfs_error)?,
+                    FileSystemItem::File(FileVariant { file }) | FileSystemItem::StandardInput(FileVariant { file }) | FileSystemItem::StandardOutput(FileVariant { file }) | FileSystemItem::StandardError(FileVariant { file }) => file.get_statistics().map_err(kind_error)?,
+                    FileSystemItem::Directory(dir) => dir.directory.get_statistics().map_err(kind_error)?,
                 };
                 (filetype, metadata)
             };
@@ -337,7 +337,7 @@ mod tests {
             _: &mut [u8],
             _: Size,
         ) -> core::task::Poll<file_system::Result<usize>> {
-            xila::file_system::ready(|| Err(file_system::Error::UnsupportedOperation))
+            xila::file_system::ready(|| Err(file_system::IoErrorKind::Unsupported))
         }
 
         fn write(
@@ -359,14 +359,14 @@ mod tests {
             xila::file_system::ready(|| {
                 CONTROL_CALLS.fetch_add(1, Ordering::SeqCst);
                 if command != CONTROL {
-                    return Err(file_system::Error::UnsupportedOperation);
+                    return Err(file_system::IoErrorKind::Unsupported);
                 }
                 let input = input
                     .cast::<u32>()
-                    .ok_or(file_system::Error::InvalidParameter)?;
+                    .ok_or(file_system::IoErrorKind::InvalidArgument)?;
                 let output = output
                     .cast_mutable::<u32>()
-                    .ok_or(file_system::Error::InvalidParameter)?;
+                    .ok_or(file_system::IoErrorKind::InvalidArgument)?;
                 *output = input.wrapping_add(1);
                 Ok(())
             })
@@ -612,7 +612,7 @@ mod tests {
                 let mut state = self.0.lock().unwrap();
                 state.read_calls += 1;
                 if state.read_calls == state.fail_read_on_call {
-                    return Err(file_system::Error::InputOutput);
+                    return Err(file_system::IoErrorKind::InputOutput);
                 }
                 let remaining = state.read_data.len().saturating_sub(state.read_offset);
                 let count = buffer.len().min(state.read_chunk).min(remaining);
@@ -633,7 +633,7 @@ mod tests {
                 let mut state = self.0.lock().unwrap();
                 state.write_calls += 1;
                 if state.write_calls == state.fail_write_on_call {
-                    return Err(file_system::Error::InputOutput);
+                    return Err(file_system::IoErrorKind::InputOutput);
                 }
                 let count = buffer.len().min(state.write_chunk);
                 state.written.extend_from_slice(&buffer[..count]);

@@ -150,10 +150,9 @@ async fn serve_agent(
             .read(&mut request_buffer)
         {
             Ok(length) => length,
-            Err(xila::virtual_file_system::Error::RessourceBusy)
-            | Err(xila::virtual_file_system::Error::FileSystem(
-                xila::file_system::Error::RessourceBusy,
-            )) => {
+            // `WouldBlock` is the readiness case: the transport has nothing to
+            // read yet. `ResourceBusy` (exclusive access) is a real failure.
+            Err(xila::virtual_file_system::IoErrorKind::WouldBlock) => {
                 task::sleep(core::time::Duration::from_millis(10)).await;
                 continue;
             }
@@ -509,7 +508,7 @@ mod window_setup_tests {
             _: &mut [u8],
             _: Size,
         ) -> Poll<file_system::Result<usize>> {
-            Poll::Ready(Err(file_system::Error::UnsupportedOperation))
+            Poll::Ready(Err(file_system::IoErrorKind::Unsupported))
         }
 
         fn write(
@@ -535,7 +534,7 @@ mod window_setup_tests {
                     WAS_RESIZED::cast_output(output).map(|resized| *resized = false)
                 }
                 SET_DRAWING_AREA::IDENTIFIER => Ok(()),
-                _ => Err(file_system::Error::UnsupportedOperation),
+                _ => Err(file_system::IoErrorKind::Unsupported),
             })
         }
     }

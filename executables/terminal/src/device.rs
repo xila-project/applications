@@ -1,17 +1,18 @@
 use xila::{
     file_system::{
-        BaseOperations, CharacterDevice, Context, Error, MountOperations, Operation, Position,
-        Result, Size, Waiter,
+        BaseOperations, CharacterDevice, Context, IoErrorKind, MountOperations, Operation,
+        Position, Result, Size, Waiter,
     },
     shared::utf8_chunks,
 };
 
 use crate::terminal::Terminal;
 
-fn map_error(error: crate::Error) -> Error {
+fn map_error(error: crate::Error) -> IoErrorKind {
     match error {
-        crate::Error::RessourceBusy => Error::RessourceBusy,
-        _ => Error::InternalError,
+        // A contended try-lock: the caller can wait and retry.
+        crate::Error::WouldBlock => IoErrorKind::WouldBlock,
+        _ => IoErrorKind::InputOutput,
     }
 }
 
@@ -23,7 +24,7 @@ impl BaseOperations for Terminal {
     fn clone_context(&self, context: &Context) -> Result<Context> {
         context
             .get_private_data_of_type::<Waiter>()
-            .ok_or(Error::InvalidContext)?;
+            .ok_or(IoErrorKind::BadDescriptor)?;
         Ok(Context::new(Some(Waiter::new())))
     }
     fn close(&self, context: &mut Context) -> Result<()> {
@@ -49,7 +50,7 @@ impl BaseOperations for Terminal {
         use portable_atomic::Ordering;
         let waiter = context
             .get_private_data_mutable_of_type::<Waiter>()
-            .ok_or(Error::InvalidContext)?;
+            .ok_or(IoErrorKind::BadDescriptor)?;
         let count = self.read_input(buffer).map_err(map_error)?;
         if count > 0 || buffer.is_empty() || self.input_closed.load(Ordering::Acquire) {
             return Poll::Ready(Ok(count));
@@ -77,7 +78,7 @@ impl BaseOperations for Terminal {
         })
     }
     fn set_position(&self, _: &mut Context, _: Size, _: &Position) -> Result<Size> {
-        Err(Error::UnsupportedOperation)
+        Err(IoErrorKind::Unsupported)
     }
 }
 impl MountOperations for Terminal {}

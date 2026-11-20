@@ -51,12 +51,7 @@ impl NetworkTab {
                 .control(network::IS_LINK_UP, &())
                 .map(|up| Some((kind, up))),
             // Protocol clients share this directory but are not interfaces.
-            Err(
-                xila::virtual_file_system::Error::FileSystem(
-                    xila::file_system::Error::UnsupportedOperation,
-                )
-                | xila::virtual_file_system::Error::UnsupportedOperation,
-            ) => Ok(None),
+            Err(xila::virtual_file_system::IoErrorKind::Unsupported) => Ok(None),
             Err(error) => Err(error),
         };
         file.close(virtual_file_system).await?;

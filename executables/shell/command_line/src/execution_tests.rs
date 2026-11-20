@@ -728,7 +728,7 @@ impl xila::file_system::DirectBaseOperations for FailingFlush {
         &self,
         _cx: &mut core::task::Context<'_>,
     ) -> core::task::Poll<xila::file_system::Result<()>> {
-        xila::file_system::ready(|| Err(xila::file_system::Error::InputOutput))
+        xila::file_system::ready(|| Err(xila::file_system::IoErrorKind::InputOutput))
     }
 }
 impl xila::file_system::MountOperations for FailingFlush {}
@@ -742,7 +742,7 @@ impl xila::file_system::DirectBaseOperations for FailingRead {
         _: &mut [u8],
         _: xila::file_system::Size,
     ) -> core::task::Poll<xila::file_system::Result<usize>> {
-        xila::file_system::ready(|| Err(xila::file_system::Error::InputOutput))
+        xila::file_system::ready(|| Err(xila::file_system::IoErrorKind::InputOutput))
     }
     fn write(
         &self,
@@ -912,7 +912,7 @@ async fn duplicated_device_keeps_its_mount_busy() {
     drop(original);
     assert_eq!(
         filesystem.unmount(&"/devices/duplicate", false).await,
-        Err(xila::virtual_file_system::Error::RessourceBusy)
+        Err(xila::virtual_file_system::IoErrorKind::ResourceBusy)
     );
     drop(duplicate);
 }
@@ -1252,8 +1252,8 @@ async fn rename_checks_parent_paths_relative_to_the_mounted_filesystem() {
 struct LoginTerminalState {
     input: std::sync::Mutex<(Vec<u8>, Vec<bool>)>,
     attributes: std::sync::Mutex<xila::file_system::character_device::TerminalAttributes>,
-    get_error: Option<xila::file_system::Error>,
-    set_errors: std::sync::Mutex<Vec<Option<xila::file_system::Error>>>,
+    get_error: Option<xila::file_system::IoErrorKind>,
+    set_errors: std::sync::Mutex<Vec<Option<xila::file_system::IoErrorKind>>>,
     set_attempts: std::sync::Mutex<usize>,
 }
 
@@ -1264,8 +1264,8 @@ impl LoginTerminalState {
 
     fn with_failures(
         input: &[u8],
-        get_error: Option<xila::file_system::Error>,
-        set_errors: &[Option<xila::file_system::Error>],
+        get_error: Option<xila::file_system::IoErrorKind>,
+        set_errors: &[Option<xila::file_system::IoErrorKind>],
     ) -> &'static Self {
         Box::leak(Box::new(Self {
             input: std::sync::Mutex::new((input.iter().rev().copied().collect(), Vec::new())),
@@ -1346,7 +1346,7 @@ impl xila::file_system::DirectBaseOperations for LoginTerminal {
                 *self.0.attributes.lock().unwrap() = *SET_TERMINAL_ATTRIBUTES::cast_input(input)?;
                 Ok(())
             }
-            _ => Err(xila::file_system::Error::UnsupportedOperation),
+            _ => Err(xila::file_system::IoErrorKind::Unsupported),
         })
     }
 }
@@ -1464,7 +1464,7 @@ fn echo_on_for_the_whole_login() -> Vec<bool> {
 async fn login_reads_the_password_with_echo_when_getting_attributes_is_unsupported() {
     let state = LoginTerminalState::with_failures(
         LOGIN_INPUT,
-        Some(xila::file_system::Error::UnsupportedOperation),
+        Some(xila::file_system::IoErrorKind::Unsupported),
         &[],
     );
     let (mut shell, state) =
@@ -1484,7 +1484,7 @@ async fn login_reads_the_password_with_echo_when_setting_attributes_is_unsupport
     let state = LoginTerminalState::with_failures(
         LOGIN_INPUT,
         None,
-        &[Some(xila::file_system::Error::UnsupportedOperation)],
+        &[Some(xila::file_system::IoErrorKind::Unsupported)],
     );
     let (mut shell, state) =
         shell_with_scripted_terminal("/devices/no_set_attributes", state).await;
@@ -1503,7 +1503,7 @@ async fn login_reads_the_password_with_echo_when_setting_attributes_is_unsupport
 async fn login_fails_without_reading_the_password_when_getting_attributes_fails() {
     let state = LoginTerminalState::with_failures(
         LOGIN_INPUT,
-        Some(xila::file_system::Error::RessourceBusy),
+        Some(xila::file_system::IoErrorKind::WouldBlock),
         &[],
     );
     let (mut shell, state) =
@@ -1512,9 +1512,7 @@ async fn login_fails_without_reading_the_password_when_getting_attributes_fails(
     let error = shell.authenticate().await.unwrap_err();
     assert!(matches!(
         error,
-        crate::Error::FailedToHidePassword(xila::virtual_file_system::Error::FileSystem(
-            xila::file_system::Error::RessourceBusy
-        ))
+        crate::Error::FailedToHidePassword(xila::file_system::IoErrorKind::WouldBlock)
     ));
     assert!(!error.to_string().is_empty());
     // Only the user name line was read: the password stays unread.
@@ -1527,7 +1525,7 @@ async fn login_fails_without_reading_the_password_when_turning_echo_off_fails() 
     let state = LoginTerminalState::with_failures(
         LOGIN_INPUT,
         None,
-        &[Some(xila::file_system::Error::InternalError)],
+        &[Some(xila::file_system::IoErrorKind::InputOutput)],
     );
     let (mut shell, state) =
         shell_with_scripted_terminal("/devices/failing_set_attributes", state).await;
@@ -1535,7 +1533,7 @@ async fn login_fails_without_reading_the_password_when_turning_echo_off_fails() 
     assert!(matches!(
         shell.authenticate().await,
         Err(crate::Error::FailedToHidePassword(
-            xila::virtual_file_system::Error::FileSystem(xila::file_system::Error::InternalError)
+            xila::file_system::IoErrorKind::InputOutput
         ))
     ));
     assert_eq!(state.echo_per_byte(), vec![true; "administrator\n".len()]);
@@ -1550,15 +1548,13 @@ async fn login_fails_without_reading_the_password_when_turning_echo_off_fails() 
 async fn login_ends_the_session_when_the_password_cannot_be_hidden() {
     let state = LoginTerminalState::with_failures(
         b"administrator\nsecret\n",
-        Some(xila::file_system::Error::RessourceBusy),
+        Some(xila::file_system::IoErrorKind::WouldBlock),
         &[],
     );
     let (mut shell, state) =
         shell_with_scripted_terminal("/devices/busy_login_session", state).await;
 
-    let error = crate::Error::FailedToHidePassword(xila::virtual_file_system::Error::FileSystem(
-        xila::file_system::Error::RessourceBusy,
-    ));
+    let error = crate::Error::FailedToHidePassword(xila::file_system::IoErrorKind::WouldBlock);
     let expected_diagnostic = format!("{error}\n");
     let expected_status = NonZeroUsize::from(error);
     assert_eq!(shell.main(vec![]).await, Err(expected_status));
@@ -1582,7 +1578,7 @@ async fn login_retries_a_failed_restore_once() {
     let state = LoginTerminalState::with_failures(
         LOGIN_INPUT,
         None,
-        &[None, Some(xila::file_system::Error::RessourceBusy)],
+        &[None, Some(xila::file_system::IoErrorKind::WouldBlock)],
     );
     let (mut shell, state) = shell_with_scripted_terminal("/devices/restore_retry", state).await;
 
@@ -1606,8 +1602,8 @@ async fn login_reports_a_restore_that_fails_twice() {
         None,
         &[
             None,
-            Some(xila::file_system::Error::RessourceBusy),
-            Some(xila::file_system::Error::RessourceBusy),
+            Some(xila::file_system::IoErrorKind::WouldBlock),
+            Some(xila::file_system::IoErrorKind::WouldBlock),
         ],
     );
     let (mut shell, state) = shell_with_scripted_terminal("/devices/restore_failure", state).await;
@@ -1621,9 +1617,7 @@ async fn login_reports_a_restore_that_fails_twice() {
     assert!(!state.attributes().is_echo_enabled());
     let expected = format!(
         "{}\n",
-        crate::Error::FailedToRestoreTerminalEcho(xila::virtual_file_system::Error::FileSystem(
-            xila::file_system::Error::RessourceBusy
-        ))
+        crate::Error::FailedToRestoreTerminalEcho(xila::file_system::IoErrorKind::WouldBlock)
     );
     assert_eq!(errors_written(&mut shell).await, expected);
 }

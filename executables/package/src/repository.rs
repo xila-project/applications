@@ -49,7 +49,7 @@ async fn ensure_directory(
         current.push('/');
         current.push_str(part);
         match Directory::create(vfs, task, Path::from_str(&current)).await {
-            Ok(()) | Err(xila::virtual_file_system::Error::AlreadyExists) => {}
+            Ok(()) | Err(xila::virtual_file_system::IoErrorKind::AlreadyExists) => {}
             Err(e) => return Err(error(&format!("cannot create {current}"), e)),
         }
     }
@@ -64,9 +64,7 @@ async fn read_file(
     let mut buffer = Vec::new();
     match File::read_from_path(vfs, task, Path::from_str(path), &mut buffer).await {
         Ok(()) => Ok(Some(buffer)),
-        Err(xila::virtual_file_system::Error::FileSystem(xila::file_system::Error::NotFound)) => {
-            Ok(None)
-        }
+        Err(xila::virtual_file_system::IoErrorKind::NotFound) => Ok(None),
         Err(e) => Err(error(&format!("cannot read {path}"), e)),
     }
 }
@@ -104,7 +102,7 @@ pub async fn list(
 ) -> Result<Vec<Repository>, String> {
     let mut directory = match Directory::open(vfs, task, Path::from_str(REPOSITORIES)).await {
         Ok(directory) => directory,
-        Err(xila::virtual_file_system::Error::FileSystem(xila::file_system::Error::NotFound)) => {
+        Err(xila::virtual_file_system::IoErrorKind::NotFound) => {
             return Ok(Vec::new());
         }
         Err(e) => return Err(error("cannot open repositories", e)),

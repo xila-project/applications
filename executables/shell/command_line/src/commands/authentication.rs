@@ -2,7 +2,7 @@ use crate::{Result, Shell, error::Error};
 use alloc::string::String;
 use core::fmt::Write;
 use xila::{
-    authentication, file_system,
+    authentication,
     file_system::character_device::{
         GET_TERMINAL_ATTRIBUTES, SET_TERMINAL_ATTRIBUTES, TerminalAttributes,
     },
@@ -12,14 +12,14 @@ use xila::{
 
 /// Whether `error` means that standard input has no terminal attributes.
 ///
-/// The virtual file system answers `UnsupportedOperation` itself for items
-/// without base operations, and wraps the answer of devices and files that do
-/// not implement the command.
-const fn is_unsupported(error: virtual_file_system::Error) -> bool {
+/// A device or file that does not implement the control command reports
+/// `Unsupported`; a file that is not a terminal at all reports
+/// `InappropriateIoControl`.
+const fn is_unsupported(error: virtual_file_system::IoErrorKind) -> bool {
     matches!(
         error,
-        virtual_file_system::Error::UnsupportedOperation
-            | virtual_file_system::Error::FileSystem(file_system::Error::UnsupportedOperation)
+        virtual_file_system::IoErrorKind::Unsupported
+            | virtual_file_system::IoErrorKind::InappropriateIoControl
     )
 }
 

@@ -6,7 +6,7 @@ use getargs_derive::GetArgs;
 use xila::{
     file_system::Path,
     internationalization::t,
-    network::{self, DnsQueryKind},
+    network::{self, DnsQueryKind, ResolveError},
 };
 
 use super::{CommandContext, UserCommand};
@@ -55,38 +55,55 @@ fn format_kind(kind: DnsQueryKind) -> &'static str {
     }
 }
 
+/// Report a resolver failure, keeping what the failure proves.
+///
+/// Only [`ResolveError::NoAnswer`] is a confirmed negative answer. An unknown or
+/// transient failure (`Failure`, `TemporaryFailure`, a timeout, ...) must never
+/// read as "no records" or "unknown host", and a missing network or interface
+/// is reported as such rather than as a resolution result.
 pub(super) fn resolution_failure<'a>(
-    error: network::Error,
+    error: ResolveError,
     domain: &'a str,
     record_kind: &'a str,
 ) -> impl Display + 'a {
     fmt::from_fn(move |formatter| match error {
-        network::Error::NameTooLong => {
+        ResolveError::NameTooLong => {
             write!(
                 formatter,
                 "{}",
                 t!("dns.errors.domain_name_too_long", arg0 = domain)
             )
         }
-        network::Error::InvalidName => {
+        ResolveError::InvalidName => {
             write!(
                 formatter,
                 "{}",
                 t!("dns.errors.invalid_domain_name", arg0 = domain)
             )
         }
-        network::Error::NoFreeSlot => {
+        ResolveError::NoQuerySlots => {
             write!(
                 formatter,
                 "{}",
                 t!("dns.errors.no_free_query_slot", arg0 = domain)
             )
         }
-        network::Error::NotFound => {
+        ResolveError::NoInterface | ResolveError::NetworkDown => {
             write!(
                 formatter,
                 "{}",
                 t!("dns.errors.no_network_interface", arg0 = domain)
+            )
+        }
+        ResolveError::NoAnswer => {
+            write!(
+                formatter,
+                "{}",
+                t!(
+                    "dns.status.no_records_found",
+                    arg0 = record_kind,
+                    arg1 = domain
+                )
             )
         }
         _ => write!(
@@ -205,7 +222,7 @@ mod tests {
     use alloc::string::ToString;
     use xila::{
         internationalization::t,
-        network::{DnsQueryKind, Error},
+        network::{DnsQueryKind, ResolveError},
     };
 
     #[test]
@@ -213,19 +230,23 @@ mod tests {
         let domain = "example.org";
         for (error, expected) in [
             (
-                Error::NameTooLong,
+                ResolveError::NameTooLong,
                 t!("dns.errors.domain_name_too_long", arg0 = domain).to_string(),
             ),
             (
-                Error::InvalidName,
+                ResolveError::InvalidName,
                 t!("dns.errors.invalid_domain_name", arg0 = domain).to_string(),
             ),
             (
-                Error::NoFreeSlot,
+                ResolveError::NoQuerySlots,
                 t!("dns.errors.no_free_query_slot", arg0 = domain).to_string(),
             ),
             (
-                Error::NotFound,
+                ResolveError::NoInterface,
+                t!("dns.errors.no_network_interface", arg0 = domain).to_string(),
+            ),
+            (
+                ResolveError::NetworkDown,
                 t!("dns.errors.no_network_interface", arg0 = domain).to_string(),
             ),
         ] {
@@ -234,13 +255,31 @@ mod tests {
     }
 
     #[test]
+    fn only_a_confirmed_negative_answer_reports_no_records() {
+        let domain = "example.org";
+        assert_eq!(
+            resolution_failure(ResolveError::NoAnswer, domain, "AAAA").to_string(),
+            t!("dns.status.no_records_found", arg0 = "AAAA", arg1 = domain).to_string()
+        );
+    }
+
+    #[test]
     fn resolution_failure_falls_back_to_domain_and_record_kind() {
         let domain = "example.org";
         let expected = t!("dns.errors.resolution_failed", arg0 = "AAAA", arg1 = domain).to_string();
-        for error in [Error::Failed, Error::TimedOut] {
+        // An unknown, transient or unmapped failure never claims a negative answer.
+        for error in [
+            ResolveError::Failure,
+            ResolveError::TemporaryFailure,
+            ResolveError::TimedOut,
+            ResolveError::NetworkUnreachable,
+            ResolveError::SystemIo,
+            ResolveError::OutOfMemory,
+        ] {
             assert_eq!(
                 resolution_failure(error, domain, "AAAA").to_string(),
-                expected
+                expected,
+                "{error:?}"
             );
         }
     }

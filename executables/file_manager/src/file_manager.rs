@@ -744,7 +744,7 @@ mod tests {
                 _: &mut [u8],
                 _: Size,
             ) -> Poll<file_system::Result<usize>> {
-                Poll::Ready(Err(file_system::Error::UnsupportedOperation))
+                Poll::Ready(Err(file_system::IoErrorKind::Unsupported))
             }
 
             fn write(
@@ -770,7 +770,7 @@ mod tests {
                         WAS_RESIZED::cast_output(output).map(|resized| *resized = false)
                     }
                     SET_DRAWING_AREA::IDENTIFIER => Ok(()),
-                    _ => Err(file_system::Error::UnsupportedOperation),
+                    _ => Err(file_system::IoErrorKind::Unsupported),
                 })
             }
         }

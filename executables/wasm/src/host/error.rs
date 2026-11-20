@@ -10,7 +10,7 @@ pub enum Error {
     Linker(wasmi::errors::LinkerError),
     Runtime(i32),
     Interrupted,
-    FileSystem(virtual_file_system::Error),
+    FileSystem(virtual_file_system::IoErrorKind),
     Task(xila::task::Error),
     InvalidPath,
     NotAWasmFile,
@@ -28,8 +28,8 @@ impl From<wasmi::errors::LinkerError> for Error {
     }
 }
 
-impl From<virtual_file_system::Error> for Error {
-    fn from(error: virtual_file_system::Error) -> Self {
+impl From<virtual_file_system::IoErrorKind> for Error {
+    fn from(error: virtual_file_system::IoErrorKind) -> Self {
         Self::FileSystem(error)
     }
 }

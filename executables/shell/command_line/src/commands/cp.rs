@@ -104,7 +104,7 @@ async fn write_all(file: &mut File<'_>, buffer: &[u8]) -> Result<()> {
             .map_err(Error::FailedToWriteFile)?;
         if written == 0 {
             return Err(Error::FailedToWriteFile(
-                xila::virtual_file_system::Error::FailedToWrite,
+                xila::virtual_file_system::IoErrorKind::WriteZero,
             ));
         }
         offset += written;

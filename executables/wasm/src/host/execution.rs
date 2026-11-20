@@ -187,7 +187,7 @@ mod clock_tests {
         fn read(&self) -> xila::time::Result<xila::time::RealtimeSample> {
             if self.1.load(Ordering::Relaxed) {
                 return Err(xila::time::Error::DeviceError(
-                    xila::file_system::Error::InternalError,
+                    xila::file_system::IoErrorKind::InputOutput,
                 ));
             }
             Ok(xila::time::RealtimeSample {

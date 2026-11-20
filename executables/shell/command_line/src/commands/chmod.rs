@@ -223,13 +223,13 @@ mod filesystem_tests {
         assert!(matches!(
             chmod(&mut context, "777", "file").await,
             Err(Error::FailedToSetPermissions(
-                xila::virtual_file_system::Error::PermissionDenied
+                xila::virtual_file_system::IoErrorKind::PermissionDenied
             ))
         ));
         assert!(matches!(
             chmod(&mut context, "777", "directory").await,
             Err(Error::FailedToSetPermissions(
-                xila::virtual_file_system::Error::PermissionDenied
+                xila::virtual_file_system::IoErrorKind::PermissionDenied
             ))
         ));
         assert_eq!(

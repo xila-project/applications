@@ -359,12 +359,7 @@ impl Layout {
         {
             Ok(kind) => kind,
             // HTTP(S) clients are protocol endpoints, not network interfaces.
-            Err(
-                xila::virtual_file_system::Error::FileSystem(
-                    xila::file_system::Error::UnsupportedOperation,
-                )
-                | xila::virtual_file_system::Error::UnsupportedOperation,
-            ) => return Ok(None),
+            Err(xila::virtual_file_system::IoErrorKind::Unsupported) => return Ok(None),
             Err(error) => return Err(Error::FailedToOpenDirectory(error)),
         };
         let is_up = file
