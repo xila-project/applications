@@ -68,6 +68,36 @@ fn poll_waits_for_earliest_deadline_and_writes_only_ready_events() {
 }
 
 #[test]
+fn only_zero_relative_timeouts_request_throttling() {
+    let mut bytes = [0; 256];
+    let mut memory = GuestMemory::new(&mut bytes);
+    for (timeout, flags, expected) in [(0, 0, true), (1, 0, false), (0, 1, false), (9, 1, false)] {
+        memory
+            .write(GuestPointer::new(1), subscription(timeout, 1, flags))
+            .unwrap();
+        let poll = ClockPoll::prepare(&memory, 1, 101, 1, 201, |_| Ok(10)).unwrap();
+        // By the first host iteration all of these deadlines have passed.
+        assert!(poll.delay([0, 12]).is_zero());
+        assert_eq!(poll.has_zero_relative_timeout(), expected);
+    }
+}
+
+#[test]
+fn zero_relative_timeout_requests_throttling_in_a_multi_clock_poll() {
+    let mut bytes = [0; 256];
+    let mut memory = GuestMemory::new(&mut bytes);
+    memory
+        .write(GuestPointer::new(1), subscription(50, 0, 0))
+        .unwrap();
+    memory
+        .write(GuestPointer::new(49), subscription(0, 1, 0))
+        .unwrap();
+    let poll = ClockPoll::prepare(&memory, 1, 101, 2, 201, |_| Ok(10)).unwrap();
+    assert!(poll.delay([10, 10]).is_zero());
+    assert!(poll.has_zero_relative_timeout());
+}
+
+#[test]
 fn polling_rejects_invalid_requests_without_output_side_effects() {
     let mut bytes = [0xaa; 4096];
     let mut memory = GuestMemory::new(&mut bytes);

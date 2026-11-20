@@ -116,7 +116,7 @@ pub async fn run(
                     let context = store.data().context;
                     let errno = match pending {
                         PendingCall::Yield => {
-                            xila::task::yield_now().await;
+                            xila::task::yield_throttled().await;
                             0
                         }
                         PendingCall::ClockPoll { poll, memory } => {
@@ -136,6 +136,8 @@ pub async fn run(
                                         delay.min(Duration::from_millis(50)),
                                     )
                                     .await;
+                                } else if poll.has_zero_relative_timeout() {
+                                    xila::task::yield_throttled().await;
                                 } else {
                                     xila::task::yield_now().await;
                                 }
