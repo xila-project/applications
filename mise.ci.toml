@@ -68,6 +68,18 @@ set -eu
 cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits
 """
 
+[tasks."ci:localization-group"]
+description = "Check each locale independently on one runner"
+run = """
+set -eu
+result=0
+for locale in ${CI_LOCALES:?}; do
+  printf 'Checking locale %s\\n' "$locale"
+  EMBEDDED_I18N_LOCALE="$locale" CARGO_TARGET_DIR="target/localization/$locale" mise run ci:localization || result=1
+done
+exit "$result"
+"""
+
 [tasks."ci:core-revision"]
 description = "Write the Core commit locked in Cargo.lock to the step output"
 run = 'python3 tools/ci/locked_revision.py core >> "$GITHUB_OUTPUT"'

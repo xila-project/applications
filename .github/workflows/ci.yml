@@ -93,15 +93,19 @@ jobs:
       - name: "Test | ABI translation"
         run: cargo test --locked --manifest-path executables/wasm/tests/translation/Cargo.toml --no-default-features --features ${{ matrix.memory }}
   localization:
-    name: "Test / Localization (${{ matrix.locale }})"
+    name: "Test / Localization (${{ matrix.locales }})"
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        locale: [en, fr, es, de, pt-BR, it, pl, zh-CN, ja]
+        include:
+          - locales: en fr es
+          - locales: de pt-BR it
+          - locales: pl zh-CN
+          - locales: ja
     env:
       XILA_MBX: "1"
-      EMBEDDED_I18N_LOCALE: ${{ matrix.locale }}
     steps:
       - name: "Setup | Checkout sources"
         uses: actions/checkout@v7
@@ -112,11 +116,11 @@ jobs:
           cache-generation: v1-apps-localization
       - name: "Setup | Resolve locked Core revision"
         id: core
-        if: matrix.locale == 'ja'
+        if: matrix.locales == 'ja'
         run: mise run ci:core-revision
       - name: "Setup | Checkout matching Core font tooling"
         uses: actions/checkout@v7
-        if: matrix.locale == 'ja'
+        if: matrix.locales == 'ja'
         with:
           repository: xila-project/core
           ref: ${{ steps.core.outputs.revision }}
@@ -125,12 +129,13 @@ jobs:
       - name: "Setup | Clang and linker dependencies"
         run: mise run ci:packages-linker
       - name: "Setup | Japanese font"
-        if: matrix.locale == 'ja'
+        if: matrix.locales == 'ja'
         run: mise run ci:font-japanese
       - name: "Test | Localization"
         env:
+          CI_LOCALES: ${{ matrix.locales }}
           XILA_JAPANESE_FONT_PATH: ${{ github.workspace }}/.ci-core-fonts/subsystems/graphics/fonts/SourceHanSansJP-Regular.otf
-        run: mise run ci:localization
+        run: mise run ci:localization-group
   package:
     name: "Package / ${{ matrix.app }}"
     needs: guest
