@@ -1,6 +1,9 @@
 """Application package identity, guest feature and publication policy checks."""
+import os
 from pathlib import Path
 import re
+import subprocess
+import tempfile
 import tomllib
 import unittest
 
@@ -106,8 +109,12 @@ class ApplicationPolicy(unittest.TestCase):
     def test_japanese_uses_the_same_pinned_core_and_wasi_task_as_other_locales(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
         localization = ci.split('  localization:', 1)[1].split('  package:', 1)[0]
-        self.assertIn('zh-CN, ja]', localization)
-        self.assertIn('run: mise run ci:localization', localization)
+        groups = re.findall(r'^          - locales: (.+)$', localization, re.M)
+        self.assertCountEqual([locale for group in groups for locale in group.split()],
+                              ['en', 'fr', 'es', 'de', 'pt-BR', 'it', 'pl', 'zh-CN', 'ja'])
+        self.assertIn('ja', groups)
+        self.assertLess(len(groups), 9)
+        self.assertIn('run: mise run ci:localization-group', localization)
         self.assertNotIn('.ci-core-ja', localization)
         self.assertNotIn('.ci-platforms-ja', localization)
         self.assertNotIn('ci:localization-japanese', localization)
@@ -125,6 +132,34 @@ class ApplicationPolicy(unittest.TestCase):
         task = manifest('mise.ci.toml')['tasks']['ci:localization']
         self.assertIn('--locked --target wasm32-wasip1', task['run'])
         self.assertNotIn('--config', task['run'])
+
+    def test_localization_group_checks_remaining_locales_after_failure(self):
+        task = manifest('mise.ci.toml')['tasks']['ci:localization-group']
+        with tempfile.TemporaryDirectory() as directory:
+            mock = Path(directory) / 'mise'
+            mock.write_text(
+                '#!/bin/sh\nprintf "%s %s %s\\n" "$*" "$EMBEDDED_I18N_LOCALE" "$CARGO_TARGET_DIR"\n'
+                'test "$EMBEDDED_I18N_LOCALE" != fr\n'
+            )
+            mock.chmod(0o755)
+            result = subprocess.run(
+                ['sh', '-c', task['run']], text=True, capture_output=True,
+                env=os.environ | {'PATH': f'{directory}:{os.environ["PATH"]}', 'CI_LOCALES': 'fr it'},
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('run ci:localization fr target/localization/fr', result.stdout)
+            self.assertIn('run ci:localization it target/localization/it', result.stdout)
+            self.assertIn('::error::Localization check failed for: fr', result.stdout)
+            self.assertNotIn('failed for: fr it', result.stdout)
+
+    def test_localization_group_rejects_an_empty_locale_list(self):
+        task = manifest('mise.ci.toml')['tasks']['ci:localization-group']
+        result = subprocess.run(
+            ['sh', '-c', task['run']], text=True, capture_output=True,
+            env=os.environ | {'CI_LOCALES': ' '},
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('::error::CI_LOCALES names no locale', result.stdout)
 
     def test_ci_caches_are_separate_and_use_one_wrapper(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
