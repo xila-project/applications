@@ -69,8 +69,8 @@ where
     create_shell(standard, show_keyboard).await?.main().await
 }
 
-// Fields drop in order: `_home` first (its button lives on `lv_layer_top()`
-// and its `RELEASED` handler passes the desk window as user data), then the
+// Fields drop in order: `_home` first (its pill lives on `lv_layer_top()`, and
+// its input device callbacks and timer hold the desk window), then the
 // shell's own windows (`desk`, `login`), then `layout` (which keeps the screen
 // callback parent alive while `desk` detaches its callback and reparents any
 // remaining application windows back to the screen before deleting `body`).
@@ -368,7 +368,7 @@ mod tests {
             );
             let desk_window = desk.get_window_object();
             let home = Box::new(Home::new(manager, desk_window).await.unwrap());
-            let home_button = home.button_object();
+            let home_pill = home.pill_object();
             let login_window = shell.login.as_mut().unwrap().window_object();
             let header = shell.layout.header_object();
             let body = shell.layout.body_object();
@@ -394,7 +394,7 @@ mod tests {
                     assert!(!textarea.is_null());
 
                     attach_probe(
-                        home_button,
+                        home_pill,
                         lvgl::lv_event_code_t_LV_EVENT_DELETE,
                         &HOME_DELETE,
                     );
@@ -505,6 +505,233 @@ mod tests {
                     Ok(())
                 })
                 .unwrap();
+        }
+
+        static APP_EVENTS: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
+
+        unsafe extern "C" fn log_app_event(event: *mut lvgl::lv_event_t) {
+            let name = match unsafe { lvgl::lv_event_get_code(event) } {
+                lvgl::lv_event_code_t_LV_EVENT_PRESSED => "pressed",
+                lvgl::lv_event_code_t_LV_EVENT_RELEASED => "released",
+                lvgl::lv_event_code_t_LV_EVENT_CLICKED => "clicked",
+                _ => return,
+            };
+            APP_EVENTS.lock().unwrap().push(name);
+        }
+
+        type Waypoint = (i16, i16);
+
+        /// Runs LVGL timers (input reads and the home gesture timer) for a while.
+        async fn pump(manager: &'static graphics::Manager) {
+            for _ in 0..4 {
+                manager
+                    .with_lvgl(|lvgl| {
+                        lvgl.timer_handler();
+                        Ok(())
+                    })
+                    .await
+                    .unwrap();
+                std::thread::sleep(Duration::from_millis(40));
+            }
+        }
+
+        /// Presses at the first point, moves through the others and releases
+        /// at the last one. `settle` waits between events, as a slow finger
+        /// does; without it the whole gesture is read in one go, as a flick.
+        async fn swipe(manager: &'static graphics::Manager, points: &[Waypoint], settle: bool) {
+            let (x, y) = points[0];
+            manager.inject_pointer_move(Point::new(x, y)).await.unwrap();
+            manager
+                .inject_pointer_button(graphics::State::Pressed)
+                .await
+                .unwrap();
+            if settle {
+                pump(manager).await;
+            }
+            for &(x, y) in &points[1..] {
+                manager.inject_pointer_move(Point::new(x, y)).await.unwrap();
+                if settle {
+                    pump(manager).await;
+                }
+            }
+            manager
+                .inject_pointer_button(graphics::State::Released)
+                .await
+                .unwrap();
+            pump(manager).await;
+        }
+
+        #[xila::task::test(task_path = xila::task)]
+        async fn bottom_edge_swipe_opens_the_desk_without_the_application_seeing_a_click() {
+            let standard = testing::initialize(false, false).await;
+            let manager = headless_graphics_manager().await;
+            let context = standard.context;
+            let mut shell = Shell::new(standard, true).await.unwrap();
+            let mut desk = Box::new(
+                Desk::new(context, shell.layout.get_windows_parent())
+                    .await
+                    .unwrap(),
+            );
+            let desk_window = desk.get_window_object();
+            let home = Box::new(Home::new(manager, desk_window).await.unwrap());
+            let pill = home.pill_object();
+            shell.desk = Some(desk);
+            shell._home = Some(home);
+
+            // The display is 320x240, so the band starts around y = 220. An
+            // application control covers the whole display on the top layer.
+            let control = manager
+                .lock_function_sync(|| unsafe {
+                    let control = lvgl::lv_obj_create(lvgl::lv_layer_top());
+                    lvgl::lv_obj_set_size(control, lvgl::lv_pct(100), lvgl::lv_pct(100));
+                    for code in [
+                        lvgl::lv_event_code_t_LV_EVENT_PRESSED,
+                        lvgl::lv_event_code_t_LV_EVENT_RELEASED,
+                        lvgl::lv_event_code_t_LV_EVENT_CLICKED,
+                    ] {
+                        lvgl::lv_obj_add_event_cb(control, Some(log_app_event), code, null_mut());
+                    }
+                    Ok(control as usize)
+                })
+                .unwrap() as *mut lvgl::lv_obj_t;
+
+            let desk_hidden = || {
+                manager
+                    .lock_function_sync(|| unsafe {
+                        Ok(lvgl::lv_obj_has_flag(
+                            desk_window,
+                            lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN,
+                        ))
+                    })
+                    .unwrap()
+            };
+            let hide_desk = || {
+                manager
+                    .lock_function_sync(|| unsafe {
+                        lvgl::lv_obj_add_flag(desk_window, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
+                        Ok(())
+                    })
+                    .unwrap()
+            };
+            let pill_offset = || {
+                manager
+                    .lock_function_sync(|| unsafe { Ok(lvgl::lv_obj_get_y_aligned(pill)) })
+                    .unwrap()
+            };
+            let rest = pill_offset();
+            let take_events = || core::mem::take(&mut *APP_EVENTS.lock().unwrap());
+
+            // The pill is only a cue: it never takes a press.
+            manager
+                .lock_function_sync(|| unsafe {
+                    assert!(!lvgl::lv_obj_has_flag(
+                        pill,
+                        lvgl::lv_obj_flag_t_LV_OBJ_FLAG_CLICKABLE
+                    ));
+                    Ok(())
+                })
+                .unwrap();
+
+            // Taps and sideways moves in the band, and swipes above it, belong
+            // to the application.
+            let cases: [(&str, &[Waypoint], bool); 4] = [
+                ("tap in the band", &[(40, 232), (40, 232)], true),
+                (
+                    "sideways in the band",
+                    &[(20, 232), (160, 230), (300, 230)],
+                    true,
+                ),
+                (
+                    "swipe above the band",
+                    &[(160, 200), (160, 170), (160, 120)],
+                    true,
+                ),
+                ("flick above the band", &[(160, 200), (160, 150)], false),
+            ];
+            for (name, points, settle) in cases {
+                hide_desk();
+                take_events();
+                swipe(manager, points, settle).await;
+                assert!(desk_hidden(), "{name} must not open the desk");
+                assert_eq!(
+                    take_events(),
+                    ["pressed", "released", "clicked"],
+                    "{name} must reach the application"
+                );
+            }
+
+            // Slow swipe from the bottom-left corner: claimed, so the
+            // application sees its press cancelled and no click.
+            hide_desk();
+            take_events();
+            manager
+                .inject_pointer_move(Point::new(2, 238))
+                .await
+                .unwrap();
+            manager
+                .inject_pointer_button(graphics::State::Pressed)
+                .await
+                .unwrap();
+            pump(manager).await;
+            for y in [232, 220, 200] {
+                manager.inject_pointer_move(Point::new(2, y)).await.unwrap();
+                pump(manager).await;
+            }
+            // Cancelled while the finger is still down, not only on release.
+            let control_pressed = manager
+                .lock_function_sync(|| unsafe {
+                    Ok(lvgl::lv_obj_has_state(
+                        control,
+                        lvgl::lv_state_t_LV_STATE_PRESSED,
+                    ))
+                })
+                .unwrap();
+            assert!(
+                !control_pressed,
+                "the application's press must be cancelled"
+            );
+            assert_ne!(pill_offset(), rest, "the pill follows the finger");
+            assert!(desk_hidden(), "the desk opens on release");
+            manager
+                .inject_pointer_move(Point::new(2, 150))
+                .await
+                .unwrap();
+            manager
+                .inject_pointer_button(graphics::State::Released)
+                .await
+                .unwrap();
+            pump(manager).await;
+            assert!(!desk_hidden(), "swipe from the corner must open the desk");
+            assert!(
+                !take_events().contains(&"clicked"),
+                "a claimed swipe must not click the application"
+            );
+            assert_eq!(pill_offset(), rest, "the pill springs back");
+
+            // Fast flick from the bottom middle: one move, no timer tick.
+            hide_desk();
+            take_events();
+            swipe(manager, &[(160, 230), (160, 200)], false).await;
+            assert!(!desk_hidden(), "a fast flick must open the desk");
+            assert_eq!(
+                take_events(),
+                ["pressed"],
+                "a flick must not release or click the application"
+            );
+            assert_eq!(pill_offset(), rest);
+
+            // A press after a gesture is not swallowed.
+            hide_desk();
+            swipe(manager, &[(40, 232), (40, 232)], true).await;
+            assert_eq!(take_events(), ["pressed", "released", "clicked"]);
+
+            manager
+                .lock_function_sync(|| unsafe {
+                    lvgl::lv_obj_delete(control);
+                    Ok(())
+                })
+                .unwrap();
+            drop(shell);
         }
 
         fn run_with_timeout<T: Send + 'static>(
