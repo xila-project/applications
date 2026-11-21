@@ -23,6 +23,12 @@ const PRIMARY: u32 = 0;
 const SECONDARY: u32 = 1;
 const OUTLINE: u32 = 2;
 
+/// Height reserved below the content for the shell's bottom-edge home swipe:
+/// its 24 dp band, 20 px at LVGL's default 130 dpi. Guests cannot read the
+/// display density, so this mirrors `Metrics::band` in
+/// `shell/graphical/src/home.rs`; keep them in sync.
+const HOME_BAND: i32 = 20;
+
 const FONT_SMALL: u32 = 0;
 const FONT_LARGE: u32 = 2;
 
@@ -188,9 +194,9 @@ impl Interface {
             let keyboard_area = container(window)?;
             object_set_width(keyboard_area, percentage(100)?)?;
             object_set_flex_grow(keyboard_area, 1)?;
-            // Keeps the keys clear of the shell's home handle.
+            // Keeps the keys clear of the shell's home swipe band.
             let inset = container(window)?;
-            object_set_size(inset, percentage(100)?, 4)?;
+            object_set_size(inset, percentage(100)?, HOME_BAND)?;
             object_update_layout(window)?;
             let width = object_get_width(keyboard_area)?;
             let height = object_get_height(keyboard_area)?;
