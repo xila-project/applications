@@ -7,6 +7,12 @@
 //! receives no click, scroll or long-press) and the pill follows the finger.
 //! A tap or a sideways move in the band is left to the application.
 //!
+//! The pill and the gesture only belong to application windows: while the desk
+//! is the visible window in front, the pill is hidden and band presses are left
+//! to the desk (its tileview swipes up to the drawer). The pill follows the
+//! window stack through the windows parent's `CHILD_CHANGED` events, which
+//! cover a window being opened, closed or brought to the front.
+//!
 //! LVGL sends only `PRESSED`, `RELEASED` and `INDEV_RESET` to input device
 //! callbacks, so a timer that runs only while a band press is active follows
 //! the finger between them. A fast flick (press, one move, release) is judged
@@ -184,6 +190,8 @@ impl Gesture {
 /// never keep a reference to the state across such a call.
 struct State {
     desk: *mut lvgl::lv_obj_t,
+    /// The windows parent, which holds the desk and the application windows.
+    parent: *mut lvgl::lv_obj_t,
     pill: *mut lvgl::lv_obj_t,
     timer: *mut lvgl::lv_timer_t,
     /// Input device that owns the gesture in progress.
@@ -218,6 +226,18 @@ impl State {
         }
     }
 
+    /// Shows the pill over application windows and hides it over the desk.
+    unsafe fn sync_pill(this: *mut Self) {
+        unsafe {
+            let flag = lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN;
+            if Self::desk_in_front((*this).desk) {
+                lvgl::lv_obj_add_flag((*this).pill, flag);
+            } else {
+                lvgl::lv_obj_remove_flag((*this).pill, flag);
+            }
+        }
+    }
+
     /// Puts the pill back and stops following the finger.
     unsafe fn settle(this: *mut Self) {
         unsafe {
@@ -247,6 +267,8 @@ impl State {
             lvgl::lv_obj_remove_flag(desk, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
             lvgl::lv_obj_move_foreground(desk);
             lvgl::lv_obj_send_event(desk, Desk::HOME_EVENT.into_lvgl_code(), null_mut());
+            // The desk may already have been the last child: no child event.
+            Self::sync_pill(this);
         }
     }
 
@@ -357,6 +379,11 @@ impl Drop for Home {
                         state.cast(),
                     );
                 });
+                lvgl::lv_obj_remove_event_cb_with_user_data(
+                    (*state).parent,
+                    Some(handle_windows),
+                    state.cast(),
+                );
                 lvgl::lv_timer_delete((*state).timer);
                 lvgl::lv_obj_delete(pill);
                 drop(alloc::boxed::Box::from_raw(state));
@@ -420,6 +447,7 @@ impl Home {
 
                 let state = alloc::boxed::Box::into_raw(alloc::boxed::Box::new(State {
                     desk,
+                    parent: lvgl::lv_obj_get_parent(desk),
                     pill,
                     timer,
                     indev: null_mut(),
@@ -427,6 +455,13 @@ impl Home {
                     gesture: Gesture::default(),
                 }));
                 lvgl::lv_timer_set_user_data(timer, state.cast());
+                lvgl::lv_obj_add_event_cb(
+                    (*state).parent,
+                    Some(handle_windows),
+                    lvgl::lv_event_code_t_LV_EVENT_CHILD_CHANGED,
+                    state.cast(),
+                );
+                State::sync_pill(state);
 
                 for_each_indev(|indev| {
                     if lvgl::lv_indev_get_type(indev) != lvgl::lv_indev_type_t_LV_INDEV_TYPE_POINTER
@@ -466,6 +501,16 @@ unsafe extern "C" fn handle_indev(event: *mut lvgl::lv_event_t) {
                 State::reset(state, indev, lvgl::lv_event_get_param(event))
             }
             _ => {}
+        }
+    }
+}
+
+unsafe extern "C" fn handle_windows(event: *mut lvgl::lv_event_t) {
+    unsafe {
+        // Only the windows parent's own children, not events bubbling up from
+        // inside a window.
+        if lvgl::lv_event_get_target(event) == lvgl::lv_event_get_current_target(event) {
+            State::sync_pill(lvgl::lv_event_get_user_data(event) as *mut State);
         }
     }
 }

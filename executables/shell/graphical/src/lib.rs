@@ -635,6 +635,15 @@ mod tests {
                     .unwrap()
             };
             let rest = pill_offset();
+            manager
+                .lock_function_sync(|| unsafe {
+                    assert!(
+                        lvgl::lv_obj_has_flag(pill, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN),
+                        "the pill starts hidden over the desk"
+                    );
+                    Ok(())
+                })
+                .unwrap();
             let take_events = || core::mem::take(&mut *APP_EVENTS.lock().unwrap());
 
             // The pill is only a cue: it never takes a press.
@@ -767,6 +776,80 @@ mod tests {
             hide_desk();
             swipe(manager, &[(40, 232), (40, 232)], true).await;
             assert_eq!(take_events(), ["pressed", "released", "clicked"]);
+
+            // The pill follows the window stack: hidden over the desk, shown
+            // over an application window, whichever way the foreground changes.
+            let pill_hidden = || {
+                manager
+                    .lock_function_sync(|| unsafe {
+                        Ok(lvgl::lv_obj_has_flag(
+                            pill,
+                            lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN,
+                        ))
+                    })
+                    .unwrap()
+            };
+            let desk_in_front = || {
+                manager
+                    .lock_function_sync(|| unsafe {
+                        let parent = lvgl::lv_obj_get_parent(desk_window);
+                        let last = lvgl::lv_obj_get_child(
+                            parent,
+                            lvgl::lv_obj_get_child_count(parent) as i32 - 1,
+                        );
+                        Ok(last == desk_window
+                            && !lvgl::lv_obj_has_flag(
+                                desk_window,
+                                lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN,
+                            ))
+                    })
+                    .unwrap()
+            };
+            manager
+                .lock_function_sync(|| unsafe {
+                    lvgl::lv_obj_remove_flag(desk_window, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
+                    lvgl::lv_obj_move_foreground(desk_window);
+                    Ok(())
+                })
+                .unwrap();
+            assert!(desk_in_front());
+
+            // An application window opens in front of the desk.
+            let mut app = graphics::lock!(manager, { manager.create_window().await.unwrap() });
+            assert!(!desk_in_front());
+            assert!(!pill_hidden(), "the pill shows over an application");
+
+            // The home swipe brings the desk to the front: the pill goes away.
+            take_events();
+            swipe(manager, &[(160, 232), (160, 200)], false).await;
+            assert!(
+                desk_in_front(),
+                "the swipe opens the desk over the application"
+            );
+            assert!(pill_hidden(), "the pill hides over the desk");
+            assert_eq!(take_events(), ["pressed", "indev_reset", "press_lost"]);
+
+            // Bringing the application back to the front shows it again.
+            manager
+                .lock_function_sync(|| unsafe {
+                    lvgl::lv_obj_move_foreground(app.as_object_mutable());
+                    Ok(())
+                })
+                .unwrap();
+            assert!(!desk_in_front());
+            assert!(
+                !pill_hidden(),
+                "the pill shows when the application returns"
+            );
+
+            // Closing the application leaves the desk in front: hidden again.
+            drop(app);
+            pump(manager).await;
+            assert!(desk_in_front());
+            assert!(
+                pill_hidden(),
+                "the pill hides when the last application closes"
+            );
 
             manager
                 .lock_function_sync(|| unsafe {
