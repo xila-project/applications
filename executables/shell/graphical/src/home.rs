@@ -12,7 +12,7 @@
 //! the finger between them. A fast flick (press, one move, release) is judged
 //! from the release point and never depends on that timer.
 
-use core::ptr::null_mut;
+use core::{ffi::c_void, ptr::null_mut};
 
 use xila::graphics::{self, lvgl};
 
@@ -47,7 +47,7 @@ impl Metrics {
     fn new(dpx: impl Fn(i32) -> i32) -> Self {
         Self {
             band: dpx(24),
-            slop: dpx(8),
+            slop: dpx(12),
             travel: dpx(20),
             rest: dpx(5),
             lift: dpx(48),
@@ -178,12 +178,19 @@ impl Gesture {
 
 /// Gesture state shared with the LVGL callbacks. Only accessed with the
 /// graphics lock held, from callbacks and from `Home`.
+///
+/// LVGL calls made while handling a gesture can re-enter `handle_indev` (a
+/// reset sends `INDEV_RESET` to it), so the methods take a raw pointer and
+/// never keep a reference to the state across such a call.
 struct State {
     desk: *mut lvgl::lv_obj_t,
     pill: *mut lvgl::lv_obj_t,
     timer: *mut lvgl::lv_timer_t,
     /// Input device that owns the gesture in progress.
     indev: *mut lvgl::lv_indev_t,
+    /// The shell is ending the application's press: the next `INDEV_RESET`
+    /// carries the pressed object, which then gets `PRESS_LOST`.
+    ending: bool,
     gesture: Gesture,
 }
 
@@ -194,92 +201,135 @@ impl State {
         (point.x, point.y)
     }
 
+    /// Whether the desk is the visible window in front. Its tileview then
+    /// owns the swipe up from the bottom edge (to the drawer).
+    unsafe fn desk_in_front(desk: *mut lvgl::lv_obj_t) -> bool {
+        unsafe {
+            let parent = lvgl::lv_obj_get_parent(desk);
+            let mut index = lvgl::lv_obj_get_child_count(parent) as i32;
+            while index > 0 {
+                index -= 1;
+                let child = lvgl::lv_obj_get_child(parent, index);
+                if !lvgl::lv_obj_has_flag(child, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN) {
+                    return child == desk;
+                }
+            }
+            false
+        }
+    }
+
     /// Puts the pill back and stops following the finger.
-    unsafe fn settle(&mut self) {
+    unsafe fn settle(this: *mut Self) {
         unsafe {
-            lvgl::lv_timer_pause(self.timer);
-            lvgl::lv_obj_set_y(self.pill, -Metrics::current().rest);
+            lvgl::lv_timer_pause((*this).timer);
+            lvgl::lv_obj_set_y((*this).pill, -(*this).gesture.metrics.rest);
         }
     }
 
-    /// Cancels the application's press and ignores the rest of this one.
-    unsafe fn take_over(indev: *mut lvgl::lv_indev_t) {
+    /// Ends the application's press: its pressed object gets `PRESS_LOST`
+    /// (through the `INDEV_RESET` this sends to `handle_indev`), so a held
+    /// note or stroke stops, and a scroll it had started is wound up.
+    unsafe fn end_press(this: *mut Self, indev: *mut lvgl::lv_indev_t) {
         unsafe {
+            let scrolled = lvgl::lv_indev_get_scroll_obj(indev);
+            (*this).ending = true;
             lvgl::lv_indev_reset(indev, null_mut());
-            lvgl::lv_indev_wait_release(indev);
+            (*this).ending = false;
+            if !scrolled.is_null() {
+                lvgl::lv_obj_readjust_scroll(scrolled, true /* LV_ANIM_ON */);
+            }
         }
     }
 
-    unsafe fn open_desk(&self) {
+    unsafe fn open_desk(this: *mut Self) {
         unsafe {
-            lvgl::lv_obj_remove_flag(self.desk, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
-            lvgl::lv_obj_move_foreground(self.desk);
-            lvgl::lv_obj_send_event(self.desk, Desk::HOME_EVENT.into_lvgl_code(), null_mut());
+            let desk = (*this).desk;
+            lvgl::lv_obj_remove_flag(desk, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
+            lvgl::lv_obj_move_foreground(desk);
+            lvgl::lv_obj_send_event(desk, Desk::HOME_EVENT.into_lvgl_code(), null_mut());
         }
     }
 
-    unsafe fn pressed(&mut self, indev: *mut lvgl::lv_indev_t) {
-        if !self.gesture.is_idle() && indev != self.indev {
-            return;
-        }
-        let was_active = !self.gesture.is_idle();
-        let (x, y) = unsafe { Self::point(indev) };
-        let height =
-            unsafe { lvgl::lv_display_get_vertical_resolution(lvgl::lv_indev_get_display(indev)) };
-        if self.gesture.press(x, y, height, Metrics::current()) {
-            self.indev = indev;
-            unsafe { lvgl::lv_timer_resume(self.timer) };
-        } else if was_active {
-            unsafe { self.settle() };
+    unsafe fn pressed(this: *mut Self, indev: *mut lvgl::lv_indev_t) {
+        unsafe {
+            if !(*this).gesture.is_idle() && indev != (*this).indev {
+                return;
+            }
+            let was_active = !(*this).gesture.is_idle();
+            let (x, y) = Self::point(indev);
+            let height =
+                lvgl::lv_display_get_vertical_resolution(lvgl::lv_indev_get_display(indev));
+            if !Self::desk_in_front((*this).desk)
+                && (*this).gesture.press(x, y, height, Metrics::current())
+            {
+                (*this).indev = indev;
+                lvgl::lv_timer_resume((*this).timer);
+            } else if was_active {
+                (*this).gesture.cancel();
+                Self::settle(this);
+            }
         }
     }
 
     /// The finger lifted while the application still owned the press.
-    unsafe fn released(&mut self, indev: *mut lvgl::lv_indev_t) {
-        if self.gesture.is_idle() || indev != self.indev {
-            return;
-        }
-        let (x, y) = unsafe { Self::point(indev) };
-        let release = self.gesture.release(x, y);
-        if release != Release::Pass {
-            // Drops the application's click along with its press.
-            unsafe { lvgl::lv_indev_reset(indev, null_mut()) };
-        }
-        if release == Release::Home {
-            unsafe { self.open_desk() };
-        }
-        unsafe { self.settle() };
-    }
-
-    /// Someone else reset the input device: forget an unclaimed candidate.
-    unsafe fn reset(&mut self, indev: *mut lvgl::lv_indev_t) {
-        if self.gesture.is_tracking() && indev == self.indev {
-            self.gesture.cancel();
-            unsafe { self.settle() };
-        }
-    }
-
-    unsafe fn follow(&mut self) {
-        if self.gesture.is_idle() {
-            unsafe { lvgl::lv_timer_pause(self.timer) };
-            return;
-        }
-        let indev = self.indev;
-        let (x, y) = unsafe { Self::point(indev) };
-        if unsafe { lvgl::lv_indev_get_state(indev) }
-            == lvgl::lv_indev_state_t_LV_INDEV_STATE_RELEASED
-        {
-            // A claimed press never reaches the `RELEASED` callback.
-            if self.gesture.release(x, y) == Release::Home {
-                unsafe { self.open_desk() };
+    unsafe fn released(this: *mut Self, indev: *mut lvgl::lv_indev_t) {
+        unsafe {
+            if (*this).gesture.is_idle() || indev != (*this).indev {
+                return;
             }
-            unsafe { self.settle() };
-        } else if let Some(claim) = self.gesture.motion(x, y) {
-            unsafe {
-                if claim.first {
-                    Self::take_over(indev);
+            let (x, y) = Self::point(indev);
+            let release = (*this).gesture.release(x, y);
+            if release != Release::Pass {
+                // Drops the application's click along with its press.
+                Self::end_press(this, indev);
+            }
+            if release == Release::Home {
+                Self::open_desk(this);
+            }
+            Self::settle(this);
+        }
+    }
+
+    /// Someone else reset the input device: forget an unclaimed candidate. When
+    /// the shell itself ended the press, tell the pressed object.
+    unsafe fn reset(this: *mut Self, indev: *mut lvgl::lv_indev_t, object: *mut c_void) {
+        unsafe {
+            if (*this).ending {
+                (*this).ending = false;
+                if !object.is_null() {
+                    lvgl::lv_obj_send_event(
+                        object.cast(),
+                        lvgl::lv_event_code_t_LV_EVENT_PRESS_LOST,
+                        indev.cast(),
+                    );
                 }
-                lvgl::lv_obj_set_y(self.pill, -(self.gesture.metrics.rest + claim.lift));
+            } else if (*this).gesture.is_tracking() && indev == (*this).indev {
+                (*this).gesture.cancel();
+                Self::settle(this);
+            }
+        }
+    }
+
+    unsafe fn follow(this: *mut Self) {
+        unsafe {
+            if (*this).gesture.is_idle() {
+                lvgl::lv_timer_pause((*this).timer);
+                return;
+            }
+            let indev = (*this).indev;
+            let (x, y) = Self::point(indev);
+            if lvgl::lv_indev_get_state(indev) == lvgl::lv_indev_state_t_LV_INDEV_STATE_RELEASED {
+                // A claimed press never reaches the `RELEASED` callback.
+                if (*this).gesture.release(x, y) == Release::Home {
+                    Self::open_desk(this);
+                }
+                Self::settle(this);
+            } else if let Some(claim) = (*this).gesture.motion(x, y) {
+                if claim.first {
+                    Self::end_press(this, indev);
+                    lvgl::lv_indev_wait_release(indev);
+                }
+                lvgl::lv_obj_set_y((*this).pill, -((*this).gesture.metrics.rest + claim.lift));
             }
         }
     }
@@ -373,6 +423,7 @@ impl Home {
                     pill,
                     timer,
                     indev: null_mut(),
+                    ending: false,
                     gesture: Gesture::default(),
                 }));
                 lvgl::lv_timer_set_user_data(timer, state.cast());
@@ -405,23 +456,22 @@ impl Home {
 
 unsafe extern "C" fn handle_indev(event: *mut lvgl::lv_event_t) {
     unsafe {
-        let state = &mut *(lvgl::lv_event_get_user_data(event) as *mut State);
+        let state = lvgl::lv_event_get_user_data(event) as *mut State;
         let indev = lvgl::lv_event_get_target(event) as *mut lvgl::lv_indev_t;
 
         match lvgl::lv_event_get_code(event) {
-            lvgl::lv_event_code_t_LV_EVENT_PRESSED => state.pressed(indev),
-            lvgl::lv_event_code_t_LV_EVENT_RELEASED => state.released(indev),
-            lvgl::lv_event_code_t_LV_EVENT_INDEV_RESET => state.reset(indev),
+            lvgl::lv_event_code_t_LV_EVENT_PRESSED => State::pressed(state, indev),
+            lvgl::lv_event_code_t_LV_EVENT_RELEASED => State::released(state, indev),
+            lvgl::lv_event_code_t_LV_EVENT_INDEV_RESET => {
+                State::reset(state, indev, lvgl::lv_event_get_param(event))
+            }
             _ => {}
         }
     }
 }
 
 unsafe extern "C" fn handle_timer(timer: *mut lvgl::lv_timer_t) {
-    unsafe {
-        let state = &mut *(lvgl::lv_timer_get_user_data(timer) as *mut State);
-        state.follow();
-    }
+    unsafe { State::follow(lvgl::lv_timer_get_user_data(timer) as *mut State) }
 }
 
 #[cfg(test)]
@@ -448,7 +498,7 @@ mod tests {
     #[test]
     fn metrics_scale_with_density() {
         assert_eq!(metrics().band, 20);
-        assert_eq!(metrics().slop, 7);
+        assert_eq!(metrics().slop, 10);
         assert_eq!(metrics().travel, 16);
         let dense = Metrics::new(|n| n * 2);
         assert_eq!(dense.band, 48);

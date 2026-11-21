@@ -9,6 +9,12 @@ use std::{
 };
 use wasm::*;
 
+/// Height reserved below the content for the shell's bottom-edge home swipe:
+/// its 24 dp band, 20 px at LVGL's default 130 dpi. Guests cannot read the
+/// display density, so this mirrors `Metrics::band` in
+/// `shell/graphical/src/home.rs`; keep them in sync.
+const HOME_BAND: i32 = 20;
+
 struct Interface {
     window: *mut Object,
     actions: [*mut Object; 7],
@@ -273,8 +279,8 @@ impl Interface {
             let keyboard = keyboard_create(window)?;
             object_set_size(keyboard, percentage(100)?, if compact { 100 } else { 180 })?;
             object_add_flag(keyboard, ObjectFlag::Hidden)?;
-            // Leave room for the shell's home handle below the status/keyboard.
-            row(window, 8)?;
+            // Leave room for the shell's home swipe band below the status/keyboard.
+            row(window, HOME_BAND)?;
             for object in actions.into_iter().chain([more, path, text, keyboard]) {
                 object_add_flag(object, ObjectFlag::EventBubble)?;
             }

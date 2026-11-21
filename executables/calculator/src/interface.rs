@@ -21,6 +21,12 @@ const LAYOUT_GRID: u32 = 2;
 /// the wide layout's two pages is doubled and the groups read separately.
 const KEY_GAP: i32 = 4;
 
+/// Height reserved below the content for the shell's bottom-edge home swipe:
+/// its 24 dp band, 20 px at LVGL's default 130 dpi. Guests cannot read the
+/// display density, so this mirrors `Metrics::band` in
+/// `shell/graphical/src/home.rs`; keep them in sync.
+const HOME_BAND: i32 = 20;
+
 /// Keypad pages, created on first use and then only shown or hidden, because
 /// guest object handles are not recycled. Function pages sit on a muted panel
 /// so their quiet ghost keys still read as one block.
@@ -133,11 +139,10 @@ impl Interface {
             object_set_flex_grow(keypad, 1)?;
             object_set_flex_flow(keypad, FlexFlow::Row)?;
 
-            // Keeps the last key row clear of the shell's home handle; the
-            // window's flex gap supplies most of the inset.
+            // Keeps the last key row clear of the shell's home swipe band.
             let inset = object_create(window)?;
             make_transparent(inset)?;
-            object_set_size(inset, percentage(100)?, 2)?;
+            object_set_size(inset, percentage(100)?, HOME_BAND)?;
 
             let mut interface = Self {
                 window,

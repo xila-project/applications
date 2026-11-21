@@ -509,11 +509,17 @@ mod tests {
 
         static APP_EVENTS: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
 
+        /// The tests that inject pointer input share one LVGL pointer device,
+        /// so they run one at a time.
+        static POINTER_INPUT: Mutex<()> = Mutex::new(());
+
         unsafe extern "C" fn log_app_event(event: *mut lvgl::lv_event_t) {
             let name = match unsafe { lvgl::lv_event_get_code(event) } {
                 lvgl::lv_event_code_t_LV_EVENT_PRESSED => "pressed",
                 lvgl::lv_event_code_t_LV_EVENT_RELEASED => "released",
                 lvgl::lv_event_code_t_LV_EVENT_CLICKED => "clicked",
+                lvgl::lv_event_code_t_LV_EVENT_PRESS_LOST => "press_lost",
+                lvgl::lv_event_code_t_LV_EVENT_INDEV_RESET => "indev_reset",
                 _ => return,
             };
             APP_EVENTS.lock().unwrap().push(name);
@@ -523,7 +529,8 @@ mod tests {
 
         /// Runs LVGL timers (input reads and the home gesture timer) for a while.
         async fn pump(manager: &'static graphics::Manager) {
-            for _ in 0..4 {
+            // Short enough that a slow gesture stays under the long press time.
+            for _ in 0..3 {
                 manager
                     .with_lvgl(|lvgl| {
                         lvgl.timer_handler();
@@ -531,7 +538,7 @@ mod tests {
                     })
                     .await
                     .unwrap();
-                std::thread::sleep(Duration::from_millis(40));
+                std::thread::sleep(Duration::from_millis(30));
             }
         }
 
@@ -562,7 +569,11 @@ mod tests {
         }
 
         #[xila::task::test(task_path = xila::task)]
+        #[allow(clippy::await_holding_lock)]
         async fn bottom_edge_swipe_opens_the_desk_without_the_application_seeing_a_click() {
+            let _input = POINTER_INPUT
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
             let standard = testing::initialize(false, false).await;
             let manager = headless_graphics_manager().await;
             let context = standard.context;
@@ -584,10 +595,15 @@ mod tests {
                 .lock_function_sync(|| unsafe {
                     let control = lvgl::lv_obj_create(lvgl::lv_layer_top());
                     lvgl::lv_obj_set_size(control, lvgl::lv_pct(100), lvgl::lv_pct(100));
+                    // Hit tests use the laid out size, which is otherwise only
+                    // computed by the next display refresh.
+                    lvgl::lv_obj_update_layout(control);
                     for code in [
                         lvgl::lv_event_code_t_LV_EVENT_PRESSED,
                         lvgl::lv_event_code_t_LV_EVENT_RELEASED,
                         lvgl::lv_event_code_t_LV_EVENT_CLICKED,
+                        lvgl::lv_event_code_t_LV_EVENT_PRESS_LOST,
+                        lvgl::lv_event_code_t_LV_EVENT_INDEV_RESET,
                     ] {
                         lvgl::lv_obj_add_event_cb(control, Some(log_app_event), code, null_mut());
                     }
@@ -634,8 +650,10 @@ mod tests {
 
             // Taps and sideways moves in the band, and swipes above it, belong
             // to the application.
-            let cases: [(&str, &[Waypoint], bool); 4] = [
+            let cases: [(&str, &[Waypoint], bool); 5] = [
                 ("tap in the band", &[(40, 232), (40, 232)], true),
+                // Tap jitter stays under the slop (10 px at 130 dpi).
+                ("tap that drifts up", &[(40, 232), (40, 224)], true),
                 (
                     "sideways in the band",
                     &[(20, 232), (160, 230), (300, 230)],
@@ -702,9 +720,10 @@ mod tests {
                 .unwrap();
             pump(manager).await;
             assert!(!desk_hidden(), "swipe from the corner must open the desk");
-            assert!(
-                !take_events().contains(&"clicked"),
-                "a claimed swipe must not click the application"
+            assert_eq!(
+                take_events(),
+                ["pressed", "indev_reset", "press_lost"],
+                "a claimed press ends with press_lost, never a release or a click"
             );
             assert_eq!(pill_offset(), rest, "the pill springs back");
 
@@ -715,8 +734,32 @@ mod tests {
             assert!(!desk_hidden(), "a fast flick must open the desk");
             assert_eq!(
                 take_events(),
-                ["pressed"],
-                "a flick must not release or click the application"
+                ["pressed", "indev_reset", "press_lost"],
+                "a flick ends the press with press_lost, never a release or a click"
+            );
+            assert_eq!(pill_offset(), rest);
+
+            // A swipe that stops short of the travel is swallowed, not opened.
+            hide_desk();
+            take_events();
+            swipe(manager, &[(160, 232), (160, 218)], false).await;
+            assert!(desk_hidden(), "a short swipe must not open the desk");
+            assert_eq!(take_events(), ["pressed", "indev_reset", "press_lost"]);
+
+            // With the desk in front its tileview keeps the swipe.
+            manager
+                .lock_function_sync(|| unsafe {
+                    lvgl::lv_obj_remove_flag(desk_window, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
+                    lvgl::lv_obj_move_foreground(desk_window);
+                    Ok(())
+                })
+                .unwrap();
+            take_events();
+            swipe(manager, &[(160, 232), (160, 215), (160, 190)], true).await;
+            assert_eq!(
+                take_events(),
+                ["pressed", "released", "clicked"],
+                "the shell must not claim a band press while the desk is in front"
             );
             assert_eq!(pill_offset(), rest);
 
@@ -728,6 +771,132 @@ mod tests {
             manager
                 .lock_function_sync(|| unsafe {
                     lvgl::lv_obj_delete(control);
+                    Ok(())
+                })
+                .unwrap();
+            drop(shell);
+        }
+
+        async fn shell_with_home(
+            manager: &'static graphics::Manager,
+        ) -> (Shell, *mut lvgl::lv_obj_t) {
+            let standard = testing::initialize(false, false).await;
+            let context = standard.context;
+            let mut shell = Shell::new(standard, true).await.unwrap();
+            let mut desk = Box::new(
+                Desk::new(context, shell.layout.get_windows_parent())
+                    .await
+                    .unwrap(),
+            );
+            let desk_window = desk.get_window_object();
+            shell._home = Some(Box::new(Home::new(manager, desk_window).await.unwrap()));
+            shell.desk = Some(desk);
+            (shell, desk_window)
+        }
+
+        fn indev_event_count(manager: &'static graphics::Manager) -> u32 {
+            manager
+                .lock_function_sync(|| unsafe {
+                    let mut count = 0;
+                    let mut indev = lvgl::lv_indev_get_next(null_mut());
+                    while !indev.is_null() {
+                        count += lvgl::lv_indev_get_event_count(indev);
+                        indev = lvgl::lv_indev_get_next(indev);
+                    }
+                    Ok(count)
+                })
+                .unwrap()
+        }
+
+        #[xila::task::test(task_path = xila::task)]
+        #[allow(clippy::await_holding_lock)]
+        async fn dropping_home_mid_gesture_removes_its_callbacks_and_timer() {
+            let _input = POINTER_INPUT
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            let manager = headless_graphics_manager().await;
+            let baseline = indev_event_count(manager);
+            let (shell, desk_window) = shell_with_home(manager).await;
+            assert!(indev_event_count(manager) > baseline);
+            manager
+                .lock_function_sync(|| unsafe {
+                    lvgl::lv_obj_add_flag(desk_window, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
+                    Ok(())
+                })
+                .unwrap();
+
+            // The finger is down in the band and already moving when the
+            // shell goes away.
+            manager
+                .inject_pointer_move(Point::new(100, 236))
+                .await
+                .unwrap();
+            manager
+                .inject_pointer_button(graphics::State::Pressed)
+                .await
+                .unwrap();
+            pump(manager).await;
+            manager
+                .inject_pointer_move(Point::new(100, 200))
+                .await
+                .unwrap();
+            pump(manager).await;
+            drop(shell);
+            assert_eq!(indev_event_count(manager), baseline);
+
+            // Nothing of the gesture is left to fire on the rest of it.
+            manager
+                .inject_pointer_move(Point::new(100, 120))
+                .await
+                .unwrap();
+            manager
+                .inject_pointer_button(graphics::State::Released)
+                .await
+                .unwrap();
+            pump(manager).await;
+            pump(manager).await;
+        }
+
+        #[xila::task::test(task_path = xila::task)]
+        #[allow(clippy::await_holding_lock)]
+        async fn claimed_swipe_winds_up_a_scroll_the_application_had_started() {
+            let _input = POINTER_INPUT
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            let manager = headless_graphics_manager().await;
+            let (shell, desk_window) = shell_with_home(manager).await;
+            let scroller = manager
+                .lock_function_sync(|| unsafe {
+                    lvgl::lv_obj_add_flag(desk_window, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
+                    let scroller = lvgl::lv_obj_create(lvgl::lv_layer_top());
+                    lvgl::lv_obj_set_size(scroller, lvgl::lv_pct(100), lvgl::lv_pct(100));
+                    let content = lvgl::lv_obj_create(scroller);
+                    lvgl::lv_obj_set_size(content, lvgl::lv_pct(100), 2000);
+                    lvgl::lv_obj_update_layout(scroller);
+                    Ok(scroller as usize)
+                })
+                .unwrap() as *mut lvgl::lv_obj_t;
+
+            // The first move is past LVGL's scroll limit, so the scroll starts
+            // before the home gesture is claimed.
+            swipe(manager, &[(2, 238), (2, 205), (2, 190), (2, 150)], true).await;
+            let (opened, scrolled, offset, limit) = manager
+                .lock_function_sync(|| unsafe {
+                    Ok((
+                        !lvgl::lv_obj_has_flag(desk_window, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN),
+                        lvgl::lv_obj_has_state(scroller, lvgl::lv_state_t_LV_STATE_SCROLLED),
+                        lvgl::lv_obj_get_scroll_y(scroller),
+                        lvgl::lv_obj_get_scroll_bottom(scroller),
+                    ))
+                })
+                .unwrap();
+            assert!(opened, "the swipe opens the desk");
+            assert!(!scrolled, "the scroll must not be left in progress");
+            assert!(offset >= 0 && limit >= 0, "scroll offset is back in range");
+
+            manager
+                .lock_function_sync(|| unsafe {
+                    lvgl::lv_obj_delete(scroller);
                     Ok(())
                 })
                 .unwrap();
