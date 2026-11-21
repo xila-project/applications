@@ -72,12 +72,22 @@ cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p 
 description = "Check each locale independently on one runner"
 run = """
 set -eu
-result=0
+failed=""
+checked=0
 for locale in ${CI_LOCALES:?}; do
-  printf 'Checking locale %s\\n' "$locale"
-  EMBEDDED_I18N_LOCALE="$locale" CARGO_TARGET_DIR="target/localization/$locale" mise run ci:localization || result=1
+  checked=$((checked + 1))
+  printf '::group::Localization (%s)\\n' "$locale"
+  EMBEDDED_I18N_LOCALE="$locale" CARGO_TARGET_DIR="target/localization/$locale" mise run ci:localization || failed="$failed $locale"
+  printf '::endgroup::\\n'
 done
-exit "$result"
+if [ "$checked" -eq 0 ]; then
+  echo "::error::CI_LOCALES names no locale"
+  exit 1
+fi
+if [ -n "$failed" ]; then
+  echo "::error::Localization check failed for:$failed"
+  exit 1
+fi
 """
 
 [tasks."ci:core-revision"]

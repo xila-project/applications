@@ -149,6 +149,17 @@ class ApplicationPolicy(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn('run ci:localization fr target/localization/fr', result.stdout)
             self.assertIn('run ci:localization it target/localization/it', result.stdout)
+            self.assertIn('::error::Localization check failed for: fr', result.stdout)
+            self.assertNotIn('failed for: fr it', result.stdout)
+
+    def test_localization_group_rejects_an_empty_locale_list(self):
+        task = manifest('mise.ci.toml')['tasks']['ci:localization-group']
+        result = subprocess.run(
+            ['sh', '-c', task['run']], text=True, capture_output=True,
+            env=os.environ | {'CI_LOCALES': ' '},
+        )
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('::error::CI_LOCALES names no locale', result.stdout)
 
     def test_ci_caches_are_separate_and_use_one_wrapper(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
