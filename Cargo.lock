@@ -2196,7 +2196,7 @@ dependencies = [
 
 [[package]]
 name = "xila-calculator"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "critical-section",
  "embedded-i18n",
@@ -2594,7 +2594,7 @@ dependencies = [
 
 [[package]]
 name = "xila-synth"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "nanoaudio",
  "nanoaudio-synth",
@@ -2688,7 +2688,7 @@ dependencies = [
 
 [[package]]
 name = "xila-text-editor"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "embedded-i18n",
  "xila-wasm",
