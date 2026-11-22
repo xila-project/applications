@@ -22,7 +22,9 @@ const MAX_REDIRECTS: usize = 5;
 /// Largest response head the device publishes (Platforms `RESPONSE_BUFFER_SIZE`);
 /// GitHub release redirects need about 5.5 KB.
 const HEAD_BUFFER: usize = 8192;
+/// Size of each body read; the body reuses the head buffer, which must hold one chunk.
 const CHUNK: usize = 2048;
+const _: () = assert!(CHUNK <= HEAD_BUFFER);
 
 /// Receives the response body in chunks.
 pub trait Sink {
@@ -143,10 +145,11 @@ async fn exchange(
             other => return Err(format!("HTTP {other} for {url}")),
         }
 
-        let mut chunk = vec![0u8; CHUNK];
+        // The head has been inspected: its allocation now holds the body chunks.
+        let mut chunk = head;
         loop {
             let count = device
-                .read(&mut chunk)
+                .read(&mut chunk[..CHUNK])
                 .await
                 .map_err(|e| format!("download from {} failed: {e}", parsed.host))?;
             if count == 0 {

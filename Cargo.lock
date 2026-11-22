@@ -2492,6 +2492,7 @@ dependencies = [
 name = "xila-package-application"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "getargs",
  "getargs-derive",
  "portable-atomic",
@@ -2501,6 +2502,7 @@ dependencies = [
  "xila-package-manifest",
  "xila-package-reader",
  "xila-package-verification",
+ "xila-testing",
  "xila-version",
 ]
 
