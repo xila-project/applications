@@ -65,7 +65,7 @@ pub enum RepositoryOperation<'a> {
     Add {
         /// Local name, e.g. community.
         name: &'a str,
-        /// HTTPS base URL, e.g. https://registry.example.org.
+        /// HTTPS base URL, e.g. https://registry.xila.example.
         url: &'a str,
         /// Root key obtained out of band (canonical base64); skips the prompt.
         #[arg(long = "root-key")]
@@ -226,7 +226,7 @@ mod tests {
             "repository",
             "add",
             "community",
-            "https://registry.example.org",
+            "https://registry.xila.example",
             "--root-key",
             "AJEDFQ2MPtUO0vu/BnC7xX5Ag8sBuq6DF5+ShKfCQgU=",
         ]);
@@ -235,7 +235,7 @@ mod tests {
             Ok(Command::Repository(RepositoryCommand {
                 command: RepositoryOperation::Add {
                     name: "community",
-                    url: "https://registry.example.org",
+                    url: "https://registry.xila.example",
                     root_key: Some("AJEDFQ2MPtUO0vu/BnC7xX5Ag8sBuq6DF5+ShKfCQgU="),
                     yes: false,
                 }
