@@ -191,7 +191,7 @@ jobs:
       - name: "Package | Build and sign"
         id: package
         # Pin by full commit SHA; move to xila-project/package-action@v1 once it is tagged.
-        uses: xila-project/package-action@f4d043aadaee14d29e71ecafab05f42bc30102b7
+        uses: xila-project/package-action@38bc4d5e3db86c6a31db9e884cf5eddcaefdd30e
         with:
           input-directory: ${{ runner.temp }}/package-source
           signing-key: ${{ (env.SIGN_WITH_SECRET == 'true' && secrets.XILA_DEV_SIGNING_SEED_B64) || steps.throwaway.outputs.seed }}
@@ -201,6 +201,7 @@ jobs:
           CI_PACKAGE_DIRECTORY: ${{ runner.temp }}/package-output
           CI_PACKAGE_SIGNATURE: ${{ env.SIGN_WITH_SECRET == 'true' && 'verified, repository development key' || 'verified, throwaway key (not published)' }}
           EXPECTED_SHA256: ${{ steps.package.outputs.package-sha256 }}
+          XILA_PACKAGE_EXECUTABLE: ${{ steps.package.outputs.xila-package-path }}
         run: mise run ci:verify-package
       - name: "Report | Upload application package"
         uses: actions/upload-artifact@v7

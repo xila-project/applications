@@ -4,18 +4,13 @@
 #
 # Environment: CI_PACKAGE_DIRECTORY (the action's output directory),
 # EXPECTED_SHA256 (optional; the digest the action reported),
-# XILA_PACKAGE_EXECUTABLE (optional; found under RUNNER_TEMP when unset),
+# XILA_PACKAGE_EXECUTABLE (the installed xila-package, the action's `xila-package-path` output),
 # GITHUB_STEP_SUMMARY (optional).
 set -euo pipefail
 
 directory="${CI_PACKAGE_DIRECTORY:?}"
-executable="${XILA_PACKAGE_EXECUTABLE:-}"
-if [[ -z "$executable" ]]; then
-  # The action installs the pinned, digest-checked release below RUNNER_TEMP.
-  mapfile -t found < <(find "${RUNNER_TEMP:?}" -path '*/xila-package-install.*/xila-package' -type f)
-  [[ ${#found[@]} -eq 1 ]] || { echo "::error::expected one installed xila-package, found ${#found[@]}"; exit 1; }
-  executable="${found[0]}"
-fi
+executable="${XILA_PACKAGE_EXECUTABLE:?}"
+[[ -x "$executable" ]] || { echo "::error::$executable is not an executable"; exit 1; }
 
 shopt -s nullglob
 archives=("$directory"/*.xpk)
