@@ -20,7 +20,7 @@ use xila::{
     virtual_file_system::{Directory, File, VirtualFileSystem},
 };
 use xila_package_manifest::{
-    MANIFEST_PATH, Manifest, RegistryEntry, SIGNATURE_PATH, validate_path,
+    MANIFEST_PATH, Manifest, RegistryEntry, SIGNATURE_PATH, XilaVersion, validate_path,
 };
 use xila_package_reader::StreamingVerifier;
 use xila_package_verification::{PublicKey, Sha256Verifier};
@@ -185,15 +185,19 @@ async fn read_public_key(
     }
 }
 
+pub(crate) const fn running_xila_version() -> XilaVersion {
+    XilaVersion::new(xila_version::RUNNING.major, xila_version::RUNNING.minor)
+}
+
 fn check_compatibility(manifest: &Manifest) -> Result<(), String> {
     if manifest.target != "wasm32-wasip1" {
         return Err("package is not a WASI Preview 1 application".into());
     }
-    if manifest.minimum_xila_abi > abi_application::APPLICATION_ABI_VERSION {
+    let running = running_xila_version();
+    if !xila_package_manifest::compatible(manifest.xila_version, running) {
         return Err(format!(
-            "package requires Xila ABI {}, runtime supports {}",
-            manifest.minimum_xila_abi,
-            abi_application::APPLICATION_ABI_VERSION
+            "package requires Xila {}, running Xila {}",
+            manifest.xila_version, running
         ));
     }
     // Until capability consent and sandbox policy are implemented, do not
@@ -599,24 +603,16 @@ pub async fn list(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<Vec<S
 #[cfg(test)]
 mod tests {
     use super::*;
+    use xila_package_manifest::{Application, FORMAT_VERSION, ManifestFile};
 
-    #[test]
-    fn paths_follow_core_hierarchy() {
-        assert_eq!(INSTALLED_ROOT, Path::APPLICATION_BUNDLES.as_str());
-        let key_directory = DEFAULT_TRUSTED_KEY.rsplit_once('/').unwrap().0;
-        assert_eq!(key_directory, Path::PACKAGE_CONFIGURATION.as_str());
-    }
-
-    #[test]
-    fn rejects_unsupported_capabilities_and_external_executable() {
-        use xila_package_manifest::{Application, FORMAT_VERSION, ManifestFile};
-        let mut manifest = Manifest {
+    fn test_manifest() -> Manifest {
+        Manifest {
             schema: None,
             format_version: FORMAT_VERSION,
             name: "test.clock".into(),
             version: "1".into(),
             target: "wasm32-wasip1".into(),
-            minimum_xila_abi: 1,
+            xila_version: running_xila_version(),
             capabilities: alloc::vec![],
             files: alloc::vec![ManifestFile {
                 path: "executables/clock.wasm".into(),
@@ -630,12 +626,53 @@ mod tests {
                 show_in_launcher: true,
             }),
             metadata: None,
-        };
+        }
+    }
+
+    #[test]
+    fn paths_follow_core_hierarchy() {
+        assert_eq!(INSTALLED_ROOT, Path::APPLICATION_BUNDLES.as_str());
+        let key_directory = DEFAULT_TRUSTED_KEY.rsplit_once('/').unwrap().0;
+        assert_eq!(key_directory, Path::PACKAGE_CONFIGURATION.as_str());
+    }
+
+    #[test]
+    fn rejects_unsupported_capabilities_and_external_executable() {
+        let mut manifest = test_manifest();
         assert!(check_compatibility(&manifest).is_ok());
         manifest.capabilities.push("network".into());
         assert!(check_compatibility(&manifest).is_err());
         manifest.capabilities.clear();
         manifest.application.as_mut().unwrap().entrypoint = "/system/executables/wasm".into();
         assert!(check_compatibility(&manifest).is_err());
+    }
+
+    #[test]
+    fn rejects_incompatible_xila_version() {
+        let running = running_xila_version();
+        let older_pre_release = (running.major == 0)
+            .then(|| running.minor.checked_sub(1))
+            .flatten()
+            .map(|minor| XilaVersion::new(0, minor));
+        for incompatible in [
+            Some(XilaVersion::new(
+                running.major,
+                running.minor.wrapping_add(1),
+            )),
+            Some(XilaVersion::new(
+                running.major.wrapping_add(1),
+                running.minor,
+            )),
+            older_pre_release,
+        ]
+        .into_iter()
+        .flatten()
+        {
+            let mut manifest = test_manifest();
+            manifest.xila_version = incompatible;
+            let problem = check_compatibility(&manifest).unwrap_err();
+            assert!(problem.contains(&incompatible.to_string()), "{problem}");
+            assert!(problem.contains(&running.to_string()), "{problem}");
+        }
     }
 }

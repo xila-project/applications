@@ -86,6 +86,8 @@ class ApplicationPolicy(unittest.TestCase):
         reference = re.search(r'package-wasm.yml@([0-9a-f]{40})', ci)
         self.assertIsNotNone(reference, "packaging workflow must pin an immutable SHA")
         self.assertIn(f"builder-ref: {reference.group(1)}", ci)
+        self.assertRegex(ci, r'builder-release:\s+xila-package-builder-v\d+\.\d+\.\d+')
+        self.assertRegex(ci, r'builder-sha256:\s+[0-9a-f]{64}')
         # Only the release jobs write, and only on pushes to main.
         release = ci.split('\n  release:\n', 1)[1]
         release_job, release_pr_job = release.split('\n  release-pr:\n', 1)
