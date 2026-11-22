@@ -548,6 +548,7 @@ async fn fd_readdir_writes_whole_records_and_resumes_from_the_cookie() {
     // cookie of each record is the index of the entry that follows it.
     let (status, bytes) = readdir(&mut guest, 512, 0);
     assert_eq!(status, 0);
+    let whole_bytes = bytes.clone();
     let all = directory_records(&bytes);
     let names: Vec<&str> = all.iter().map(|record| record.2.as_str()).collect();
     assert_eq!(names, [".", "..", "alpha", "beta", "gamma"]);
@@ -555,13 +556,16 @@ async fn fd_readdir_writes_whole_records_and_resumes_from_the_cookie() {
     assert_eq!(cookies, [1, 2, 3, 4, 5]);
     assert_eq!(all[2].3, 4, "a regular file");
 
-    // A small buffer stops after the last whole record that fits and leaves the
-    // rest of the buffer untouched.
+    // A small buffer is filled completely: the last record is written truncated.
     let first_two = 25 + 26;
     let (status, bytes) = readdir(&mut guest, (first_two + 24 + 5 - 1) as i32, 0);
     assert_eq!(status, 0);
-    assert_eq!(directory_records(&bytes), all[..2]);
-    assert_eq!(guest.get(2000 + first_two, 4), [0xee; 4]);
+    assert_eq!(bytes.len(), first_two + 24 + 5 - 1);
+    assert_eq!(directory_records(&bytes[..first_two]), all[..2]);
+    assert_eq!(
+        &bytes[first_two..],
+        &whole_bytes[first_two..first_two + 24 + 4]
+    );
 
     // Resuming from a record's cookie continues with the next entry.
     let (status, bytes) = readdir(&mut guest, 512, 2);
@@ -570,6 +574,7 @@ async fn fd_readdir_writes_whole_records_and_resumes_from_the_cookie() {
     let (status, bytes) = readdir(&mut guest, 24 + 4, 3);
     assert_eq!(status, 0);
     assert_eq!(directory_records(&bytes), all[3..4]);
+    assert_eq!(bytes.len(), 24 + 4);
 
     // At the end the call succeeds with no bytes; past it the cookie is invalid.
     let (status, bytes) = readdir(&mut guest, 512, 5);
@@ -578,15 +583,66 @@ async fn fd_readdir_writes_whole_records_and_resumes_from_the_cookie() {
     let (status, _) = readdir(&mut guest, 512, 6);
     assert_eq!(status, errno(Error::Inval));
 
-    // A buffer too small for the first record writes nothing.
+    // A buffer shorter than the first record is still filled with its prefix.
     let (status, bytes) = readdir(&mut guest, 24, 0);
     assert_eq!(status, 0);
-    assert!(bytes.is_empty());
+    assert_eq!(bytes, whole_bytes[..24]);
+
+    // A record split at every byte offset of its header and name: the buffer is
+    // always filled and holds a prefix of the record; the previous record's
+    // cookie returns it whole.
+    for length in 1..=(24 + 5) {
+        let (status, bytes) = readdir(&mut guest, length, 2);
+        assert_eq!(status, 0);
+        assert_eq!(bytes.len(), length as usize);
+        assert_eq!(bytes, whole_bytes[first_two..first_two + length as usize]);
+    }
+    // A buffer exactly one record long holds that record and nothing more.
+    let (status, bytes) = readdir(&mut guest, 24 + 5, 2);
+    assert_eq!(status, 0);
+    assert_eq!(directory_records(&bytes), all[2..3]);
 
     // The end-of-directory cookie reports no bytes without touching the directory.
     let (status, bytes) = readdir(&mut guest, 512, -1);
     assert_eq!(status, 0);
     assert!(bytes.is_empty());
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn fd_readdir_truncates_a_name_longer_than_the_buffer() {
+    let mut guest = Guest::new().await;
+    assert_eq!(guest.with_path("path_create_directory", ROOT, "long"), 0);
+    let name = "n".repeat(100);
+    File::write_to_path(
+        guest.vfs,
+        guest.task,
+        format!("/sandbox/long/{name}").as_str(),
+        b"",
+    )
+    .await
+    .unwrap();
+    let directory = guest.open_directory("long");
+    let readdir = |guest: &mut Guest, length: i32, cookie: i64| -> Vec<u8> {
+        guest.put(2000, &[0xee; 512]);
+        let status = guest.call(
+            "fd_readdir",
+            &[i(directory), i(2000), i(length), l(cookie), i(1300)],
+        );
+        assert_eq!(status, 0);
+        let written = guest.u32_at(1300) as usize;
+        guest.get(2000, written)
+    };
+
+    // The long entry follows "." and ".."; with a buffer shorter than its name the
+    // call still fills the buffer with the start of the record.
+    let whole = readdir(&mut guest, 512, 2);
+    assert_eq!(whole.len(), 24 + 100);
+    assert_eq!(directory_records(&whole)[0].2, name);
+    let truncated = readdir(&mut guest, 40, 2);
+    assert_eq!(truncated.len(), 40);
+    assert_eq!(truncated, whole[..40]);
+    // Retrying from the same cookie with a larger buffer returns it whole.
+    assert_eq!(readdir(&mut guest, 24 + 100, 2), whole);
 }
 
 #[xila::task::test(task_path = xila::task)]

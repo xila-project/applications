@@ -71,21 +71,29 @@ define_wasi_module! {
                 let name = entry.name.as_bytes();
                 let name_length = u32::try_from(name.len()).map_err(|_| Error::Overflow)?;
                 let record_length = RECORD_HEADER_LENGTH.checked_add(name.len()).ok_or(Error::Overflow)?;
-                if written.checked_add(record_length).ok_or(Error::Overflow)? > capacity { break; }
-                index += 1;
-                let next = u64::try_from(index).unwrap_or(u64::MAX);
+                // A record that does not fit is written truncated so the buffer is
+                // filled completely; the guest sees a full buffer and retries from the
+                // previous record's cookie with a larger one.
+                let available = capacity - written;
+                let fitted = record_length.min(available);
+                let next = u64::try_from(index + 1).unwrap_or(u64::MAX);
                 let mut header = [0u8; RECORD_HEADER_LENGTH];
                 header[0..8].copy_from_slice(&next.to_le_bytes());
                 header[8..16].copy_from_slice(&entry.inode.to_le_bytes());
                 header[16..20].copy_from_slice(&name_length.to_le_bytes());
                 header[20] = kind_to_filetype(&entry.kind);
-                let mut guest = borrow_memory(&memory, &mut caller);
-                let record = guest
-                    .bytes_mut(GuestSlice::new(buf_ptr + written as WasmUsize, record_length as WasmUsize))
-                    .ok_or(Error::Fault)?;
-                record[..RECORD_HEADER_LENGTH].copy_from_slice(&header);
-                record[RECORD_HEADER_LENGTH..].copy_from_slice(name);
-                written += record_length;
+                if fitted > 0 {
+                    let mut guest = borrow_memory(&memory, &mut caller);
+                    let record = guest
+                        .bytes_mut(GuestSlice::new(buf_ptr + written as WasmUsize, fitted as WasmUsize))
+                        .ok_or(Error::Fault)?;
+                    let header_fitted = fitted.min(RECORD_HEADER_LENGTH);
+                    record[..header_fitted].copy_from_slice(&header[..header_fitted]);
+                    record[header_fitted..].copy_from_slice(&name[..fitted - header_fitted]);
+                }
+                written += fitted;
+                index += 1;
+                if fitted < record_length { break; }
             }
             borrow_memory(&memory, &mut caller)
                 .write(GuestPointer::new(nread_ptr), written as WasmUsize)
