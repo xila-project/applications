@@ -1,18 +1,27 @@
 #![no_std]
 extern crate alloc;
+#[cfg(test)]
+extern crate std;
 
 mod cli;
 mod http;
 mod install;
+mod privilege;
 mod repository;
+mod transaction;
+
+#[cfg(all(test, target_os = "linux"))]
+testing::instantiate_global_allocator!();
 
 use alloc::{
     boxed::Box,
+    format,
     string::{String, ToString},
     vec::Vec,
 };
 use core::{fmt::Write, num::NonZeroUsize};
 use xila::executable::{self, ExecutableTrait, Standard};
+use xila_package_manager::installation::{self, Activated, Mode, Storage};
 
 pub struct PackageExecutable;
 
@@ -80,7 +89,6 @@ async fn repository_command(
             }
         }
         cli::RepositoryOperation::Remove { name } => {
-            install::ensure_root(vfs, task).await?;
             repository::remove(vfs, task, name).await?;
             write_line(standard, &alloc::format!("Removed repository {name}.")).await?;
         }
@@ -90,7 +98,6 @@ async fn repository_command(
             root_key,
             yes,
         } => {
-            install::ensure_root(vfs, task).await?;
             let pending = repository::prepare(vfs, task, name, url, root_key).await?;
             if !pending.pinned {
                 write_line(
@@ -133,6 +140,144 @@ async fn repository_command(
     Ok(())
 }
 
+fn describe(installed: &install::Installed) -> String {
+    match &installed.activated {
+        Activated::Installed => format!("Installed {} {}", installed.name, installed.version),
+        Activated::Upgraded {
+            previous: Some(previous),
+        } => format!(
+            "Upgraded {} from {} to {}",
+            installed.name, previous.version, installed.version
+        ),
+        Activated::Upgraded { previous: None } => {
+            format!("Upgraded {} to {}", installed.name, installed.version)
+        }
+    }
+}
+
+/// Install or upgrade a package from a repository or a local archive.
+async fn install_command(
+    standard: &mut Standard<'static>,
+    session: &mut transaction::Session,
+    options: cli::Install<'_>,
+    mode: Mode,
+) -> Result<(), String> {
+    let vfs = standard.context.virtual_file_system;
+    let task = standard
+        .context
+        .task_manager
+        .get_current_task_identifier()
+        .await;
+    let line = match options.target() {
+        cli::Target::Package { name, version } => {
+            if options.public_key.is_some() || options.allow_untrusted {
+                return Err(
+                    "--public-key and --allow-untrusted only apply to local archives".into(),
+                );
+            }
+            let installed =
+                repository::install(session, vfs, task, name, version, options.repository, mode)
+                    .await?;
+            format!(
+                "{} from {} (verified from its root key: entry, publisher, signature and hashes).",
+                describe(&installed.installed),
+                installed.repository
+            )
+        }
+        cli::Target::Archive(archive) => {
+            if options.allow_untrusted || options.public_key.is_some() {
+                if options.repository.is_some() {
+                    return Err(
+                        "--repository does not apply with --public-key or --allow-untrusted".into(),
+                    );
+                }
+                let installed =
+                    install::install_local(session, vfs, task, archive, options.public_key, mode)
+                        .await?;
+                if options.allow_untrusted {
+                    format!(
+                        "{} (publisher NOT authenticated; hashes verified).",
+                        describe(&installed)
+                    )
+                } else {
+                    format!(
+                        "{} (Ed25519 signature with the given key and payload hashes verified).",
+                        describe(&installed)
+                    )
+                }
+            } else {
+                let installed = repository::install_archive(
+                    session,
+                    vfs,
+                    task,
+                    archive,
+                    options.repository,
+                    mode,
+                )
+                .await?;
+                format!(
+                    "{} (verified through {}: entry, publisher, signature and hashes).",
+                    describe(&installed.installed),
+                    installed.repository
+                )
+            }
+        }
+    };
+    write_line(standard, &line).await
+}
+
+/// Commands that change the installed packages; the task is privileged.
+async fn change(standard: &mut Standard<'static>, command: cli::Command<'_>) -> Result<(), String> {
+    let vfs = standard.context.virtual_file_system;
+    let task = standard
+        .context
+        .task_manager
+        .get_current_task_identifier()
+        .await;
+    if let cli::Command::Repository(cli::RepositoryCommand { command }) = command {
+        return repository_command(standard, command).await;
+    }
+    let mut session = transaction::begin(vfs, task).await?;
+    if let Some(line) = transaction::describe(&session.recovery) {
+        write_line(standard, &line).await?;
+    }
+    match command {
+        cli::Command::Install(options) => {
+            install_command(standard, &mut session, options, Mode::Install).await
+        }
+        cli::Command::Upgrade(options) => {
+            install_command(standard, &mut session, options, Mode::Upgrade).await
+        }
+        cli::Command::Remove { name } => {
+            let removed = installation::remove(&mut session.storage, &transaction::LAYOUT, name)
+                .await
+                .map_err(|e| format!("cannot remove {name}: {e}"))?;
+            let version = removed
+                .map(|origin| format!(" {}", origin.version))
+                .unwrap_or_default();
+            write_line(
+                standard,
+                &format!("Removed {name}{version}; its user data is kept."),
+            )
+            .await
+        }
+        cli::Command::Recover => {
+            let removed = session.recovery.removed.len();
+            if session.recovery.transaction.is_none() && removed == 0 {
+                write_line(standard, "Nothing to recover.").await?;
+            } else if removed != 0 {
+                write_line(
+                    standard,
+                    &format!("Removed {removed} abandoned temporary entries."),
+                )
+                .await?;
+            }
+            Ok(())
+        }
+        cli::Command::List | cli::Command::Repository(_) => Ok(()),
+    }
+}
+
 async fn run(standard: &mut Standard<'static>, arguments: &[String]) -> Result<(), String> {
     let command = match cli::parse(arguments) {
         Ok(command) => command,
@@ -150,72 +295,38 @@ async fn run(standard: &mut Standard<'static>, arguments: &[String]) -> Result<(
         .await;
     match command {
         cli::Command::List => {
+            if transaction::VirtualStorage::new(vfs, task)
+                .exists(transaction::JOURNAL)
+                .await?
+            {
+                let _ = writeln!(
+                    standard.error(),
+                    "package: an interrupted package operation is pending; run `package recover`"
+                );
+            }
             for name in install::list(vfs, task).await? {
                 let origin = match repository::origin(vfs, task, &name).await? {
-                    Some(origin) => alloc::format!(
+                    Some(origin) => format!(
                         "\t{}\t{}",
                         origin.version,
                         origin.repository.as_deref().unwrap_or("local")
                     ),
                     None => String::new(),
                 };
-                write_line(standard, &alloc::format!("{name}{origin}")).await?;
+                write_line(standard, &format!("{name}{origin}")).await?;
             }
         }
-        cli::Command::Repository(cli::RepositoryCommand { command }) => {
-            repository_command(standard, command).await?;
+        cli::Command::Repository(cli::RepositoryCommand {
+            command: cli::RepositoryOperation::List,
+        }) => {
+            repository_command(standard, cli::RepositoryOperation::List).await?;
         }
-        cli::Command::Install(options) => match options.target() {
-            cli::Target::Package { name, version } => {
-                if options.public_key.is_some() || options.allow_untrusted {
-                    return Err(
-                        "--public-key and --allow-untrusted only apply to local archives".into(),
-                    );
-                }
-                let installed =
-                    repository::install(vfs, task, name, version, options.repository).await?;
-                write_line(
-                    standard,
-                    &alloc::format!(
-                        "Installed {} {} from {} (verified from its root key: entry, publisher, signature and hashes).",
-                        installed.name, installed.version, installed.repository
-                    ),
-                )
-                .await?;
-            }
-            cli::Target::Archive(archive) => {
-                if options.repository.is_some() {
-                    return Err("--repository only applies to package names".into());
-                }
-                let digest = install::archive_sha256(vfs, task, archive).await?;
-                let (package, version) = install::install(
-                    vfs,
-                    task,
-                    archive,
-                    options.public_key,
-                    options.allow_untrusted,
-                )
-                .await?;
-                repository::record_origin(vfs, task, None, &package, &version, &digest).await?;
-                if options.allow_untrusted {
-                    write_line(
-                        standard,
-                        &alloc::format!(
-                            "Installed {package} (publisher NOT authenticated; hashes verified)."
-                        ),
-                    )
-                    .await?;
-                } else {
-                    write_line(
-                        standard,
-                        &alloc::format!(
-                            "Installed {package} (Ed25519 signature and payload hashes verified)."
-                        ),
-                    )
-                    .await?;
-                }
-            }
-        },
+        command => {
+            let elevation = privilege::elevate(standard).await?;
+            let result = change(standard, command).await;
+            elevation.restore(standard).await;
+            result?;
+        }
     }
     standard.out().flush().await.map_err(|e| e.to_string())?;
     Ok(())
