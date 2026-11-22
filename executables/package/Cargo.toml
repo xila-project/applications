@@ -28,3 +28,6 @@ path = "src/lib.rs"
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dev-dependencies]
 testing = { workspace = true }
 critical-section = { workspace = true, features = ["std"] }
+
+[dev-dependencies]
+task = { workspace = true, features = ["test_harness"] }

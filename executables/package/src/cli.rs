@@ -4,19 +4,20 @@
 use alloc::string::String;
 use getargs_derive::{GetArgs, Subcommand};
 
-/// Install a package: a .xpk path, or a package name from the configured
-/// repositories (`name` or `name@version`).
+/// Install or upgrade a package: a .xpk path, or a package name from the
+/// configured repositories (`name` or `name@version`).
 #[derive(Debug, Clone, PartialEq, Eq, GetArgs)]
 pub struct Install<'a> {
     /// A .xpk path in the Xila virtual filesystem, or a package name.
     pub package: &'a str,
-    /// Local archive only: verify with this raw Ed25519 public key file.
+    /// Local archive only: verify with this raw Ed25519 developer key file
+    /// instead of the repositories.
     #[arg(long = "public-key", conflicts_with = "allow_untrusted")]
     pub public_key: Option<&'a str>,
     /// Local archive only: accept an unknown publisher, still checking hashes.
     #[arg(long = "allow-untrusted", conflicts_with = "public_key")]
     pub allow_untrusted: bool,
-    /// Package name only: use this repository when several provide it.
+    /// Use this repository when several provide the package.
     #[arg(long)]
     pub repository: Option<&'a str>,
 }
@@ -86,6 +87,15 @@ pub enum RepositoryOperation<'a> {
 pub enum Command<'a> {
     /// Verify and install a package.
     Install(Install<'a>),
+    /// Verify and install a newer version of an installed package, keeping its data.
+    Upgrade(Install<'a>),
+    /// Remove an installed package; its user data is kept.
+    Remove {
+        /// Package name, e.g. xila.clock.
+        name: &'a str,
+    },
+    /// Finish or undo an interrupted package operation.
+    Recover,
     /// List installed application bundles.
     List,
     /// Manage package repositories.
@@ -202,6 +212,33 @@ mod tests {
     }
 
     #[test]
+    fn lifecycle_commands() {
+        let input = args(&["upgrade", "xila.clock"]);
+        match parse(&input).unwrap() {
+            Command::Upgrade(upgrade) => assert_eq!(
+                upgrade.target(),
+                Target::Package {
+                    name: "xila.clock",
+                    version: None
+                }
+            ),
+            other => panic!("unexpected {other:?}"),
+        }
+        let input = args(&["upgrade", "/temporary/clock.xpk", "--allow-untrusted"]);
+        assert!(matches!(
+            parse(&input),
+            Ok(Command::Upgrade(Install {
+                allow_untrusted: true,
+                ..
+            }))
+        ));
+        let input = args(&["remove", "xila.clock"]);
+        assert_eq!(parse(&input), Ok(Command::Remove { name: "xila.clock" }));
+        assert!(parse(&args(&["remove"])).is_err());
+        assert_eq!(parse(&args(&["recover"])), Ok(Command::Recover));
+    }
+
+    #[test]
     fn help_and_listing() {
         assert_eq!(parse(&args(&["list"])), Ok(Command::List));
         for parts in [vec!["--help"], vec!["install", "--help"], vec!["--version"]] {
@@ -211,5 +248,7 @@ mod tests {
         }
         assert!(Cli::HELP.contains("Usage: package"));
         assert!(Cli::HELP.contains("repository"));
+        assert!(Cli::HELP.contains("upgrade"));
+        assert!(Cli::HELP.contains("recover"));
     }
 }

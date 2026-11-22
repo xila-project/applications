@@ -2,7 +2,12 @@
 //!
 //! A .xpk is only trusted after EOF and the TAR terminator have been checked,
 //! every payload hash has matched, and (unless explicitly overridden) its
-//! Ed25519 manifest signature has been verified with a trusted key.
+//! Ed25519 manifest signature has been verified with a key the device trusts
+//! through a repository: root key → repository key → registry entry and
+//! developer key → package signature → file hashes.
+//!
+//! The verified bundle is then activated by package_manager's
+//! crash-consistent installation transactions (see `transaction`).
 //!
 //! We never check signatures again at application launch: the installed files
 //! are owned and protected by the Xila filesystem / permission model.
@@ -19,15 +24,19 @@ use xila::{
     task::TaskIdentifier,
     virtual_file_system::{Directory, File, VirtualFileSystem},
 };
+use xila_package_manager::installation::{self, Activated, Mode};
 use xila_package_manifest::{
-    MANIFEST_PATH, Manifest, RegistryEntry, SIGNATURE_PATH, XilaVersion, validate_path,
+    DOWNLOAD_PREFIX, MANIFEST_PATH, MAX_MANIFEST_BYTES, Manifest, ORIGIN_SCHEMA_URL, Origin,
+    REPOSITORY_FORMAT_VERSION, RegistryEntry, SIGNATURE_PATH, STAGING_PREFIX, XilaVersion,
+    validate_path,
 };
 use xila_package_reader::StreamingVerifier;
 use xila_package_verification::{PublicKey, Sha256Verifier};
 
+use crate::transaction::{LAYOUT, Session};
+
 /// Same as `Path::APPLICATION_BUNDLES`; a `&str` because `Path::as_str` is not `const`.
 pub const INSTALLED_ROOT: &str = "/applications/bundles";
-pub const DEFAULT_TRUSTED_KEY: &str = "/configuration/system/packages/trusted.pub";
 static NEXT_STAGING: AtomicUsize = AtomicUsize::new(1);
 
 fn error(context: &str, detail: impl core::fmt::Display) -> String {
@@ -308,7 +317,7 @@ async fn extract(
 
 /// Remove failed / interrupted staging trees without touching live installs.
 /// Directory listing is completed and closed before any child is removed.
-async fn remove_tree(
+pub(crate) async fn remove_tree(
     vfs: &VirtualFileSystem,
     task: TaskIdentifier,
     root: &str,
@@ -408,10 +417,15 @@ async fn seal_tree(
     Ok(())
 }
 
-async fn new_staging(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<String, String> {
+/// A new private staging directory: its name in the bundles directory and its path.
+async fn new_staging(
+    vfs: &VirtualFileSystem,
+    task: TaskIdentifier,
+) -> Result<(String, String), String> {
     for _ in 0..64 {
         let id = NEXT_STAGING.fetch_add(1, Ordering::Relaxed);
-        let path = format!("{INSTALLED_ROOT}/.incoming-{id:x}");
+        let name = format!("{STAGING_PREFIX}{id:x}");
+        let path = format!("{INSTALLED_ROOT}/{name}");
         match Directory::create(vfs, task, Path::from_str(&path)).await {
             Ok(()) => {
                 // No unverified executable bytes may be visible to another
@@ -426,7 +440,7 @@ async fn new_staging(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<St
                     let _ = vfs.remove(task, Path::from_str(&path)).await;
                     return Err(error("cannot protect staging directory", problem));
                 }
-                return Ok(path);
+                return Ok((name, path));
             }
             Err(xila::virtual_file_system::IoErrorKind::AlreadyExists) => continue,
             Err(e) => return Err(error("cannot create package staging directory", e)),
@@ -435,28 +449,10 @@ async fn new_staging(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<St
     Err("could not allocate a staging directory".into())
 }
 
-/// Only a privileged task may create or publish system-wide packages.
-/// The built-in "administrator" user (UID 1000) is NOT automatically root.
-/// Do not give it writable /applications permissions or escalate it here.
-pub async fn ensure_root(
-    vfs: &'static VirtualFileSystem,
-    task: TaskIdentifier,
-) -> Result<(), String> {
-    let user = vfs
-        .task_manager()
-        .get_user(task)
-        .await
-        .map_err(|e| error("cannot determine installing user", e))?;
-    if user != xila::users::UserIdentifier::ROOT {
-        return Err("package install requires a privileged root task".into());
-    }
-    ensure_directory(vfs, task, INSTALLED_ROOT).await
-}
-
 /// A fresh path for a downloaded archive, hidden from `list` like staging.
 pub fn new_download_path() -> String {
     let id = NEXT_STAGING.fetch_add(1, Ordering::Relaxed);
-    format!("{INSTALLED_ROOT}/.download-{id:x}.xpk")
+    format!("{INSTALLED_ROOT}/{DOWNLOAD_PREFIX}{id:x}.xpk")
 }
 
 /// Lowercase hexadecimal SHA-256 of a file.
@@ -500,74 +496,161 @@ pub async fn archive_sha256(
     }
 }
 
-/// Install a verified archive once; never overwrite an existing installation.
+/// A package installed or upgraded by [`install_verified`].
+pub struct Installed {
+    pub name: String,
+    pub version: String,
+    pub activated: Activated,
+}
+
+/// Verify `archive` into a staging directory, then activate it.
 /// With `expected`, every field the registry entry copied from the signed
-/// manifest must match before anything is published.
+/// manifest must match before anything is published. `repository` and
+/// `archive_sha256` are recorded as the package's origin.
+#[allow(clippy::too_many_arguments)]
 pub async fn install_verified(
+    session: &mut Session,
     vfs: &'static VirtualFileSystem,
     task: TaskIdentifier,
     archive: &str,
     key: Option<&PublicKey>,
     expected: Option<&RegistryEntry>,
-) -> Result<(String, String), String> {
-    let staging = new_staging(vfs, task).await?;
-    let operation = async {
+    repository: Option<&str>,
+    archive_sha256: &str,
+    mode: Mode,
+) -> Result<Installed, String> {
+    let (staging_name, staging) = new_staging(vfs, task).await?;
+    let verified = async {
         let manifest = extract(vfs, task, archive, &staging, key).await?;
         if let Some(entry) = expected {
             entry
                 .check_manifest(&manifest)
                 .map_err(|_| "package differs from its registry entry".to_string())?;
         }
-        let dest = format!("{INSTALLED_ROOT}/{}", manifest.name);
-        // Never silently replace already-installed code. Root-authorized
-        // concurrent installs require a higher-level exclusive transaction.
-        match vfs
-            .get_link_statistics_for_task(task, &Path::from_str(&dest))
-            .await
-        {
-            Err(xila::virtual_file_system::IoErrorKind::NotFound) => {}
-            Ok(_) => return Err(format!("package {} is already installed", manifest.name)),
-            Err(e) => return Err(error("cannot inspect installation destination", e)),
-        }
         seal_tree(vfs, task, &staging).await?;
-        vfs.rename(task, &Path::from_str(&staging), &Path::from_str(&dest))
-            .await
-            .map_err(|e| error("cannot publish verified package", e))?;
-        Ok((manifest.name, manifest.version))
+        Ok::<_, String>(manifest)
     }
     .await;
-
-    match operation {
-        Ok(name) => Ok(name),
+    let manifest = match verified {
+        Ok(manifest) => manifest,
         Err(problem) => {
-            if let Err(cleanup) = remove_tree(vfs, task, &staging).await {
-                Err(format!("{problem}; cleanup also failed: {cleanup}"))
-            } else {
-                Err(problem)
+            return match remove_tree(vfs, task, &staging).await {
+                Ok(()) => Err(problem),
+                Err(cleanup) => Err(format!("{problem}; cleanup also failed: {cleanup}")),
+            };
+        }
+    };
+    let origin = Origin {
+        schema: Some(ORIGIN_SCHEMA_URL.into()),
+        format_version: REPOSITORY_FORMAT_VERSION,
+        repository: repository.map(Into::into),
+        name: manifest.name.clone(),
+        version: manifest.version.clone(),
+        archive_sha256: archive_sha256.into(),
+    };
+    match installation::activate(&mut session.storage, &LAYOUT, &staging_name, origin, mode).await {
+        Ok(activated) => Ok(Installed {
+            name: manifest.name,
+            version: manifest.version,
+            activated,
+        }),
+        Err(problem) => {
+            // Finish or undo a journaled step, and delete the staging directory.
+            let recovered = installation::recover(&mut session.storage, &LAYOUT).await;
+            let problem = format!("cannot install {}: {problem}", manifest.name);
+            match recovered {
+                Ok(_) => Err(problem),
+                Err(cleanup) => Err(format!("{problem}; recovery also failed: {cleanup}")),
             }
         }
     }
 }
 
-/// Install a local archive. Reject unknown publishers by default.
-/// --allow-untrusted bypasses ONLY publisher identity.
-pub async fn install(
+/// Read the manifest at the start of a local archive, without trusting it:
+/// it only names the registry entry that will authenticate the archive.
+pub async fn read_manifest(
+    vfs: &'static VirtualFileSystem,
+    task: TaskIdentifier,
+    archive: &str,
+) -> Result<Manifest, String> {
+    let mut source = File::open(vfs, task, Path::from_str(archive), AccessFlags::Read.into())
+        .await
+        .map_err(|e| error("cannot open package archive", e))?;
+    let operation = async {
+        let mut parser = TarStreamParser::new();
+        let mut block = [0u8; BLOCKSIZE];
+        let mut manifest: Option<Vec<u8>> = None;
+        while next_block(&mut source, &mut block).await? {
+            match parser
+                .parse_block(&block)
+                .map_err(|e| format!("TAR parsing failed: {e:?}"))?
+            {
+                Some(StreamEvent::Entry { filename, size, .. }) => {
+                    let path = filename.as_str().map_err(|_| "invalid TAR filename")?;
+                    if path != MANIFEST_PATH || manifest.is_some() {
+                        break;
+                    }
+                    if size > MAX_MANIFEST_BYTES {
+                        return Err("package manifest is too large".to_string());
+                    }
+                    manifest = Some(Vec::with_capacity(size));
+                }
+                Some(StreamEvent::Data { data, remaining }) => {
+                    let bytes = manifest
+                        .as_mut()
+                        .ok_or_else(|| "package does not start with its manifest".to_string())?;
+                    bytes.extend_from_slice(data);
+                    if remaining == 0 {
+                        return xila_package_manifest::decode(bytes)
+                            .map_err(|e| format!("invalid package manifest: {e:?}"));
+                    }
+                }
+                Some(StreamEvent::End) | None => {}
+            }
+        }
+        Err("package does not start with its manifest".to_string())
+    }
+    .await;
+    let close = source
+        .close(vfs)
+        .await
+        .map_err(|e| error("archive close failed", e));
+    match (operation, close) {
+        (Err(e), _) => Err(e),
+        (Ok(_), Err(e)) => Err(e),
+        (Ok(manifest), Ok(())) => Ok(manifest),
+    }
+}
+
+/// Install or upgrade a local archive verified with an explicitly chosen
+/// developer key (`key_path`), or, with `None`, without authenticating its
+/// publisher (hashes are still verified). Archives trusted through a
+/// repository go through `repository::install_archive` instead.
+pub async fn install_local(
+    session: &mut Session,
     vfs: &'static VirtualFileSystem,
     task: TaskIdentifier,
     archive: &str,
     key_path: Option<&str>,
-    allow_untrusted: bool,
-) -> Result<(String, String), String> {
-    if allow_untrusted && key_path.is_some() {
-        return Err("cannot combine --public-key with --allow-untrusted".into());
-    }
-    ensure_root(vfs, task).await?;
-    let key = if allow_untrusted {
-        None
-    } else {
-        Some(read_public_key(vfs, task, key_path.unwrap_or(DEFAULT_TRUSTED_KEY)).await?)
+    mode: Mode,
+) -> Result<Installed, String> {
+    let key = match key_path {
+        Some(path) => Some(read_public_key(vfs, task, path).await?),
+        None => None,
     };
-    install_verified(vfs, task, archive, key.as_ref(), None).await
+    let digest = archive_sha256(vfs, task, archive).await?;
+    install_verified(
+        session,
+        vfs,
+        task,
+        archive,
+        key.as_ref(),
+        None,
+        None,
+        &digest,
+        mode,
+    )
+    .await
 }
 
 pub async fn list(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<Vec<String>, String> {
@@ -632,8 +715,12 @@ mod tests {
     #[test]
     fn paths_follow_core_hierarchy() {
         assert_eq!(INSTALLED_ROOT, Path::APPLICATION_BUNDLES.as_str());
-        let key_directory = DEFAULT_TRUSTED_KEY.rsplit_once('/').unwrap().0;
-        assert_eq!(key_directory, Path::PACKAGE_CONFIGURATION.as_str());
+        let journal_directory = crate::transaction::JOURNAL.rsplit_once('/').unwrap().0;
+        assert_eq!(journal_directory, Path::PACKAGE_CONFIGURATION.as_str());
+        let download = new_download_path();
+        assert!(xila_package_manifest::is_temporary_entry(
+            download.rsplit_once('/').unwrap().1
+        ));
     }
 
     #[test]

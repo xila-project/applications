@@ -2502,6 +2502,7 @@ dependencies = [
  "xila-package-manifest",
  "xila-package-reader",
  "xila-package-verification",
+ "xila-task",
  "xila-testing",
  "xila-version",
 ]
@@ -2509,7 +2510,7 @@ dependencies = [
 [[package]]
 name = "xila-package-bundle"
 version = "0.4.0"
-source = "git+https://github.com/xila-project/package_manager?branch=main#93ed41ec98c6102b0c8a091ba7df55042d83b78b"
+source = "git+https://github.com/xila-project/package_manager?branch=main#23237a41239272c532ee39c8ca24ad691477561f"
 dependencies = [
  "xila-package-manifest",
  "xila-package-verification",
@@ -2518,7 +2519,7 @@ dependencies = [
 [[package]]
 name = "xila-package-manager"
 version = "0.4.0"
-source = "git+https://github.com/xila-project/package_manager?branch=main#93ed41ec98c6102b0c8a091ba7df55042d83b78b"
+source = "git+https://github.com/xila-project/package_manager?branch=main#23237a41239272c532ee39c8ca24ad691477561f"
 dependencies = [
  "xila-package-manifest",
  "xila-package-verification",
@@ -2527,7 +2528,7 @@ dependencies = [
 [[package]]
 name = "xila-package-manifest"
 version = "0.4.0"
-source = "git+https://github.com/xila-project/package_manager?branch=main#93ed41ec98c6102b0c8a091ba7df55042d83b78b"
+source = "git+https://github.com/xila-project/package_manager?branch=main#23237a41239272c532ee39c8ca24ad691477561f"
 dependencies = [
  "miniserde",
 ]
@@ -2535,7 +2536,7 @@ dependencies = [
 [[package]]
 name = "xila-package-reader"
 version = "0.4.0"
-source = "git+https://github.com/xila-project/package_manager?branch=main#93ed41ec98c6102b0c8a091ba7df55042d83b78b"
+source = "git+https://github.com/xila-project/package_manager?branch=main#23237a41239272c532ee39c8ca24ad691477561f"
 dependencies = [
  "tar-no-std",
  "xila-package-bundle",
@@ -2546,7 +2547,7 @@ dependencies = [
 [[package]]
 name = "xila-package-verification"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/package_manager?branch=main#93ed41ec98c6102b0c8a091ba7df55042d83b78b"
+source = "git+https://github.com/xila-project/package_manager?branch=main#23237a41239272c532ee39c8ca24ad691477561f"
 dependencies = [
  "ed25519-dalek",
  "sha2",

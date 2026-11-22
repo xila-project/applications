@@ -15,17 +15,18 @@ use xila::{
     task::TaskIdentifier,
     virtual_file_system::{Directory, File, VirtualFileSystem},
 };
+use xila_package_manager::installation::{self, Mode, Storage};
 use xila_package_manager::trust::{self, TrustedRoot};
 use xila_package_manifest::{
     INDEX_PATH, Index, MAX_MANIFEST_BYTES, ORIGIN_SCHEMA_URL, Origin, REPOSITORY_FORMAT_VERSION,
-    ROOT_PATH, RegistryEntry, Repository, SIGNATURE_SUFFIX, decode_origin, decode_repository,
-    encode_origin, encode_repository,
+    ROOT_PATH, RegistryEntry, Repository, SIGNATURE_SUFFIX, decode_repository, encode_repository,
 };
 use xila_package_verification::{ContentVerifier, PublicKey};
 
 use crate::{
     http::{self, Sink},
     install,
+    transaction::{LAYOUT, Session, VirtualStorage},
 };
 
 pub const REPOSITORIES: &str = "/configuration/system/packages/repositories";
@@ -39,7 +40,7 @@ fn error(context: &str, detail: impl core::fmt::Display) -> String {
     format!("{context}: {detail}")
 }
 
-async fn ensure_directory(
+pub(crate) async fn ensure_directory(
     vfs: &VirtualFileSystem,
     task: TaskIdentifier,
     path: &str,
@@ -89,10 +90,6 @@ async fn write_file(
 
 fn configuration_path(name: &str) -> String {
     format!("{REPOSITORIES}/{name}.json")
-}
-
-fn origin_path(package: &str) -> String {
-    format!("{ORIGINS}/{package}.json")
 }
 
 /// Every configured repository, sorted by name.
@@ -474,63 +471,61 @@ async fn download(
     result.and(close)
 }
 
+/// The recorded origin of an installed package.
 pub async fn origin(
-    vfs: &VirtualFileSystem,
+    vfs: &'static VirtualFileSystem,
     task: TaskIdentifier,
     package: &str,
 ) -> Result<Option<Origin>, String> {
-    match read_file(vfs, task, &origin_path(package)).await? {
-        Some(bytes) => decode_origin(&bytes)
-            .map(Some)
-            .map_err(|e| error(&format!("invalid origin of {package}"), format!("{e:?}"))),
-        None => Ok(None),
-    }
-}
-
-pub async fn record_origin(
-    vfs: &VirtualFileSystem,
-    task: TaskIdentifier,
-    repository: Option<&str>,
-    name: &str,
-    version: &str,
-    archive_sha256: &str,
-) -> Result<(), String> {
-    let origin = Origin {
-        schema: Some(ORIGIN_SCHEMA_URL.into()),
-        format_version: REPOSITORY_FORMAT_VERSION,
-        repository: repository.map(Into::into),
-        name: name.into(),
-        version: version.into(),
-        archive_sha256: archive_sha256.into(),
-    };
-    let text = encode_origin(&origin).map_err(|e| error("invalid origin", format!("{e:?}")))?;
-    ensure_directory(vfs, task, ORIGINS).await?;
-    write_file(vfs, task, &origin_path(name), text.as_bytes()).await
+    installation::origin(&mut VirtualStorage::new(vfs, task), &LAYOUT, package)
+        .await
+        .map_err(|e| error(&format!("invalid origin of {package}"), e))
 }
 
 /// What was installed, and from where.
 pub struct Installed {
-    pub name: String,
-    pub version: String,
+    pub installed: install::Installed,
     pub repository: String,
 }
 
-/// Resolve `name` (optionally at `version`) in the configured repositories,
-/// verify everything from their root keys, download and install it.
-pub async fn install(
+/// The repositories a package may come from: the one it was installed
+/// from when upgrading, `only` when given, or every configured one.
+async fn sources(
     vfs: &'static VirtualFileSystem,
     task: TaskIdentifier,
     name: &str,
-    version: Option<&str>,
     only: Option<&str>,
-) -> Result<Installed, String> {
-    if let Some(existing) = origin(vfs, task, name).await? {
-        return Err(format!(
-            "{name} {} is already installed (from {}); updates are not supported yet",
-            existing.version,
-            existing.repository.as_deref().unwrap_or("a local archive")
-        ));
-    }
+    mode: Mode,
+) -> Result<(Option<Origin>, Vec<Repository>), String> {
+    let installed = origin(vfs, task, name).await?;
+    let present = VirtualStorage::new(vfs, task)
+        .exists(&LAYOUT.bundle(name))
+        .await?;
+    let only = match (mode, present, &installed) {
+        (Mode::Install, true, _) => {
+            let version = installed
+                .as_ref()
+                .map(|origin| format!(" {}", origin.version))
+                .unwrap_or_default();
+            return Err(format!(
+                "{name}{version} is already installed; use `package upgrade`"
+            ));
+        }
+        (Mode::Install, false, _) => only,
+        (Mode::Upgrade, false, _) => return Err(format!("{name} is not installed")),
+        (Mode::Upgrade, true, None) => only,
+        (Mode::Upgrade, true, Some(origin)) => match (&origin.repository, only) {
+            (None, _) => {
+                return Err(format!(
+                    "{name} was installed from a local archive; upgrade it with an archive"
+                ));
+            }
+            (Some(from), Some(only)) if from != only => {
+                return Err(format!("{name} was installed from {from}, not from {only}"));
+            }
+            (Some(from), _) => Some(from.as_str()),
+        },
+    };
     let repositories = match only {
         Some(only) => alloc::vec![load(vfs, task, only).await?],
         None => list(vfs, task).await?,
@@ -538,50 +533,143 @@ pub async fn install(
     if repositories.is_empty() {
         return Err("no repository configured; add one with `package repository add`".into());
     }
+    Ok((installed, repositories))
+}
+
+/// The single compatible registry entry for `name` among `repositories`.
+async fn resolve(
+    vfs: &'static VirtualFileSystem,
+    task: TaskIdentifier,
+    repositories: Vec<Repository>,
+    name: &str,
+    version: Option<&str>,
+) -> Result<Match, String> {
     let mut matches = Vec::new();
     for repository in repositories {
         if let Some(found) = find(vfs, task, repository, name, version).await? {
             matches.push(found);
         }
     }
-    let found = match matches.len() {
-        0 => {
-            return Err(format!(
-                "{name} not found for {TARGET} in the configured repositories"
-            ));
-        }
-        1 => matches.pop().expect("one match"),
+    match matches.len() {
+        0 => Err(format!(
+            "{name}{} not found for {TARGET} in the configured repositories",
+            version.map(|v| format!(" {v}")).unwrap_or_default()
+        )),
+        1 => Ok(matches.pop().expect("one match")),
         _ => {
             let names: Vec<&str> = matches.iter().map(|m| m.repository.name.as_str()).collect();
-            return Err(format!(
+            Err(format!(
                 "{name} is available from several repositories ({}); choose one with --repository",
                 names.join(", ")
-            ));
+            ))
         }
-    };
-    let key = publisher(vfs, task, &found).await?;
+    }
+}
 
-    install::ensure_root(vfs, task).await?;
+fn origin_of(found: &Match) -> Origin {
+    Origin {
+        schema: Some(ORIGIN_SCHEMA_URL.into()),
+        format_version: REPOSITORY_FORMAT_VERSION,
+        repository: Some(found.repository.name.clone()),
+        name: found.entry.name.clone(),
+        version: found.entry.version.clone(),
+        archive_sha256: found.entry.archive.sha256.clone(),
+    }
+}
+
+/// Resolve `name` (optionally at `version`) in the configured repositories,
+/// verify everything from their root keys, download and install or upgrade it.
+#[allow(clippy::too_many_arguments)]
+pub async fn install(
+    session: &mut Session,
+    vfs: &'static VirtualFileSystem,
+    task: TaskIdentifier,
+    name: &str,
+    version: Option<&str>,
+    only: Option<&str>,
+    mode: Mode,
+) -> Result<Installed, String> {
+    let (installed, repositories) = sources(vfs, task, name, only, mode).await?;
+    let found = resolve(vfs, task, repositories, name, version).await?;
+    if mode == Mode::Upgrade {
+        installation::check_upgrade::<String>(installed.as_ref(), &origin_of(&found))
+            .map_err(|e| format!("{name} is up to date: {e}"))?;
+    }
+    let key = publisher(vfs, task, &found).await?;
     let path = install::new_download_path();
     let result = async {
         download(vfs, task, &found.entry, &path).await?;
-        install::install_verified(vfs, task, &path, Some(&key), Some(&found.entry)).await
+        install::install_verified(
+            session,
+            vfs,
+            task,
+            &path,
+            Some(&key),
+            Some(&found.entry),
+            Some(&found.repository.name),
+            &found.entry.archive.sha256,
+            mode,
+        )
+        .await
     }
     .await;
     let _ = vfs.remove(task, Path::from_str(&path)).await;
-    let (installed, _) = result?;
-    record_origin(
+    Ok(Installed {
+        installed: result?,
+        repository: found.repository.name,
+    })
+}
+
+/// Install or upgrade a local archive, trusted through the configured
+/// repositories: its registry entry, signed by a repository key, must pin
+/// this exact archive (SHA-256 and size), and the developer key that entry
+/// authorizes must have signed its manifest. Only registry metadata is
+/// fetched; the archive itself never leaves the device.
+pub async fn install_archive(
+    session: &mut Session,
+    vfs: &'static VirtualFileSystem,
+    task: TaskIdentifier,
+    archive: &str,
+    only: Option<&str>,
+    mode: Mode,
+) -> Result<Installed, String> {
+    let manifest = install::read_manifest(vfs, task, archive).await?;
+    let (_, repositories) = sources(vfs, task, &manifest.name, only, mode).await?;
+    let found = resolve(
         vfs,
         task,
+        repositories,
+        &manifest.name,
+        Some(&manifest.version),
+    )
+    .await?;
+    let digest = install::archive_sha256(vfs, task, archive).await?;
+    let size = vfs
+        .get_link_statistics_for_task(task, &Path::from_str(archive))
+        .await
+        .map_err(|e| error("cannot inspect package archive", e))?
+        .size;
+    if digest != found.entry.archive.sha256 || size != found.entry.archive.size {
+        return Err(format!(
+            "{archive} is not the {} {} archive published by {}",
+            manifest.name, manifest.version, found.repository.name
+        ));
+    }
+    let key = publisher(vfs, task, &found).await?;
+    let installed = install::install_verified(
+        session,
+        vfs,
+        task,
+        archive,
+        Some(&key),
+        Some(&found.entry),
         Some(&found.repository.name),
-        &installed,
-        &found.entry.version,
-        &found.entry.archive.sha256,
+        &digest,
+        mode,
     )
     .await?;
     Ok(Installed {
-        name: installed,
-        version: found.entry.version,
+        installed,
         repository: found.repository.name,
     })
 }
