@@ -2021,6 +2021,78 @@ async fn path_open_follows_chained_links_and_stops_at_loops() {
     );
 }
 
+impl Guest {
+    /// `path_readlink` below the preopen into a `capacity` byte buffer; the
+    /// bytes it reported as used, or the errno.
+    fn readlink(&mut self, path: &str, capacity: usize) -> Result<Vec<u8>, i32> {
+        const BUFFER: usize = 16_384;
+        const USED: usize = 20_480;
+        let [pointer, length] = self.text(0, path);
+        self.put(BUFFER, &[0xAA; 64]);
+        self.put(USED, &u32::MAX.to_le_bytes());
+        match self.call(
+            "path_readlink",
+            &[
+                i(ROOT),
+                pointer,
+                length,
+                i(BUFFER as i32),
+                i(capacity as i32),
+                i(USED as i32),
+            ],
+        ) {
+            0 => Ok(self.get(BUFFER, self.u32_at(USED) as usize)),
+            error => {
+                assert_eq!(self.u32_at(USED), u32::MAX, "{path}: no result on error");
+                Err(error)
+            }
+        }
+    }
+
+    /// `path_symlink` below the preopen; the errno.
+    fn try_symlink(&mut self, target: &str, link: &str) -> i32 {
+        let [target_pointer, target_length] = self.text(0, target);
+        let [link_pointer, link_length] = self.text(1, link);
+        self.call(
+            "path_symlink",
+            &[
+                target_pointer,
+                target_length,
+                i(ROOT),
+                link_pointer,
+                link_length,
+            ],
+        )
+    }
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn path_readlink_reads_links_and_rejects_everything_else() {
+    let mut guest = Guest::new().await;
+    assert_eq!(guest.with_path("path_create_directory", ROOT, "sub"), 0);
+    guest.seed("data", b"hello").await;
+    guest.symlink("data", "link");
+    guest.symlink("cycle_b", "cycle_a");
+    guest.symlink("cycle_a", "cycle_b");
+
+    // The target, whole or truncated to the buffer, never NUL-terminated.
+    assert_eq!(guest.readlink("link", 64), Ok(b"data".to_vec()));
+    assert_eq!(guest.readlink("link", 2), Ok(b"da".to_vec()));
+    // A cycle is read like any link: the final link is never followed.
+    assert_eq!(guest.readlink("cycle_a", 64), Ok(b"cycle_b".to_vec()));
+
+    // A file or a directory is not a link.
+    assert_eq!(guest.readlink("data", 64), Err(errno(Error::Inval)));
+    assert_eq!(guest.readlink("sub", 64), Err(errno(Error::Inval)));
+    assert_eq!(guest.readlink("missing", 64), Err(errno(Error::Noent)));
+    // A cycle earlier in the path ends in ELOOP.
+    assert_eq!(guest.readlink("cycle_a/inner", 64), Err(errno(Error::Loop)));
+
+    // An empty target names nothing, like POSIX `symlink("", link)`.
+    assert_eq!(guest.try_symlink("", "empty"), errno(Error::Noent));
+    assert_eq!(guest.readlink("empty", 64), Err(errno(Error::Noent)));
+}
+
 #[xila::task::test(task_path = xila::task)]
 async fn path_open_cannot_escape_through_a_final_or_chained_link() {
     // `absolute`, `parent` and `chain` lead to `/outside`.

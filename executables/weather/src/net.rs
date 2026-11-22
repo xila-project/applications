@@ -1,5 +1,7 @@
 #[cfg(any(target_arch = "wasm32", test))]
 use alloc::{format, string::String, vec, vec::Vec};
+#[cfg(any(target_arch = "wasm32", test))]
+use core::time::Duration;
 use shared::HttpResponseParser;
 #[cfg(any(target_arch = "wasm32", test))]
 use shared::{HttpRequestBuilder, Url};
@@ -8,13 +10,28 @@ use std::fs::OpenOptions;
 #[cfg(target_arch = "wasm32")]
 use std::io::{ErrorKind, Read, Write};
 #[cfg(target_arch = "wasm32")]
-use std::thread::{sleep, yield_now};
+use std::{thread::sleep, time::Instant};
 
 #[cfg(target_arch = "wasm32")]
 const RESOURCE_BUSY_OS_ERROR: i32 = 277;
 
+/// How long a read may keep reporting that no data is ready yet.
 #[cfg(target_arch = "wasm32")]
-const HTTPS_READ_MAX_RETRIES: usize = 16_384;
+const HTTPS_READ_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Longest wait between two reads of a device that has no data yet.
+#[cfg(any(target_arch = "wasm32", test))]
+const HTTPS_READ_MAXIMUM_DELAY: Duration = Duration::from_millis(16);
+
+/// Wait before the next read after `attempt` reads found no data: 1 ms,
+/// doubling up to [`HTTPS_READ_MAXIMUM_DELAY`]. The guest cannot poll the
+/// device for readiness, so it sleeps: unlike `sched_yield`, which the host
+/// throttles for busy-waiting guests, a sleep lets other tasks run and wakes
+/// up on time.
+#[cfg(any(target_arch = "wasm32", test))]
+fn read_retry_delay(attempt: u32) -> Duration {
+    Duration::from_millis(1u64 << attempt.min(31)).min(HTTPS_READ_MAXIMUM_DELAY)
+}
 
 #[cfg(target_arch = "wasm32")]
 fn is_transient_read_error(error: &std::io::Error) -> bool {
@@ -28,23 +45,23 @@ fn read_with_retry(
     buffer: &mut [u8],
     error_label: &str,
 ) -> Result<usize, String> {
-    for attempt in 0..HTTPS_READ_MAX_RETRIES {
+    let start = Instant::now();
+    let mut attempt = 0;
+    loop {
         match file.read(buffer) {
             Ok(count) => return Ok(count),
             Err(error) if is_transient_read_error(&error) => {
-                yield_now();
-
-                if attempt % 64 == 0 {
-                    sleep(std::time::Duration::from_millis(1));
+                if start.elapsed() >= HTTPS_READ_TIMEOUT {
+                    return Err(String::from("timed out waiting for https response"));
                 }
+                sleep(read_retry_delay(attempt));
+                attempt = attempt.saturating_add(1);
             }
             Err(_error) => {
                 return Err(String::from(error_label));
             }
         }
     }
-
-    Err(String::from("timed out waiting for https response"))
 }
 
 pub fn split_headers_body(input: &[u8]) -> Option<(&[u8], &[u8])> {
@@ -157,6 +174,20 @@ fn read_device_response(
 #[cfg(test)]
 mod tests {
     use super::{extract_http_status, split_headers_body};
+
+    #[test]
+    fn read_retries_back_off_to_a_bounded_sleep() {
+        use super::{HTTPS_READ_MAXIMUM_DELAY, read_retry_delay};
+        use core::time::Duration;
+
+        let delays: alloc::vec::Vec<_> = (0..6).map(read_retry_delay).collect();
+        assert_eq!(
+            delays,
+            [1, 2, 4, 8, 16, 16].map(Duration::from_millis),
+            "never a zero wait, which would be a busy-wait"
+        );
+        assert_eq!(read_retry_delay(u32::MAX), HTTPS_READ_MAXIMUM_DELAY);
+    }
 
     #[test]
     fn split_headers_and_body_works() {
