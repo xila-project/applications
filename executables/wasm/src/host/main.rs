@@ -21,6 +21,17 @@ use crate::host::{
 };
 
 const DEFAULT_STACK_SIZE: usize = 4096;
+
+/// Environment variable that marks a task started by the Shell's `sudo`, and
+/// every task it starts. It matches `command_line_shell::SUDO_USER_VARIABLE`.
+///
+/// Guests are untrusted code, so they never run with an identity granted by
+/// `sudo`, even when the Wasm runner itself is the command given to `sudo`:
+/// the runtime refuses to start a guest in a task that holds this variable.
+/// Core already refuses to launch a registered file format with another
+/// identity; this check covers the mounted runner and any native program
+/// started under `sudo` that launches it.
+pub const SUDO_USER_VARIABLE: &str = "Sudo_user";
 const START_FUNCTION_NAME: &str = "_start";
 
 #[cfg(test)]
@@ -138,6 +149,23 @@ pub async fn execute_with_control(
     arguments: Vec<String>,
     control: xila::synchronization::Arc<super::ExecutionControl>,
 ) -> core::result::Result<(), NonZeroUsize> {
+    // - Admission: no guest runs with an identity granted by `sudo`.
+    let task_manager = standard.context.task_manager;
+    let task = task_manager.get_current_task_identifier().await;
+    if task_manager
+        .get_environment_variable(task, SUDO_USER_VARIABLE)
+        .await
+        .is_ok()
+    {
+        log::warning!("WebAssembly guest refused: the task was started by sudo");
+        writeln!(
+            standard.error(),
+            "Error: WebAssembly guests do not run under sudo"
+        )
+        .ok();
+        return Err(NonZeroUsize::new(1).unwrap());
+    }
+
     let (runtime_arguments, guest_arguments) = split_guest_arguments(&arguments);
     let arguments = match WasmArguments::from_args(runtime_arguments.iter().map(|s| s.as_str())) {
         Ok(args) => args,

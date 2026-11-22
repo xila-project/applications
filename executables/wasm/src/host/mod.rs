@@ -11,7 +11,7 @@ pub mod translation;
 mod wasi;
 
 pub use executable::*;
-pub use main::execute_with_control;
+pub use main::{SUDO_USER_VARIABLE, execute_with_control};
 pub use store::GlobalStore;
 pub use wasi::WasiContext;
 pub use wasi::register::add_wasi_to_linker;
