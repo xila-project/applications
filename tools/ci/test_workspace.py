@@ -79,15 +79,19 @@ class ApplicationPolicy(unittest.TestCase):
     def test_pr_packaging_never_publishes(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
         self.assertFalse((ROOT / '.github/workflows/release.yml').exists())
-        self.assertIn('publish-release: false', ci)
-        self.assertIn("sign-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}", ci)
         self.assertNotIn('NETBIRD_SETUP_KEY:', ci)
-        self.assertIn('secrets.XILA_DEV_SIGNING_SEED_B64', ci)
-        reference = re.search(r'package-wasm.yml@([0-9a-f]{40})', ci)
-        self.assertIsNotNone(reference, "packaging workflow must pin an immutable SHA")
-        self.assertIn(f"builder-ref: {reference.group(1)}", ci)
-        self.assertRegex(ci, r'builder-release:\s+xila-package-builder-v\d+\.\d+\.\d+')
-        self.assertRegex(ci, r'builder-sha256:\s+[0-9a-f]{64}')
+        self.assertNotIn('package-wasm.yml', ci)
+        # The repository signing secret only reaches packages built on a push to main.
+        self.assertIn("SIGN_WITH_SECRET: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}", ci)
+        self.assertIn("env.SIGN_WITH_SECRET == 'true' && secrets.XILA_DEV_SIGNING_SEED_B64", ci)
+        self.assertEqual(ci.count('secrets.XILA_DEV_SIGNING_SEED_B64'), 1)
+        self.assertIn('Throwaway signing key', ci)
+        reference = re.search(r'uses: xila-project/package-action@([0-9a-f]{40})\n', ci)
+        self.assertIsNotNone(reference, "package action must be pinned by full commit SHA")
+        package_job = ci.split('\n  package:\n', 1)[1].split('\n  required:\n', 1)[0]
+        self.assertIn('permissions:\n      contents: read', package_job)
+        self.assertNotIn('contents: write', package_job)
+        self.assertIn('mise run ci:verify-package', package_job)
         # Only the release jobs write, and only on pushes to main.
         release = ci.split('\n  release:\n', 1)[1]
         release_job, release_pr_job = release.split('\n  release-pr:\n', 1)

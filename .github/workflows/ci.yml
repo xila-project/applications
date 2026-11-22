@@ -149,27 +149,67 @@ jobs:
   package:
     name: "Package / ${{ matrix.app }}"
     needs: guest
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Only pushes to main sign with the repository secret; every other run
+    # signs with a throwaway key so that it builds and verifies the same way.
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         app: [calculator, clock, weather, pixel_painter, text_editor, synth, digits]
-    permissions:
-      contents: read
-      id-token: write
-    secrets:
-      XILA_DEV_SIGNING_SEED_B64: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.XILA_DEV_SIGNING_SEED_B64 || '' }}
-    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@93ed41ec98c6102b0c8a091ba7df55042d83b78b
-    with:
-      wasm-artifact: wasi-applications
-      wasm-path: ${{ matrix.app }}.wasm
-      manifest-path: packaging/${{ matrix.app }}.json
-      shortcut-path: executables/${{ matrix.app }}/shortcut.json
-      builder-ref: 93ed41ec98c6102b0c8a091ba7df55042d83b78b
-      builder-release: xila-package-builder-v0.4.0
-      builder-sha256: 02905040ef0c241c0cb6b006b729a0ee255b66b7e38ff938c8c12dac5df18554
-      artifact-name: package-${{ matrix.app }}
-      publish-release: false
-      sign-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    env:
+      SIGN_WITH_SECRET: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    steps:
+      - name: "Setup | Checkout sources"
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: "Setup | Activate mise"
+        uses: xila-project/workspace/.github/actions/setup-rust@ab0393f7a1df988b8fcd13da38e013057e9c9de8
+        with:
+          cache-enabled: "false"
+      - name: "Setup | Download WASI applications"
+        uses: actions/download-artifact@v8
+        with:
+          name: wasi-applications
+          path: ${{ runner.temp }}/wasi-applications
+      - name: "Validate | Manifest and shortcut, then stage package source"
+        env:
+          CI_APPLICATION: ${{ matrix.app }}
+          CI_WASM_DIRECTORY: ${{ runner.temp }}/wasi-applications
+          CI_PACKAGE_STAGING: ${{ runner.temp }}/package-source
+        run: mise run ci:stage-package
+      - name: "Setup | Throwaway signing key"
+        id: throwaway
+        if: env.SIGN_WITH_SECRET != 'true'
+        run: |
+          seed="$(head -c 32 /dev/urandom | base64 --wrap 0)"
+          echo "::add-mask::$seed"
+          echo "seed=$seed" >> "$GITHUB_OUTPUT"
+      - name: "Package | Build and sign"
+        id: package
+        # Pin by full commit SHA; move to xila-project/package-action@v1 once it is tagged.
+        uses: xila-project/package-action@38bc4d5e3db86c6a31db9e884cf5eddcaefdd30e
+        with:
+          input-directory: ${{ runner.temp }}/package-source
+          signing-key: ${{ (env.SIGN_WITH_SECRET == 'true' && secrets.XILA_DEV_SIGNING_SEED_B64) || steps.throwaway.outputs.seed }}
+          output-directory: ${{ runner.temp }}/package-output
+      - name: "Verify | Package signature and digest"
+        env:
+          CI_PACKAGE_DIRECTORY: ${{ runner.temp }}/package-output
+          CI_PACKAGE_SIGNATURE: ${{ env.SIGN_WITH_SECRET == 'true' && 'verified, repository development key' || 'verified, throwaway key (not published)' }}
+          EXPECTED_SHA256: ${{ steps.package.outputs.package-sha256 }}
+          XILA_PACKAGE_EXECUTABLE: ${{ steps.package.outputs.xila-package-path }}
+        run: mise run ci:verify-package
+      - name: "Report | Upload application package"
+        uses: actions/upload-artifact@v7
+        with:
+          name: package-${{ matrix.app }}
+          path: ${{ runner.temp }}/package-output/*
+          if-no-files-found: error
+          retention-days: 14
   required:
     if: always()
     needs: [quality, guest, host, abi, localization, package]

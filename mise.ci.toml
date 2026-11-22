@@ -142,6 +142,14 @@ description = "Install locked application Node dependencies with the pinned tool
 tools.node = "{{ vars.node_version }}"
 run = "npm ci"
 
+[tasks."ci:stage-package"]
+description = "Validate one application's manifest and shortcut and stage the input directory of the package action"
+run = 'python3 tools/ci/stage_package.py --application "${CI_APPLICATION:?}" --wasm-directory "${CI_WASM_DIRECTORY:?}" --output "${CI_PACKAGE_STAGING:?}"'
+
+[tasks."ci:verify-package"]
+description = "Verify the produced package with xila-package, write its SHA-256 sidecar and report the digest"
+run = "bash tools/ci/verify_package.sh"
+
 [tasks."ci:quality-extra"]
 description = "Validate application manifests, workflows, and localization"
 run = """
