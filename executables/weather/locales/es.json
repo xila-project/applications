@@ -1,0 +1,79 @@
+{
+  "compass": {
+    "east": "E",
+    "north": "N",
+    "north_east": "NE",
+    "north_west": "NO",
+    "south": "S",
+    "south_east": "SE",
+    "south_west": "SO",
+    "west": "O"
+  },
+  "conditions": {
+    "clear_sky": "Cielo despejado",
+    "drizzle": "Llovizna",
+    "fog": "Niebla",
+    "freezing_drizzle": "Llovizna helada",
+    "freezing_rain": "Lluvia helada",
+    "heavy_rain": "Lluvia intensa",
+    "heavy_snow": "Nevada intensa",
+    "light_rain": "Lluvia ligera",
+    "light_snow": "Nevada ligera",
+    "mainly_clear": "Mayormente despejado",
+    "overcast": "Cubierto",
+    "partly_cloudy": "Parcialmente nublado",
+    "rain": "Lluvia",
+    "rain_showers": "Chubascos",
+    "snow": "Nieve",
+    "snow_grains": "Cinarra",
+    "snow_showers": "Chubascos de nieve",
+    "thunderstorm": "Tormenta",
+    "thunderstorm_with_hail": "Tormenta, granizo",
+    "unknown": "Desconocido"
+  },
+  "daily": {
+    "no_data": "Sin previsión diaria.",
+    "rain_chance": "lluvia {chance}%"
+  },
+  "hourly": {
+    "no_data": "Sin previsión por horas.",
+    "rain_chart": "Probabilidad de lluvia (%)",
+    "range": "{start} a {end}  •  {minimum}° a {maximum}°",
+    "temperature_chart": "Temperatura, próximas 24 horas (°C)"
+  },
+  "now": {
+    "feels_like": "Sensación de {temperature}°C",
+    "gusts": "Ráfagas",
+    "humidity": "Humedad",
+    "no_data": "Sin datos actuales",
+    "precipitation": "Precipitación",
+    "wind": "Viento"
+  },
+  "search": {
+    "empty": "Busca una ciudad para ver su tiempo.",
+    "refresh": "Actualizar"
+  },
+  "status": {
+    "api_error": "Error de la API: {code}",
+    "display_error": "Error de visualización {error}",
+    "enter_city": "Escribe el nombre de una ciudad",
+    "invalid_response": "Respuesta de la API no válida",
+    "loading": "Cargando…",
+    "network_error": "Error de red",
+    "no_location": "No se encontró ningún lugar"
+  },
+  "tabs": {
+    "daily": "Por días",
+    "hourly": "Por horas",
+    "now": "Ahora"
+  },
+  "weekdays": {
+    "friday": "Vie",
+    "monday": "Lun",
+    "saturday": "Sáb",
+    "sunday": "Dom",
+    "thursday": "Jue",
+    "tuesday": "Mar",
+    "wednesday": "Mié"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "compass": {
+    "east": "东",
+    "north": "北",
+    "north_east": "东北",
+    "north_west": "西北",
+    "south": "南",
+    "south_east": "东南",
+    "south_west": "西南",
+    "west": "西"
+  },
+  "conditions": {
+    "clear_sky": "晴朗",
+    "drizzle": "毛毛雨",
+    "fog": "雾",
+    "freezing_drizzle": "冻毛毛雨",
+    "freezing_rain": "冻雨",
+    "heavy_rain": "大雨",
+    "heavy_snow": "大雪",
+    "light_rain": "小雨",
+    "light_snow": "小雪",
+    "mainly_clear": "大部晴朗",
+    "overcast": "阴天",
+    "partly_cloudy": "局部多云",
+    "rain": "中雨",
+    "rain_showers": "阵雨",
+    "snow": "中雪",
+    "snow_grains": "米雪",
+    "snow_showers": "阵雪",
+    "thunderstorm": "雷暴",
+    "thunderstorm_with_hail": "雷暴，冰雹",
+    "unknown": "未知"
+  },
+  "daily": {
+    "no_data": "暂无逐日预报。",
+    "rain_chance": "降雨 {chance}%"
+  },
+  "hourly": {
+    "no_data": "暂无逐小时预报。",
+    "rain_chart": "降雨概率 (%)",
+    "range": "{start} 至 {end}  •  {minimum}° 至 {maximum}°",
+    "temperature_chart": "气温，未来 24 小时 (°C)"
+  },
+  "now": {
+    "feels_like": "体感 {temperature}°C",
+    "gusts": "阵风",
+    "humidity": "湿度",
+    "no_data": "暂无当前数据",
+    "precipitation": "降水量",
+    "wind": "风"
+  },
+  "search": {
+    "empty": "搜索城市以查看其天气。",
+    "refresh": "刷新"
+  },
+  "status": {
+    "api_error": "API 错误：{code}",
+    "display_error": "显示错误 {error}",
+    "enter_city": "请输入城市名称",
+    "invalid_response": "API 响应无效",
+    "loading": "正在加载…",
+    "network_error": "网络错误",
+    "no_location": "未找到地点"
+  },
+  "tabs": {
+    "daily": "逐日",
+    "hourly": "逐小时",
+    "now": "现在"
+  },
+  "weekdays": {
+    "friday": "周五",
+    "monday": "周一",
+    "saturday": "周六",
+    "sunday": "周日",
+    "thursday": "周四",
+    "tuesday": "周二",
+    "wednesday": "周三"
+  }
+}

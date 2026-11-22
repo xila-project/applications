@@ -1,3 +1,5 @@
+embedded_i18n::i18n!("locales");
+
 #[cfg(target_arch = "wasm32")]
 mod device;
 #[cfg(target_arch = "wasm32")]

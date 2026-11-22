@@ -1,0 +1,79 @@
+{
+  "compass": {
+    "east": "E",
+    "north": "N",
+    "north_east": "NE",
+    "north_west": "NW",
+    "south": "S",
+    "south_east": "SE",
+    "south_west": "SW",
+    "west": "W"
+  },
+  "conditions": {
+    "clear_sky": "Bezchmurnie",
+    "drizzle": "Mżawka",
+    "fog": "Mgła",
+    "freezing_drizzle": "Marznąca mżawka",
+    "freezing_rain": "Marznący deszcz",
+    "heavy_rain": "Ulewny deszcz",
+    "heavy_snow": "Intensywny śnieg",
+    "light_rain": "Słaby deszcz",
+    "light_snow": "Słaby śnieg",
+    "mainly_clear": "Przeważnie bezchmurnie",
+    "overcast": "Pochmurno",
+    "partly_cloudy": "Częściowe zachmurzenie",
+    "rain": "Deszcz",
+    "rain_showers": "Przelotny deszcz",
+    "snow": "Śnieg",
+    "snow_grains": "Śnieg ziarnisty",
+    "snow_showers": "Przelotny śnieg",
+    "thunderstorm": "Burza",
+    "thunderstorm_with_hail": "Burza, grad",
+    "unknown": "Nieznane"
+  },
+  "daily": {
+    "no_data": "Brak prognozy dziennej.",
+    "rain_chance": "deszcz {chance}%"
+  },
+  "hourly": {
+    "no_data": "Brak prognozy godzinowej.",
+    "rain_chart": "Szansa na deszcz (%)",
+    "range": "{start}–{end}  •  {minimum}°–{maximum}°",
+    "temperature_chart": "Temperatura, następne 24 godziny (°C)"
+  },
+  "now": {
+    "feels_like": "Odczuwalna {temperature}°C",
+    "gusts": "Porywy",
+    "humidity": "Wilgotność",
+    "no_data": "Brak bieżących danych",
+    "precipitation": "Opady",
+    "wind": "Wiatr"
+  },
+  "search": {
+    "empty": "Wyszukaj miasto, aby zobaczyć pogodę.",
+    "refresh": "Odśwież"
+  },
+  "status": {
+    "api_error": "Błąd API: {code}",
+    "display_error": "Błąd wyświetlania {error}",
+    "enter_city": "Wpisz nazwę miasta",
+    "invalid_response": "Nieprawidłowa odpowiedź API",
+    "loading": "Wczytywanie…",
+    "network_error": "Błąd sieci",
+    "no_location": "Nie znaleziono miejsca"
+  },
+  "tabs": {
+    "daily": "Dziennie",
+    "hourly": "Godzinowo",
+    "now": "Teraz"
+  },
+  "weekdays": {
+    "friday": "Pt",
+    "monday": "Pn",
+    "saturday": "Sob",
+    "sunday": "Nd",
+    "thursday": "Czw",
+    "tuesday": "Wt",
+    "wednesday": "Śr"
+  }
+}

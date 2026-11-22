@@ -1,0 +1,79 @@
+{
+  "compass": {
+    "east": "L",
+    "north": "N",
+    "north_east": "NE",
+    "north_west": "NO",
+    "south": "S",
+    "south_east": "SE",
+    "south_west": "SO",
+    "west": "O"
+  },
+  "conditions": {
+    "clear_sky": "Céu limpo",
+    "drizzle": "Garoa",
+    "fog": "Nevoeiro",
+    "freezing_drizzle": "Garoa congelante",
+    "freezing_rain": "Chuva congelante",
+    "heavy_rain": "Chuva forte",
+    "heavy_snow": "Neve forte",
+    "light_rain": "Chuva fraca",
+    "light_snow": "Neve fraca",
+    "mainly_clear": "Predominantemente limpo",
+    "overcast": "Encoberto",
+    "partly_cloudy": "Parcialmente nublado",
+    "rain": "Chuva",
+    "rain_showers": "Pancadas de chuva",
+    "snow": "Neve",
+    "snow_grains": "Grãos de neve",
+    "snow_showers": "Pancadas de neve",
+    "thunderstorm": "Trovoada",
+    "thunderstorm_with_hail": "Trovoada, granizo",
+    "unknown": "Desconhecido"
+  },
+  "daily": {
+    "no_data": "Sem previsão diária.",
+    "rain_chance": "chuva {chance}%"
+  },
+  "hourly": {
+    "no_data": "Sem previsão por hora.",
+    "rain_chart": "Chance de chuva (%)",
+    "range": "{start} a {end}  •  {minimum}° a {maximum}°",
+    "temperature_chart": "Temperatura, próximas 24 horas (°C)"
+  },
+  "now": {
+    "feels_like": "Sensação de {temperature}°C",
+    "gusts": "Rajadas",
+    "humidity": "Umidade",
+    "no_data": "Sem dados atuais",
+    "precipitation": "Precipitação",
+    "wind": "Vento"
+  },
+  "search": {
+    "empty": "Pesquise uma cidade para ver o tempo.",
+    "refresh": "Atualizar"
+  },
+  "status": {
+    "api_error": "Erro da API: {code}",
+    "display_error": "Erro de exibição {error}",
+    "enter_city": "Digite o nome de uma cidade",
+    "invalid_response": "Resposta da API inválida",
+    "loading": "Carregando…",
+    "network_error": "Erro de rede",
+    "no_location": "Nenhum local encontrado"
+  },
+  "tabs": {
+    "daily": "Diário",
+    "hourly": "Por hora",
+    "now": "Agora"
+  },
+  "weekdays": {
+    "friday": "Sex",
+    "monday": "Seg",
+    "saturday": "Sáb",
+    "sunday": "Dom",
+    "thursday": "Qui",
+    "tuesday": "Ter",
+    "wednesday": "Qua"
+  }
+}

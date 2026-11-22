@@ -1,0 +1,27 @@
+{
+  "controls": {
+    "octave_down": "Oct -",
+    "octave_up": "Oct +",
+    "retry_audio": "Retry audio",
+    "volume": "Volume",
+    "volume_short": "Vol"
+  },
+  "playing": {
+    "hint": "Hold a key to play",
+    "notes": "Playing {notes}"
+  },
+  "settings": {
+    "octave": "Octave {octave}",
+    "summary": "Octave {octave} | {tone} | Volume {volume}%"
+  },
+  "status": {
+    "ready": "Audio ready",
+    "silent": "Silent mode: enable host audio, then Retry audio",
+    "silent_compact": "Silent mode: no audio"
+  },
+  "tones": {
+    "sine": "Sine",
+    "square": "Square",
+    "triangle": "Triangle"
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "compass": {
+    "east": "E",
+    "north": "N",
+    "north_east": "NE",
+    "north_west": "NO",
+    "south": "S",
+    "south_east": "SE",
+    "south_west": "SO",
+    "west": "O"
+  },
+  "conditions": {
+    "clear_sky": "Cielo sereno",
+    "drizzle": "Pioviggine",
+    "fog": "Nebbia",
+    "freezing_drizzle": "Pioviggine gelata",
+    "freezing_rain": "Pioggia gelata",
+    "heavy_rain": "Pioggia forte",
+    "heavy_snow": "Neve forte",
+    "light_rain": "Pioggia debole",
+    "light_snow": "Neve debole",
+    "mainly_clear": "Prevalentemente sereno",
+    "overcast": "Coperto",
+    "partly_cloudy": "Parzialmente nuvoloso",
+    "rain": "Pioggia",
+    "rain_showers": "Rovesci di pioggia",
+    "snow": "Neve",
+    "snow_grains": "Neve granulosa",
+    "snow_showers": "Rovesci di neve",
+    "thunderstorm": "Temporale",
+    "thunderstorm_with_hail": "Temporale, grandine",
+    "unknown": "Sconosciuto"
+  },
+  "daily": {
+    "no_data": "Nessuna previsione giornaliera.",
+    "rain_chance": "pioggia {chance}%"
+  },
+  "hourly": {
+    "no_data": "Nessuna previsione oraria.",
+    "rain_chart": "Probabilità di pioggia (%)",
+    "range": "{start} – {end}  •  {minimum}° – {maximum}°",
+    "temperature_chart": "Temperatura, prossime 24 ore (°C)"
+  },
+  "now": {
+    "feels_like": "Percepita {temperature}°C",
+    "gusts": "Raffiche",
+    "humidity": "Umidità",
+    "no_data": "Nessun dato attuale",
+    "precipitation": "Precipitazioni",
+    "wind": "Vento"
+  },
+  "search": {
+    "empty": "Cerca una città per vederne il meteo.",
+    "refresh": "Aggiorna"
+  },
+  "status": {
+    "api_error": "Errore API: {code}",
+    "display_error": "Errore di visualizzazione {error}",
+    "enter_city": "Inserisci il nome di una città",
+    "invalid_response": "Risposta API non valida",
+    "loading": "Caricamento…",
+    "network_error": "Errore di rete",
+    "no_location": "Nessuna località trovata"
+  },
+  "tabs": {
+    "daily": "Giornaliero",
+    "hourly": "Orario",
+    "now": "Ora"
+  },
+  "weekdays": {
+    "friday": "Ven",
+    "monday": "Lun",
+    "saturday": "Sab",
+    "sunday": "Dom",
+    "thursday": "Gio",
+    "tuesday": "Mar",
+    "wednesday": "Mer"
+  }
+}

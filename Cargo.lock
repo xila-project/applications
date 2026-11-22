@@ -2611,6 +2611,7 @@ dependencies = [
 name = "xila-synth"
 version = "0.2.0"
 dependencies = [
+ "embedded-i18n",
  "nanoaudio",
  "nanoaudio-synth",
  "xila-audio",
