@@ -126,5 +126,19 @@
     "errors": {
       "invalid_duration": "Durée de pause invalide : utilisez un entier positif ou nul avec ms, s, m ou h (maximum 18446744073709551615 nanosecondes)"
     }
+  },
+  "sudo": {
+    "errors": {
+      "aborted": "Authentification interrompue",
+      "built_in": "sudo n’exécute que des commandes externes, et {arg0} est une commande intégrée",
+      "failed_to_execute": "Impossible d’exécuter la commande : {arg0}",
+      "locked_out": "Trop de tentatives échouées : réessayez dans {arg0} secondes",
+      "not_allowed": "Non autorisé : seuls les membres du groupe administrator peuvent utiliser sudo",
+      "unknown_user": "Utilisateur inconnu : {arg0}",
+      "usage": "Utilisation : sudo [-u UTILISATEUR] COMMANDE [ARGUMENT]..."
+    },
+    "prompts": {
+      "password": "[sudo] Mot de passe de {arg0} : "
+    }
   }
 }

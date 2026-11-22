@@ -132,5 +132,19 @@
     "errors": {
       "invalid_duration": "Nieprawidłowy czas uśpienia: użyj nieujemnej liczby całkowitej z ms, s, m lub h (maksymalnie 18446744073709551615 nanosekund)"
     }
+  },
+  "sudo": {
+    "errors": {
+      "aborted": "Uwierzytelnianie przerwane",
+      "built_in": "sudo uruchamia tylko polecenia zewnętrzne, a {arg0} jest poleceniem wbudowanym",
+      "failed_to_execute": "Nie udało się uruchomić polecenia: {arg0}",
+      "locked_out": "Zbyt wiele nieudanych prób: spróbuj ponownie za {arg0} s",
+      "not_allowed": "Brak uprawnień: tylko członkowie grupy administrator mogą używać sudo",
+      "unknown_user": "Nieznany użytkownik: {arg0}",
+      "usage": "Użycie: sudo [-u UŻYTKOWNIK] POLECENIE [ARGUMENT]..."
+    },
+    "prompts": {
+      "password": "[sudo] Hasło użytkownika {arg0}: "
+    }
   }
 }

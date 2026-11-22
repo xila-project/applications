@@ -22,6 +22,7 @@ mod error;
 mod execution;
 mod parser;
 mod resolver;
+mod sudo;
 mod tokenizer;
 use commands::CommandContext;
 pub use error::*;

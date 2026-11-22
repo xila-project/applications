@@ -126,5 +126,19 @@
     "errors": {
       "invalid_duration": "無効な待機時間です。ms、s、m、h を付けた非負整数を指定してください（最大 18446744073709551615 ナノ秒）。"
     }
+  },
+  "sudo": {
+    "errors": {
+      "aborted": "認証が中断されました",
+      "built_in": "sudo は外部コマンドのみ実行します。{arg0} は組み込みコマンドです",
+      "failed_to_execute": "コマンドを実行できませんでした: {arg0}",
+      "locked_out": "失敗した試行が多すぎます: {arg0} 秒後に再試行してください",
+      "not_allowed": "許可されていません: sudo を使用できるのは administrator グループのメンバーだけです",
+      "unknown_user": "不明なユーザーです: {arg0}",
+      "usage": "使い方: sudo [-u ユーザー] コマンド [引数]..."
+    },
+    "prompts": {
+      "password": "[sudo] {arg0} のパスワード: "
+    }
   }
 }

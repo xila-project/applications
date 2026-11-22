@@ -123,5 +123,19 @@
     "errors": {
       "invalid_duration": "无效的休眠时长：请使用非负整数，单位为 ms、s、m 或 h（最大值为 18446744073709551615 纳秒）"
     }
+  },
+  "sudo": {
+    "errors": {
+      "aborted": "身份验证已中止",
+      "built_in": "sudo 只运行外部命令，而 {arg0} 是内置命令",
+      "failed_to_execute": "无法运行命令：{arg0}",
+      "locked_out": "失败次数过多：请在 {arg0} 秒后重试",
+      "not_allowed": "不允许：只有 administrator 组的成员可以使用 sudo",
+      "unknown_user": "未知用户：{arg0}",
+      "usage": "用法：sudo [-u 用户] 命令 [参数]..."
+    },
+    "prompts": {
+      "password": "[sudo] {arg0} 的密码："
+    }
   }
 }

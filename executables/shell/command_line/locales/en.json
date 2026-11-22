@@ -126,5 +126,19 @@
     "errors": {
       "invalid_duration": "Invalid sleep duration: use a nonnegative integer with ms, s, m, or h (maximum 18446744073709551615 nanoseconds)"
     }
+  },
+  "sudo": {
+    "errors": {
+      "aborted": "Authentication aborted",
+      "built_in": "sudo runs external commands only, and {arg0} is a built-in command",
+      "failed_to_execute": "Failed to run the command: {arg0}",
+      "locked_out": "Too many failed attempts: try again in {arg0} seconds",
+      "not_allowed": "Not allowed: only members of the administrator group can use sudo",
+      "unknown_user": "Unknown user: {arg0}",
+      "usage": "Usage: sudo [-u USER] COMMAND [ARGUMENT]..."
+    },
+    "prompts": {
+      "password": "[sudo] Password for {arg0}: "
+    }
   }
 }

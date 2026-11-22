@@ -66,6 +66,18 @@ pub enum Error<'a> {
     FailedToRestoreTerminalEcho(virtual_file_system::IoErrorKind),
     #[cfg(feature = "network")]
     NetworkUnavailable,
+    /// `sudo` was given no command, an unknown option or `-u` without a user.
+    SudoUsage,
+    /// The caller is not a member of the administrator group.
+    SudoNotAllowed,
+    SudoUnknownUser(alloc::string::String),
+    /// `sudo` runs external commands only.
+    SudoBuiltIn(alloc::string::String),
+    /// Too many failed attempts: the caller must wait this many seconds.
+    SudoLockedOut(u64),
+    /// Standard input ended or the task was asked to stop during the prompt.
+    SudoAborted,
+    SudoFailedToExecute(xila::executable::Error),
 }
 
 impl<A: getargs::Argument> From<getargs::Error<A>> for Error<'_> {
@@ -363,6 +375,29 @@ impl Display for Error<'_> {
             Error::Format => {
                 write!(formatter, "{}", t!("errors.format_failed"))
             }
+            Error::SudoUsage => write!(formatter, "{}", t!("sudo.errors.usage")),
+            Error::SudoNotAllowed => write!(formatter, "{}", t!("sudo.errors.not_allowed")),
+            Error::SudoUnknownUser(user) => write!(
+                formatter,
+                "{}",
+                t!("sudo.errors.unknown_user", arg0 = user.as_str())
+            ),
+            Error::SudoBuiltIn(command) => write!(
+                formatter,
+                "{}",
+                t!("sudo.errors.built_in", arg0 = command.as_str())
+            ),
+            Error::SudoLockedOut(seconds) => write!(
+                formatter,
+                "{}",
+                t!("sudo.errors.locked_out", arg0 = seconds)
+            ),
+            Error::SudoAborted => write!(formatter, "{}", t!("sudo.errors.aborted")),
+            Error::SudoFailedToExecute(error) => write!(
+                formatter,
+                "{}",
+                t!("sudo.errors.failed_to_execute", arg0 = error)
+            ),
             Error::FailedToReadEnvironmentVariable(error) => {
                 write!(
                     formatter,

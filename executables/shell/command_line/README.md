@@ -112,3 +112,30 @@ the source or destination cannot be renamed.
 the destination is an existing directory, the source filename is appended to
 it. Directory sources, recursive copies, and copying a file onto itself are
 unsupported. The copy uses a fixed 512-byte buffer.
+
+## Running a command as root
+
+`sudo [-u USER] COMMAND [ARGUMENT]...` runs one external command as root, or
+as `USER`, for example
+`sudo /applications/executables/package install xila.text-editor`.
+
+- Only members of the `administrator` group may use it. Anyone else is refused
+  before any prompt. A root caller is not prompted.
+- It asks for the caller's own password, with terminal echo off, and stops at
+  the end of input like the login prompt. The password is never taken from the
+  arguments or the environment, and its buffer is overwritten after use.
+  Account records are readable by root only, so the password is checked in a
+  short-lived task of its own that runs as root and runs nothing else.
+- After 3 failed attempts in a row, the caller is locked out for 30 seconds,
+  doubled by each further failure up to 5 minutes. The count is shared by every
+  shell and reset by a success.
+- A command given by name is searched in `/applications/executables` only, not
+  in the caller's `Paths`; a path containing `/` is used as given. Built-ins
+  are refused. The command runs in its own task with the target user and its
+  primary group, and an environment of `User`, `HOME`, `Host`,
+  `Current_directory` and `Paths` (the secure path) only. The shell's own task
+  keeps the caller's identity. Core refuses to start WebAssembly and other
+  registered formats with another identity.
+- Every attempt is logged with the caller, the target user, the command and
+  the outcome.
+- Successful authentications are not remembered.
