@@ -94,10 +94,14 @@ async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), 
             task,
             "Debug agent transport",
             None,
-            async move |service_task| {
-                if let Err(error) = serve_agent(vfs, context, service_task, task_stopping).await {
-                    log::error!("Debug agent transport stopped: {error}");
-                }
+            async move |service_task| match serve_agent(vfs, context, service_task, task_stopping)
+                .await
+            {
+                Ok(TransportEnd::Stopped) => {}
+                Ok(TransportEnd::ServedElsewhere) => log::information!(
+                    "Debug agent transport is already served by another Debug instance"
+                ),
+                Err(error) => log::error!("Debug agent transport stopped: {error}"),
             },
         )
         .await
@@ -126,20 +130,35 @@ async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), 
     }
 }
 
+/// Path of the debug transport device, which one opening serves at a time.
+const TRANSPORT_PATH: &str = "/devices/graphics/debug/transport";
+
+/// How the transport task ended without an error.
+#[derive(Debug, PartialEq, Eq)]
+enum TransportEnd {
+    /// The window closed and the transport was released.
+    Stopped,
+    /// Another instance, typically the `--background` one, already holds the
+    /// transport and answers `xila-debug`; this instance only shows its window.
+    ServedElsewhere,
+}
+
 async fn serve_agent(
     vfs: &'static VirtualFileSystem,
     context: &'static xila::executable::ExecutableContext,
     task: TaskIdentifier,
     stopping: Arc<AtomicBool>,
-) -> Result<(), String> {
-    let mut transport = File::open(
-        vfs,
-        task,
-        "/devices/graphics/debug/transport",
-        AccessFlags::READ_WRITE.into(),
-    )
-    .await
-    .map_err(|error| error.to_string())?;
+) -> Result<TransportEnd, String> {
+    let mut transport =
+        match File::open(vfs, task, TRANSPORT_PATH, AccessFlags::READ_WRITE.into()).await {
+            Ok(transport) => transport,
+            // The transport is opened exclusively: `ResourceBusy` is another
+            // opening, not a failure of this one.
+            Err(xila::virtual_file_system::IoErrorKind::ResourceBusy) => {
+                return Ok(TransportEnd::ServedElsewhere);
+            }
+            Err(error) => return Err(error.to_string()),
+        };
     let mut request_buffer = alloc::vec![0; MAX_REQUEST_BYTES + 1];
     loop {
         if stopping.load(Ordering::Acquire) {
@@ -183,7 +202,7 @@ async fn serve_agent(
         .close(vfs)
         .await
         .map_err(|error| error.to_string())?;
-    Ok(())
+    Ok(TransportEnd::Stopped)
 }
 
 async fn write_all(file: &mut File<'_>, bytes: &[u8]) -> Result<(), String> {
@@ -462,7 +481,9 @@ mod window_setup_tests {
         time::MonotonicClock,
     };
 
-    use super::{code, create_debug_window_with};
+    use super::{TRANSPORT_PATH, TransportEnd, code, create_debug_window_with, serve_agent};
+    use portable_atomic::AtomicBool;
+    use xila::synchronization::Arc;
 
     struct TestMemoryManager;
 
@@ -549,6 +570,58 @@ mod window_setup_tests {
             graphics::set_ffi_manager(manager);
             manager
         })
+    }
+
+    /// A transport another opening already holds, like the background
+    /// instance's.
+    struct HeldTransport;
+    impl MountOperations for HeldTransport {}
+    impl DirectCharacterDevice for HeldTransport {}
+    impl DirectBaseOperations for HeldTransport {
+        fn open(&self) -> file_system::Result<()> {
+            Err(file_system::IoErrorKind::ResourceBusy)
+        }
+
+        fn read(
+            &self,
+            _: &mut Context<'_>,
+            _: &mut [u8],
+            _: Size,
+        ) -> Poll<file_system::Result<usize>> {
+            Poll::Ready(Err(file_system::IoErrorKind::Unsupported))
+        }
+
+        fn write(
+            &self,
+            _: &mut Context<'_>,
+            _: &[u8],
+            _: Size,
+        ) -> Poll<file_system::Result<usize>> {
+            Poll::Ready(Err(file_system::IoErrorKind::Unsupported))
+        }
+    }
+
+    #[xila::task::test(task_path = xila::task)]
+    async fn a_transport_served_by_another_instance_is_not_an_error() {
+        let standard = testing::initialize(false, false).await;
+        let context = standard.context;
+        let vfs = context.virtual_file_system;
+        let task = context.task_manager.get_current_task_identifier().await;
+        let stopping = || Arc::new(AtomicBool::new(false));
+
+        // Without a transport device, the failure is still reported.
+        assert!(serve_agent(vfs, context, task, stopping()).await.is_err());
+
+        for directory in ["/devices/graphics", "/devices/graphics/debug"] {
+            let _ = vfs.create_directory(task, &directory).await;
+        }
+        vfs.mount_character_device(task, TRANSPORT_PATH, HeldTransport)
+            .await
+            .unwrap();
+        assert_eq!(
+            serve_agent(vfs, context, task, stopping()).await,
+            Ok(TransportEnd::ServedElsewhere)
+        );
     }
 
     #[test]

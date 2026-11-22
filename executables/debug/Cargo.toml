@@ -13,5 +13,10 @@ debug_protocol = { workspace = true }
 portable-atomic = { workspace = true }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dev-dependencies]
+task = { workspace = true, features = ["test_harness"] }
+testing = { workspace = true }
+critical-section = { workspace = true, features = ["std"] }
+
 [lib]
 name = "debug_application"

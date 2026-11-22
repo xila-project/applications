@@ -122,6 +122,26 @@ async fn ping_loop<C: CommandContext>(
     Ok(())
 }
 
+/// What `ping` does with the result of resolving its target.
+enum PingTarget<A> {
+    /// Ping the first address.
+    Address(A),
+    /// The name has no address: report an unknown host.
+    UnknownHost,
+    /// The resolution failed: report why, without claiming the name does not
+    /// exist.
+    Failed(ResolveError),
+}
+
+fn ping_target<A>(resolution: Result<Option<A>, ResolveError>) -> PingTarget<A> {
+    match resolution {
+        Ok(Some(address)) => PingTarget::Address(address),
+        // No address, or a confirmed negative answer: the name does not exist.
+        Ok(None) | Err(ResolveError::NoAnswer) => PingTarget::UnknownHost,
+        Err(error) => PingTarget::Failed(error),
+    }
+}
+
 async fn execute_ping<'a, I, C>(
     context: &mut C,
     options: &mut getargs::Options<&'a str, I>,
@@ -143,13 +163,13 @@ where
         .as_ref()
         .ok_or(crate::Error::NetworkUnavailable)?;
 
-    let resolved_target = match manager
+    let resolution = manager
         .resolve(target, DnsQueryKind::A | DnsQueryKind::Aaaa, true, None)
         .await
-        .map(|ips| ips.into_iter().next())
-    {
-        Ok(Some(ip)) => ip,
-        Ok(None) => {
+        .map(|ips| ips.into_iter().next());
+    let resolved_target = match ping_target(resolution) {
+        PingTarget::Address(ip) => ip,
+        PingTarget::UnknownHost => {
             return context
                 .write_out_fmt(format_args!(
                     "{}\n",
@@ -157,16 +177,7 @@ where
                 ))
                 .await;
         }
-        // A confirmed negative answer: the name does not exist.
-        Err(ResolveError::NoAnswer) => {
-            return context
-                .write_out_fmt(format_args!(
-                    "{}\n",
-                    t!("dns.errors.unknown_host", arg0 = target)
-                ))
-                .await;
-        }
-        Err(error) => {
+        PingTarget::Failed(error) => {
             return context
                 .write_out_fmt(format_args!(
                     "{}\n",
@@ -190,8 +201,32 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::PingArguments;
+    use super::{PingArguments, PingTarget, ping_target};
     use alloc::string::ToString;
+    use xila::network::ResolveError;
+
+    #[test]
+    fn only_a_missing_address_or_a_negative_answer_is_an_unknown_host() {
+        assert!(matches!(ping_target(Ok(Some(7))), PingTarget::Address(7)));
+        assert!(matches!(
+            ping_target::<u8>(Ok(None)),
+            PingTarget::UnknownHost
+        ));
+        assert!(matches!(
+            ping_target::<u8>(Err(ResolveError::NoAnswer)),
+            PingTarget::UnknownHost
+        ));
+        for error in [
+            ResolveError::Failure,
+            ResolveError::NameTooLong,
+            ResolveError::TimedOut,
+        ] {
+            assert!(matches!(
+                ping_target::<u8>(Err(error)),
+                PingTarget::Failed(failed) if failed == error
+            ));
+        }
+    }
 
     #[test]
     fn preserves_defaults_and_option_names() {
