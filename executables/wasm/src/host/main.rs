@@ -283,11 +283,8 @@ async fn main_inner(
     let module = load_module(&engine, path, context).await?;
 
     let (_standard_in, standard_out, standard_error) = standard.split();
-    let root_dir = xila::virtual_file_system::SynchronousDirectory::open(
-        context.virtual_file_system,
-        task,
-        xila::file_system::Path::from_str("/"),
-    );
+    let root_directory =
+        DirectoryVariant::preopen(context.virtual_file_system, task, Path::from_str("/")).await;
 
     let mut store = Store::new(
         &engine,
@@ -345,22 +342,23 @@ async fn main_inner(
                 file: standard_error.into_synchronous_file(),
             }),
         );
-        if let Ok(dir) = root_dir {
-            data.wasi.files.insert(
-                3,
-                FileSystemItem::Directory(DirectoryVariant {
-                    confinement_root: None,
-                    directory: dir,
-                    path: xila::file_system::PathOwned::root(),
-                }),
-            );
-            data.wasi.next_fd = 4;
-            data.wasi.prestats.insert(
-                3,
-                Prestat {
-                    name: b"/".to_vec(),
-                },
-            );
+        match root_directory {
+            Err(error) => {
+                // Without a confined root the guest gets no file system at all.
+                log::warning!("WebAssembly guest runs without a preopened directory: {error}");
+            }
+            Ok(root_directory) => {
+                data.wasi
+                    .files
+                    .insert(3, FileSystemItem::Directory(root_directory));
+                data.wasi.next_fd = 4;
+                data.wasi.prestats.insert(
+                    3,
+                    Prestat {
+                        name: b"/".to_vec(),
+                    },
+                );
+            }
         }
     }
 

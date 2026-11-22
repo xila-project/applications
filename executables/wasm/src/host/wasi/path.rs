@@ -368,23 +368,15 @@ define_wasi_module! {
             let state = if fdflags & 1 != 0 { Some(StateFlags::Append) } else { None };
             let vfs = caller.data().context.virtual_file_system;
             let confined_relative = guest_relative(&root, &absolute_path)?;
-            if !follow {
-                match task::block_on(vfs.get_statistics_beneath(task_id, &confined_relative, false, &root)) {
-                    Ok(statistics) if statistics.kind == Kind::SymbolicLink => {
-                        if oflags & 2 != 0 || oflags & 1 == 0 || oflags & 4 == 0 {
-                            return Err(Error::Loop.into());
-                        }
-                    }
-                    Ok(_) => {}
-                    Err(IoErrorKind::NotFound) if oflags & 1 != 0 => {}
-                    Err(error) => return Err(kind_error(error).into()),
-                }
-            }
+            // The final component is looked up once, under the namespace lock:
+            // without `SYMLINK_FOLLOW` a final symbolic link is `ELOOP` (or
+            // `EEXIST` for an exclusive creation), never a separate check that
+            // a concurrent rename could invalidate.
             let item = if oflags & 2 != 0 {
-                let directory_handle = task::block_on(vfs.open_directory_beneath(task_id, &confined_relative, &root)).map(|dir| dir.into_synchronous_directory()).map_err(kind_error)?;
+                let directory_handle = task::block_on(vfs.open_directory_beneath_with_lookup(task_id, &confined_relative, &root, follow)).map(|dir| dir.into_synchronous_directory()).map_err(kind_error)?;
                 FileSystemItem::Directory(DirectoryVariant { confinement_root: Some(root), directory: directory_handle, path: absolute_path })
             } else {
-                let file = task::block_on(vfs.open_beneath(&confined_relative, Flags::new(access, create, state), task_id, &root)).map(|file| file.into_synchronous_file()).map_err(kind_error)?;
+                let file = task::block_on(vfs.open_beneath_with_lookup(&confined_relative, Flags::new(access, create, state), task_id, &root, follow)).map(|file| file.into_synchronous_file()).map_err(kind_error)?;
                 FileSystemItem::File(FileVariant { file })
             };
             let new_fd = caller.data_mut().wasi.insert_file_system_item(item).ok_or(Error::Mfile)?;
@@ -520,14 +512,11 @@ mod tests {
         };
         wasi.files.insert(
             3,
-            FileSystemItem::Directory(DirectoryVariant {
-                confinement_root: None,
-                path: PathOwned::try_from("/sandbox").unwrap(),
-                directory: xila::virtual_file_system::SynchronousDirectory::open(
-                    vfs, task, "/sandbox",
-                )
-                .unwrap(),
-            }),
+            FileSystemItem::Directory(
+                DirectoryVariant::preopen(vfs, task, "/sandbox")
+                    .await
+                    .unwrap(),
+            ),
         );
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
@@ -661,14 +650,11 @@ mod tests {
         };
         wasi.files.insert(
             3,
-            FileSystemItem::Directory(DirectoryVariant {
-                confinement_root: None,
-                path: PathOwned::try_from("/sandbox").unwrap(),
-                directory: xila::virtual_file_system::SynchronousDirectory::open(
-                    vfs, task, "/sandbox",
-                )
-                .unwrap(),
-            }),
+            FileSystemItem::Directory(
+                DirectoryVariant::preopen(vfs, task, "/sandbox")
+                    .await
+                    .unwrap(),
+            ),
         );
         let engine = Engine::default();
         let mut linker = Linker::new(&engine);
