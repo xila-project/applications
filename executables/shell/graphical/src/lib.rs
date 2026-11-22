@@ -174,7 +174,7 @@ impl Shell {
             }
 
             if let Some(desk) = &mut self.desk
-                && !desk.is_hidden()
+                && !desk.is_hidden().await
             {
                 desk.handle_events().await;
             }
@@ -1003,6 +1003,37 @@ mod tests {
             });
             handle.join().unwrap();
             result
+        }
+
+        #[xila::task::test(task_path = xila::task)]
+        #[allow(clippy::await_holding_lock)]
+        async fn desk_hidden_state_is_read_under_the_graphics_lock() {
+            use core::{future::Future, pin::pin, task::Waker};
+
+            let _input = POINTER_INPUT
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            let manager = headless_graphics_manager().await;
+            let (shell, _desk_window) = shell_with_home(manager).await;
+            let mut context = Context::from_waker(Waker::noop());
+
+            let value = {
+                let desk = shell.desk.as_ref().unwrap();
+                let held = manager.try_lock().expect("the graphics lock is free");
+                let mut hidden = pin!(desk.is_hidden());
+                assert!(
+                    hidden.as_mut().poll(&mut context).is_pending(),
+                    "the flag must not be read while another holder has the graphics lock"
+                );
+                drop(held);
+
+                let Poll::Ready(value) = hidden.as_mut().poll(&mut context) else {
+                    panic!("the flag is read once the graphics lock is released");
+                };
+                value
+            };
+            assert!(!value, "a freshly created desk is shown");
+            drop(shell);
         }
 
         #[xila::task::test(task_path = xila::task)]

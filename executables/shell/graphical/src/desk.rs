@@ -124,8 +124,16 @@ impl Desk {
         self.window.as_object_mutable()
     }
 
-    pub fn is_hidden(&self) -> bool {
-        unsafe { lvgl::lv_obj_has_flag(self.dock, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN) }
+    /// Whether the dock, and with it the desk, is hidden.
+    ///
+    /// LVGL may update the object's flags from another executor thread, so the
+    /// flag is read under the graphics lock.
+    pub async fn is_hidden(&self) -> bool {
+        graphics::lock!(self.graphics_manager, {
+            // SAFETY: the graphics lock is held, and `dock` is owned by the
+            // desk window, which lives as long as `self`.
+            unsafe { lvgl::lv_obj_has_flag(self.dock, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN) }
+        })
     }
 
     pub async fn new(
