@@ -178,7 +178,10 @@ async fn real_clock_guest_runs_stopwatch_timer_saves_alarm_and_closes() {
     let handle = xila::executable::execute(
         context,
         "/applications/executables/wasm",
-        vec!["/applications/executables/clock".into()],
+        vec![
+            "--developer-mode".into(),
+            "/applications/executables/clock".into(),
+        ],
         standard.duplicate().await.unwrap(),
         None,
     )
@@ -239,7 +242,10 @@ async fn real_clock_guest_runs_stopwatch_timer_saves_alarm_and_closes() {
     let reopened = xila::executable::execute(
         context,
         "/applications/executables/wasm",
-        vec!["/applications/executables/clock".into()],
+        vec![
+            "--developer-mode".into(),
+            "/applications/executables/clock".into(),
+        ],
         standard,
         None,
     )

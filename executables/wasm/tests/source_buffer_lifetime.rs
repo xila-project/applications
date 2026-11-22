@@ -186,7 +186,12 @@ async fn launcher_releases_webassembly_source_bytes_after_compilation() {
         let (handle, _) = context
             .task_manager
             .spawn(task, "MeasuredGuest", None, move |_| async move {
-                wasm::execute_with_control(guest_standard, vec![path_owned], guest_control).await
+                wasm::execute_with_control(
+                    guest_standard,
+                    vec!["--developer-mode".into(), path_owned],
+                    guest_control,
+                )
+                .await
             })
             .await
             .unwrap();
@@ -241,7 +246,7 @@ async fn launcher_releases_webassembly_source_bytes_after_compilation() {
     let failed_standard = standard.duplicate().await.unwrap();
     let failed_result = wasm::execute_with_control(
         failed_standard,
-        vec![path.to_string()],
+        vec!["--developer-mode".to_string(), path.to_string()],
         Arc::new(wasm::ExecutionControl::new()),
     )
     .await;

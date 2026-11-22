@@ -159,7 +159,10 @@ async fn real_painter_guest_draws_saves_opens_and_preserves_work_on_errors() {
     let handle = xila::executable::execute(
         context,
         "/applications/executables/wasm",
-        vec!["/applications/executables/pixel_painter".into()],
+        vec![
+            "--developer-mode".into(),
+            "/applications/executables/pixel_painter".into(),
+        ],
         standard,
         None,
     )

@@ -211,7 +211,10 @@ async fn real_synth_guest_recovers_from_silent_mode_plays_releases_and_closes() 
     let handle = xila::executable::execute(
         context,
         "/applications/executables/wasm",
-        vec!["/applications/executables/synth".into()],
+        vec![
+            "--developer-mode".into(),
+            "/applications/executables/synth".into(),
+        ],
         standard,
         None,
     )
