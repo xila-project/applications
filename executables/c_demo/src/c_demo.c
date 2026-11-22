@@ -46,11 +46,24 @@ static int32_t failure(const XilaStartup *startup, const char *operation, XilaSt
     return 1;
 }
 
+/* Whether a host running `running` accepts an executable built for `declared`
+   (packed as `(major << 16) | minor`): before 1.0 the minor versions must match;
+   from 1.0 the majors must match and the running minor be at least `declared`. */
+static bool xila_version_compatible(uint32_t declared, uint32_t running) {
+    uint32_t major = declared >> 16;
+    uint32_t minor = declared & UINT32_C(0xffff);
+    if (major != (running >> 16)) return false;
+    uint32_t running_minor = running & UINT32_C(0xffff);
+    return major == 0 ? minor == running_minor : minor <= running_minor;
+}
+
 int32_t c_demo_main(const XilaStartup *startup) {
     if (startup == NULL || startup->size < sizeof(*startup)) return 1;
     const XilaApi *api = startup->api;
+    uint32_t compiled_version =
+        ((uint32_t)XILA_VERSION_MAJOR << 16) | (uint32_t)XILA_VERSION_MINOR;
     if (api == NULL || api->size < sizeof(*api) ||
-        api->version != ((XILA_ABI_VERSION_MAJOR << 16) | XILA_ABI_VERSION_MINOR)) return 1;
+        !xila_version_compatible(compiled_version, api->version)) return 1;
     XilaStatus status;
 #define CHECK(operation) do { status = (operation); if (status != XILA_STATUS_OK) \
     return failure(startup, #operation, status); } while (0)

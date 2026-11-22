@@ -353,7 +353,7 @@ async fn find(
         let entry = trusted
             .verify_entry(&bytes, &signature)
             .map_err(|e| rejected(&repository.name, &path, e))?;
-        if trust::compatible(&entry, TARGET, abi_application::APPLICATION_ABI_VERSION) {
+        if trust::compatible(&entry, TARGET, install::running_xila_version()) {
             return Ok(Some(Match {
                 repository,
                 trusted,

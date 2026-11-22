@@ -150,13 +150,15 @@ jobs:
       id-token: write
     secrets:
       XILA_DEV_SIGNING_SEED_B64: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.XILA_DEV_SIGNING_SEED_B64 || '' }}
-    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@dfc80e508bf7e808226b78c936a9fbb19780057a
+    uses: xila-project/package_manager/.github/workflows/package-wasm.yml@93ed41ec98c6102b0c8a091ba7df55042d83b78b
     with:
       wasm-artifact: wasi-applications
       wasm-path: ${{ matrix.app }}.wasm
       manifest-path: packaging/${{ matrix.app }}.json
       shortcut-path: executables/${{ matrix.app }}/shortcut.json
-      builder-ref: dfc80e508bf7e808226b78c936a9fbb19780057a
+      builder-ref: 93ed41ec98c6102b0c8a091ba7df55042d83b78b
+      builder-release: xila-package-builder-v0.4.0
+      builder-sha256: 02905040ef0c241c0cb6b006b729a0ee255b66b7e38ff938c8c12dac5df18554
       artifact-name: package-${{ matrix.app }}
       publish-release: false
       sign-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}

@@ -1,9 +1,9 @@
 {
-  "format_version": 1,
+  "format_version": 2,
   "name": "xila.pixel-painter",
   "version": "0.2.0",
   "target": "wasm32-wasip1",
-  "minimum_xila_abi": 1,
+  "xila_version": "0.1",
   "capabilities": [],
   "application": {
     "entrypoint": "executables/pixel_painter.wasm",

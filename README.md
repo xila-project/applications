@@ -27,7 +27,7 @@ cargo test --config /tmp/xila-local.toml -p xila-command-line-shell --test integ
 
 Cargo records patched paths in `Cargo.lock`; regenerate the lockfile without the local config before committing. Use the same Core checkout for all patches, including transitive platform dependencies.
 
-Editable v1 developer package manifests live in `packaging/`. These contain application identity, entrypoint and ABI but **no generated hashes**. The reusable package-manager CI workflow stages each compiled WASI binary, builds and verifies a canonical `.app` bundle, and archives it as `.xpk` with a SHA-256 sidecar. Pull requests test the new bundle format without publishing them. A version tag matching all application versions can publish release assets. These archives are unsigned development packages: their checksums establish content integrity, not publisher identity. ABI version 1 denotes the initial versioned application ABI; older unversioned runtimes do not declare that compatibility.
+Editable version 2 developer package manifests live in `packaging/`. These contain application identity, entrypoint and minimum Xila version (`xila_version`) but **no generated hashes**. The reusable package-manager CI workflow stages each compiled WASI binary, builds and verifies a canonical `.app` bundle, and archives it as `.xpk` with a SHA-256 sidecar. Pull requests test the new bundle format without publishing them. A version tag matching all application versions can publish release assets. These archives are unsigned development packages: their checksums establish content integrity, not publisher identity. `xila_version` follows Xila's release compatibility rule (`0.x` requires an exact minor match; `1.0` and later require the same major and at least the declared minor version).
 
 CI uses separate mr-boxington target caches for host and WASI builds. On the first host Clippy run, mr-boxington reported 0 hits, 953 compilations without usable prior inputs or predictions, 26 bypasses and 0 seconds of estimated compiler work saved. This was a cold run; it does not establish warm-build reuse. Check subsequent job diagnostics and Cargo's build output before drawing cache conclusions.
 
@@ -45,7 +45,7 @@ provide arbitrary Japanese input or IME support.
 
 Each WASI application owns its graphical Shell shortcut alongside its Rust
 sources at `executables/<app>/shortcut.json`. The source manifest in
-`packaging/<app>.json` only defines package identity, ABI requirements,
+`packaging/<app>.json` only defines package identity, minimum Xila version requirements,
 capabilities and executable metadata; **the shortcut itself never lives in
 `packaging/`**.
 
