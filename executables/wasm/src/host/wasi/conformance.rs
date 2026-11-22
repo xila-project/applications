@@ -792,6 +792,8 @@ async fn fd_write_preserves_wrapped_filesystem_errnos() {
         (Io::WouldBlock, 6),        // AGAIN: retry after readiness
         (Io::ResourceBusy, 10),     // BUSY: administrative, do not retry
         (Io::SymlinkLoop, 32),      // LOOP
+        (Io::TimedOut, 73),         // TIMEDOUT
+        (Io::StaleHandle, 72),      // STALE: reopen, not a retry
         (Io::CrossDevice, 75),      // XDEV
         (Io::PathEscapesRoot, 76),  // NOTCAPABLE
         (Io::Unsupported, 58),      // NOTSUP
@@ -811,6 +813,35 @@ async fn fd_write_preserves_wrapped_filesystem_errnos() {
         let fd = guest.open(&name, WRITE).unwrap();
         assert_eq!(guest.write(fd, b"x"), expected, "{source:?}");
         assert_eq!(guest.call("fd_close", &[i(fd)]), 0);
+    }
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn path_operations_on_a_mount_point_or_its_ancestor_report_busy_not_try_again() {
+    let mut guest = Guest::new().await;
+    assert_eq!(guest.with_path("path_create_directory", ROOT, "parent"), 0);
+    assert_eq!(
+        guest.with_path("path_create_directory", ROOT, "parent/mounted"),
+        0
+    );
+    let device = xila::file_system::MemoryDevice::<512>::new_static(1024 * 512);
+    let file_system =
+        xila::little_fs::FileSystem::new_format(device, xila::little_fs::Options::new(256))
+            .unwrap();
+    guest
+        .vfs
+        .mount_file_system(file_system, "/sandbox/parent/mounted", guest.task)
+        .await
+        .unwrap();
+    let busy = errno(Error::Busy);
+    assert_eq!(busy, 10); // BUSY, never AGAIN (6): a retry loop would spin forever
+    for path in ["parent/mounted", "parent"] {
+        assert_eq!(guest.rename(path, "elsewhere"), busy, "rename {path}");
+        assert_eq!(
+            guest.with_path("path_remove_directory", ROOT, path),
+            busy,
+            "remove {path}"
+        );
     }
 }
 

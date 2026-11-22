@@ -298,7 +298,15 @@ pub fn errno_error(errno: PosixErrno) -> Error {
 /// Built on [`IoErrorKind::posix_errno`]; the only departures are the WASI
 /// specifics: a path that escapes its preopened root is `ENOTCAPABLE`, not
 /// `EACCES`. `WouldBlock` is `EAGAIN` (retry after readiness) while
-/// `ResourceBusy` is `EBUSY` (administrative: waiting will not help).
+/// `ResourceBusy` is `EBUSY` (administrative: waiting will not help, as for
+/// renaming or removing a mount point or an open file) and `StaleHandle` is
+/// `ESTALE` (reopen the file).
+///
+/// Descriptor exhaustion has two errnos: `SystemFileLimit` is `ENFILE` and
+/// stands for a shared pool that ran out, such as the pipe and poll slots
+/// that every process uses, while `ProcessFileLimit` is `EMFILE` and stands
+/// for the descriptor table of one WASI process (the host reports it itself
+/// as [`Error::Mfile`]). `TimedOut` is `ETIMEDOUT` and `SymlinkLoop` is `ELOOP`.
 pub fn kind_error(kind: IoErrorKind) -> Error {
     match kind {
         IoErrorKind::PathEscapesRoot => Error::Notcapable,
@@ -344,6 +352,32 @@ mod tests {
         assert_eq!(kind_error(IoErrorKind::NameTooLong), Error::Nametoolong);
         assert_eq!(kind_error(IoErrorKind::ProcessFileLimit), Error::Mfile);
         assert_eq!(kind_error(IoErrorKind::SystemFileLimit), Error::Nfile);
+    }
+
+    #[test]
+    fn shared_slot_exhaustion_is_enfile_and_the_process_table_is_emfile() {
+        // Pipe and poll slots are shared by every process, so running out of
+        // them is the system-wide limit; only a process's own table is EMFILE.
+        assert_eq!(kind_error(IoErrorKind::SystemFileLimit), Error::Nfile);
+        assert_eq!(kind_error(IoErrorKind::ProcessFileLimit), Error::Mfile);
+        assert_eq!(i32::from(Error::Nfile), 41);
+        assert_eq!(i32::from(Error::Mfile), 33);
+    }
+
+    #[test]
+    fn deadlines_and_link_loops_are_not_input_output_errors() {
+        assert_eq!(kind_error(IoErrorKind::TimedOut), Error::Timedout);
+        assert_eq!(i32::from(Error::Timedout), 73);
+        assert_eq!(kind_error(IoErrorKind::SymlinkLoop), Error::Loop);
+        assert_eq!(i32::from(Error::Loop), 32);
+    }
+
+    #[test]
+    fn stale_handles_are_not_retryable_contention() {
+        assert_eq!(kind_error(IoErrorKind::StaleHandle), Error::Stale);
+        assert_eq!(i32::from(Error::Stale), 72);
+        assert_ne!(kind_error(IoErrorKind::StaleHandle), Error::Again);
+        assert_ne!(kind_error(IoErrorKind::ResourceBusy), Error::Again);
     }
 
     #[test]
