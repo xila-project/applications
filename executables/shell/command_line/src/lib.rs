@@ -26,6 +26,7 @@ mod sudo;
 mod tokenizer;
 use commands::CommandContext;
 pub use error::*;
+pub use sudo::SUDO_USER_VARIABLE;
 
 const SCRIPT_DEPTH_VARIABLE: &str = "XILA_SHELL_DEPTH";
 const MAX_SHELL_DEPTH: usize = 4;

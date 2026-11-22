@@ -93,7 +93,7 @@ impl Shell {
     /// A failed restore is retried once. If it still fails, echo stays off
     /// and the error is reported on standard error, without discarding the
     /// password that was read.
-    async fn restore_terminal_attributes(&mut self, attributes: TerminalAttributes) {
+    pub(crate) async fn restore_terminal_attributes(&mut self, attributes: TerminalAttributes) {
         let input = self.standard.input();
         if input
             .control(SET_TERMINAL_ATTRIBUTES, &attributes)

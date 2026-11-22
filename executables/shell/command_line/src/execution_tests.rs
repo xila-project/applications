@@ -1255,6 +1255,10 @@ struct LoginTerminalState {
     get_error: Option<xila::file_system::IoErrorKind>,
     set_errors: std::sync::Mutex<Vec<Option<xila::file_system::IoErrorKind>>>,
     set_attempts: std::sync::Mutex<usize>,
+    /// While set, reads stay pending.
+    blocked: std::sync::Mutex<bool>,
+    /// When set, setting attributes reports success but changes nothing.
+    ignores_changes: bool,
 }
 
 impl LoginTerminalState {
@@ -1267,6 +1271,20 @@ impl LoginTerminalState {
         get_error: Option<xila::file_system::IoErrorKind>,
         set_errors: &[Option<xila::file_system::IoErrorKind>],
     ) -> &'static Self {
+        Self::build(input, get_error, set_errors, false)
+    }
+
+    /// A terminal that accepts attribute changes without applying them.
+    fn ignoring_changes(input: &[u8]) -> &'static Self {
+        Self::build(input, None, &[], true)
+    }
+
+    fn build(
+        input: &[u8],
+        get_error: Option<xila::file_system::IoErrorKind>,
+        set_errors: &[Option<xila::file_system::IoErrorKind>],
+        ignores_changes: bool,
+    ) -> &'static Self {
         Box::leak(Box::new(Self {
             input: std::sync::Mutex::new((input.iter().rev().copied().collect(), Vec::new())),
             attributes: std::sync::Mutex::new(
@@ -1275,7 +1293,18 @@ impl LoginTerminalState {
             get_error,
             set_errors: std::sync::Mutex::new(set_errors.iter().rev().copied().collect()),
             set_attempts: std::sync::Mutex::new(0),
+            blocked: std::sync::Mutex::new(false),
+            ignores_changes,
         }))
+    }
+
+    fn set_blocked(&self, blocked: bool) {
+        *self.blocked.lock().unwrap() = blocked;
+    }
+
+    /// Input not read yet.
+    fn unread(&self) -> Vec<u8> {
+        self.input.lock().unwrap().0.iter().rev().copied().collect()
     }
 
     fn set_attempts(&self) -> usize {
@@ -1300,6 +1329,9 @@ impl xila::file_system::DirectBaseOperations for LoginTerminal {
         buffer: &mut [u8],
         _: xila::file_system::Size,
     ) -> core::task::Poll<xila::file_system::Result<usize>> {
+        if *self.0.blocked.lock().unwrap() {
+            return core::task::Poll::Pending;
+        }
         let echo = self.0.attributes().is_echo_enabled();
         let (remaining, echo_per_byte) = &mut *self.0.input.lock().unwrap();
         let Some(byte) = remaining.pop() else {
@@ -1342,6 +1374,9 @@ impl xila::file_system::DirectBaseOperations for LoginTerminal {
                 *self.0.set_attempts.lock().unwrap() += 1;
                 if let Some(error) = self.0.set_errors.lock().unwrap().pop().flatten() {
                     return Err(error);
+                }
+                if self.0.ignores_changes {
+                    return Ok(());
                 }
                 *self.0.attributes.lock().unwrap() = *SET_TERMINAL_ATTRIBUTES::cast_input(input)?;
                 Ok(())
@@ -1685,15 +1720,8 @@ impl ExecutableTrait for Identify {
 
 const SUDO_PASSWORD: &str = "secret";
 
-/// A Shell whose standard input is a login terminal sending `input`, running
-/// as the new account `name` (password [`SUDO_PASSWORD`]). The account is an
-/// administrator when `administrator` is set, otherwise the only member of a
-/// group of its own.
-///
-/// As in seeded images, account records are readable by root only.
-/// `identify` is installed in the secure path and `elsewhere` (the same
-/// program) in a directory of the caller's `Paths` only, next to a
-/// caller-defined `Sudo_test_secret` variable.
+/// A Shell whose standard input is a login terminal sending `input`; see
+/// [`sudo_shell_with`].
 async fn sudo_shell(
     name: &str,
     administrator: bool,
@@ -1704,9 +1732,32 @@ async fn sudo_shell(
     xila::users::UserIdentifier,
     xila::users::GroupIdentifier,
 ) {
+    sudo_shell_with(name, administrator, LoginTerminalState::new(input)).await
+}
+
+/// A Shell whose standard input is the login terminal `state`, running as
+/// the new account `name` (password [`SUDO_PASSWORD`]). The account is an
+/// administrator when `administrator` is set, otherwise the only member of a
+/// group of its own.
+///
+/// As in seeded images, account records are readable by root only.
+/// `identify` is installed in the secure path and `elsewhere` (the same
+/// program) in `/sudo_paths`, which is also the Shell's working directory and
+/// in its `Paths`. The caller's environment also holds a forged `Host` and a
+/// `Sudo_test_secret`, which commands run by `sudo` must not see.
+async fn sudo_shell_with(
+    name: &str,
+    administrator: bool,
+    state: &'static LoginTerminalState,
+) -> (
+    Shell,
+    &'static LoginTerminalState,
+    xila::users::UserIdentifier,
+    xila::users::GroupIdentifier,
+) {
     use xila::{file_system::Permissions, users::ADMINISTRATOR_GROUP_NAME};
 
-    let (shell, state) = shell_with_login_terminal(&format!("/devices/{name}"), input).await;
+    let (mut shell, state) = shell_with_scripted_terminal(&format!("/devices/{name}"), state).await;
     let context = shell.context;
     let task = shell.task;
     let virtual_file_system = context.virtual_file_system;
@@ -1765,14 +1816,17 @@ async fn sudo_shell(
     }
 
     let manager = context.task_manager;
-    manager
-        .set_environment_variable(task, "Paths", "/sudo_paths:/applications/executables")
-        .await
-        .unwrap();
-    manager
-        .set_environment_variable(task, "Sudo_test_secret", "inherited")
-        .await
-        .unwrap();
+    for (variable, value) in [
+        ("Paths", "/sudo_paths:/applications/executables"),
+        ("Host", "forged"),
+        ("Sudo_test_secret", "inherited"),
+    ] {
+        manager
+            .set_environment_variable(task, variable, value)
+            .await
+            .unwrap();
+    }
+    shell.current_directory = Path::from_str("/sudo_paths").to_owned();
     manager.set_user(task, user).await.unwrap();
     manager.set_group(task, group).await.unwrap();
     (shell, state, user, group)
@@ -1789,8 +1843,8 @@ async fn shell_identity(
     )
 }
 
-/// Standard error written so far, read back as root.
-async fn sudo_errors(shell: &mut Shell) -> String {
+/// Switch the Shell task to root, to set up files or read results back.
+async fn become_root(shell: &Shell) {
     let manager = shell.context.task_manager;
     manager
         .set_user(shell.task, xila::users::UserIdentifier::ROOT)
@@ -1800,7 +1854,19 @@ async fn sudo_errors(shell: &mut Shell) -> String {
         .set_group(shell.task, xila::users::GroupIdentifier::ROOT)
         .await
         .unwrap();
+}
+
+/// Standard error written so far, read back as root.
+async fn sudo_errors(shell: &mut Shell) -> String {
+    become_root(shell).await;
     errors_written(shell).await
+}
+
+/// Standard output written so far, read back as root.
+async fn sudo_output(shell: &mut Shell) -> String {
+    become_root(shell).await;
+    shell.standard.out().flush().await.unwrap();
+    contents(shell, "/shell-output").await
 }
 
 #[xila::task::test(task_path = xila::task)]
@@ -1828,7 +1894,8 @@ async fn sudo_runs_the_command_as_root_without_echo_and_keeps_the_shell_identity
     );
     // The Shell's task keeps the caller's identity.
     assert_eq!(shell_identity(&shell).await, (user, group));
-    // Only the minimal environment reaches the command.
+    // Only the fixed, minimal environment reaches the command: nothing of
+    // the caller's but the marker naming the caller.
     let mut names: Vec<&str> = run
         .environment
         .iter()
@@ -1837,25 +1904,35 @@ async fn sudo_runs_the_command_as_root_without_echo_and_keeps_the_shell_identity
     names.sort_unstable();
     assert_eq!(
         names,
-        ["Current_directory", "HOME", "Host", "Paths", "User"]
+        [
+            "Current_directory",
+            "HOME",
+            "Host",
+            "Paths",
+            "Sudo_user",
+            "User"
+        ]
     );
     assert_eq!(run.variable("User"), Some("root"));
     assert_eq!(run.variable("HOME"), Some(xila::users::ROOT_HOME));
-    assert_eq!(run.variable("Host"), Some("xila"));
+    assert_eq!(run.variable("Host"), Some(crate::sudo::SUDO_HOST));
+    // Root's home does not exist here, so the command starts in `/`, not in
+    // the caller's directory.
     assert_eq!(run.variable("Current_directory"), Some("/"));
     assert_eq!(run.variable("Paths"), Some(crate::sudo::SECURE_PATH));
+    assert_eq!(
+        run.variable(crate::SUDO_USER_VARIABLE),
+        Some("sudo_success")
+    );
     assert_eq!(sudo_errors(&mut shell).await, "");
 }
 
 #[xila::task::test(task_path = xila::task)]
-async fn sudo_runs_the_command_as_another_user() {
+async fn sudo_runs_the_command_as_another_user_in_its_home() {
     let (mut shell, _, user, group) = sudo_shell("sudo_other", true, b"secret\n").await;
     let manager = shell.context.task_manager;
     // Accounts are created as root.
-    manager
-        .set_user(shell.task, xila::users::UserIdentifier::ROOT)
-        .await
-        .unwrap();
+    become_root(&shell).await;
     let authentication_context = xila::authentication::Context {
         virtual_file_system: shell.context.virtual_file_system,
         task_manager: manager,
@@ -1875,7 +1952,14 @@ async fn sudo_runs_the_command_as_another_user() {
     )
     .await
     .unwrap();
+    shell
+        .context
+        .virtual_file_system
+        .ensure_user_home(shell.task, target)
+        .await
+        .unwrap();
     manager.set_user(shell.task, user).await.unwrap();
+    manager.set_group(shell.task, group).await.unwrap();
 
     assert_eq!(
         shell
@@ -1889,6 +1973,10 @@ async fn sudo_runs_the_command_as_another_user() {
     assert_eq!((runs[0].user, runs[0].group), (target, target_group));
     assert_eq!(runs[0].variable("User"), Some("sudo_target"));
     assert_eq!(runs[0].variable("HOME"), Some("/users/sudo_target"));
+    assert_eq!(
+        runs[0].variable("Current_directory"),
+        Some("/users/sudo_target")
+    );
     assert_eq!(shell_identity(&shell).await, (user, group));
 }
 
@@ -1930,13 +2018,11 @@ async fn sudo_refuses_a_caller_outside_the_administrator_group_without_prompting
     // Nothing was read: the caller is refused before the prompt.
     assert!(state.echo_per_byte().is_empty());
     assert_eq!(shell_identity(&shell).await, (user, group));
-    shell.standard.out().flush().await.unwrap();
     assert_eq!(
         sudo_errors(&mut shell).await,
         format!("{}\n", crate::Error::SudoNotAllowed)
     );
-    let output = contents(&shell, "/shell-output").await;
-    assert_eq!(output, "");
+    assert_eq!(sudo_output(&mut shell).await, "");
 }
 
 #[xila::task::test(task_path = xila::task)]
@@ -1997,7 +2083,69 @@ async fn sudo_locks_the_caller_out_after_three_failures() {
 }
 
 #[xila::task::test(task_path = xila::task)]
-async fn sudo_refuses_built_ins_and_ignores_the_callers_paths() {
+async fn sudo_admits_one_attempt_per_user_across_shells() {
+    use embassy_futures::join::join;
+
+    let (mut first, first_state, _, _) = sudo_shell("sudo_concurrent", true, b"secret\n").await;
+    // A second Shell of the same user, on a terminal of its own.
+    let second_state = LoginTerminalState::new(b"secret\n");
+    let virtual_file_system = first.context.virtual_file_system;
+    become_root(&first).await;
+    virtual_file_system
+        .mount_character_device(
+            first.task,
+            "/devices/sudo_concurrent_second",
+            LoginTerminal(second_state),
+        )
+        .await
+        .unwrap();
+    let mut standard = first.standard.duplicate().await.unwrap();
+    standard.standard_in = File::open(
+        virtual_file_system,
+        first.task,
+        "/devices/sudo_concurrent_second",
+        AccessFlags::Read.into(),
+    )
+    .await
+    .unwrap();
+    let mut second = Shell::new(standard).await;
+    let user = first
+        .context
+        .users_manager
+        .get_user_identifier("sudo_concurrent")
+        .await
+        .unwrap();
+    first
+        .context
+        .task_manager
+        .set_user(first.task, user)
+        .await
+        .unwrap();
+
+    // The first attempt waits at its prompt while the second one starts.
+    first_state.set_blocked(true);
+    let (first_status, second_status) =
+        join(first.execute_line("sudo identify sudo_concurrent"), async {
+            let status = second
+                .execute_line("sudo identify sudo_concurrent")
+                .await
+                .unwrap();
+            first_state.set_blocked(false);
+            status
+        })
+        .await;
+
+    assert_eq!(first_status.unwrap(), 0);
+    assert_eq!(second_status, 1);
+    // The second Shell was refused without reading its input.
+    assert!(second_state.echo_per_byte().is_empty());
+    assert_eq!(identify_runs("sudo_concurrent").len(), 1);
+    let errors = sudo_errors(&mut second).await;
+    assert!(errors.contains(&format!("{}", crate::Error::SudoBusy)));
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn sudo_refuses_built_ins_and_commands_outside_the_secure_path() {
     let (mut shell, state, _, _) = sudo_shell("sudo_paths", true, b"secret\n").await;
 
     assert_eq!(shell.execute_line("sudo cd /").await.unwrap(), 1);
@@ -2009,6 +2157,15 @@ async fn sudo_refuses_built_ins_and_ignores_the_callers_paths() {
             .unwrap(),
         127
     );
+    // Relative to the caller's working directory, outside the secure path,
+    // or leaving it with `..`.
+    for command in [
+        "sudo ./elsewhere sudo_paths",
+        "sudo /sudo_paths/elsewhere sudo_paths",
+        "sudo /applications/executables/../../sudo_paths/elsewhere sudo_paths",
+    ] {
+        assert_eq!(shell.execute_line(command).await.unwrap(), 1, "{command}");
+    }
     assert_eq!(shell.execute_line("sudo").await.unwrap(), 1);
     // None of them prompted.
     assert!(state.echo_per_byte().is_empty());
@@ -2016,21 +2173,26 @@ async fn sudo_refuses_built_ins_and_ignores_the_callers_paths() {
     assert_eq!(
         sudo_errors(&mut shell).await,
         format!(
-            "{}\n{}\n{}\n",
+            "{}\n{}\n{}\n{}\n{}\n{}\n",
             crate::Error::SudoBuiltIn("cd".into()),
             crate::Error::CommandNotFound,
+            crate::Error::SudoCommandNotAllowed("./elsewhere".into()),
+            crate::Error::SudoCommandNotAllowed("/sudo_paths/elsewhere".into()),
+            crate::Error::SudoCommandNotAllowed(
+                "/applications/executables/../../sudo_paths/elsewhere".into()
+            ),
             crate::Error::SudoUsage
         )
     );
 }
 
 #[xila::task::test(task_path = xila::task)]
-async fn sudo_accepts_an_explicit_path() {
+async fn sudo_accepts_an_absolute_path_in_the_secure_path() {
     let (mut shell, _, _, _) = sudo_shell("sudo_explicit", true, b"secret\n").await;
 
     assert_eq!(
         shell
-            .execute_line("sudo /sudo_paths/elsewhere sudo_explicit")
+            .execute_line("sudo /applications/executables/identify sudo_explicit")
             .await
             .unwrap(),
         0
@@ -2038,4 +2200,181 @@ async fn sudo_accepts_an_explicit_path() {
     let runs = identify_runs("sudo_explicit");
     assert_eq!(runs.len(), 1);
     assert_eq!(runs[0].user, xila::users::UserIdentifier::ROOT);
+}
+
+/// Run `sudo identify NAME` on the terminal `state` and check that it is
+/// refused before the prompt because echo cannot be turned off.
+async fn assert_sudo_refuses_without_hidden_echo(
+    name: &str,
+    state: &'static LoginTerminalState,
+    expected: xila::file_system::IoErrorKind,
+) {
+    let (mut shell, state, _, _) = sudo_shell_with(name, true, state).await;
+
+    assert_eq!(
+        shell
+            .execute_line(&format!("sudo identify {name}"))
+            .await
+            .unwrap(),
+        1
+    );
+
+    assert!(identify_runs(name).is_empty());
+    // Nothing was read and no prompt was written.
+    assert!(state.echo_per_byte().is_empty());
+    assert_eq!(sudo_output(&mut shell).await, "");
+    assert_eq!(
+        state.attributes(),
+        xila::file_system::character_device::TerminalAttributes::INTERACTIVE
+    );
+    assert_eq!(
+        sudo_errors(&mut shell).await,
+        format!("{}\n", crate::Error::SudoEchoNotSuppressed(expected))
+    );
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn sudo_refuses_input_without_terminal_attributes() {
+    use xila::file_system::IoErrorKind;
+    assert_sudo_refuses_without_hidden_echo(
+        "sudo_no_attributes",
+        LoginTerminalState::with_failures(b"secret\n", Some(IoErrorKind::Unsupported), &[]),
+        IoErrorKind::Unsupported,
+    )
+    .await;
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn sudo_refuses_input_whose_echo_cannot_be_turned_off() {
+    use xila::file_system::IoErrorKind;
+    assert_sudo_refuses_without_hidden_echo(
+        "sudo_no_set_attributes",
+        LoginTerminalState::with_failures(b"secret\n", None, &[Some(IoErrorKind::Unsupported)]),
+        IoErrorKind::Unsupported,
+    )
+    .await;
+    assert_sudo_refuses_without_hidden_echo(
+        "sudo_failing_set_attributes",
+        LoginTerminalState::with_failures(b"secret\n", None, &[Some(IoErrorKind::InputOutput)]),
+        IoErrorKind::InputOutput,
+    )
+    .await;
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn sudo_refuses_input_whose_echo_stays_on() {
+    assert_sudo_refuses_without_hidden_echo(
+        "sudo_echo_stays_on",
+        LoginTerminalState::ignoring_changes(b"secret\n"),
+        xila::file_system::IoErrorKind::Unsupported,
+    )
+    .await;
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn sudo_refuses_a_file_as_password_input() {
+    let (mut shell, _, _, _) = sudo_shell("sudo_file_input", true, b"").await;
+    become_root(&shell).await;
+    write_file(&shell, "/sudo-password", b"secret\n").await;
+    shell.standard.standard_in = File::open(
+        shell.context.virtual_file_system,
+        shell.task,
+        "/sudo-password",
+        AccessFlags::Read.into(),
+    )
+    .await
+    .unwrap();
+    let user = shell
+        .context
+        .users_manager
+        .get_user_identifier("sudo_file_input")
+        .await
+        .unwrap();
+    shell
+        .context
+        .task_manager
+        .set_user(shell.task, user)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        shell
+            .execute_line("sudo identify sudo_file_input")
+            .await
+            .unwrap(),
+        1
+    );
+    assert!(identify_runs("sudo_file_input").is_empty());
+    let errors = sudo_errors(&mut shell).await;
+    assert!(
+        errors.starts_with(&format!(
+            "{}",
+            crate::Error::SudoEchoNotSuppressed(xila::file_system::IoErrorKind::Unsupported)
+        )) || errors.starts_with(&format!(
+            "{}",
+            crate::Error::SudoEchoNotSuppressed(
+                xila::file_system::IoErrorKind::InappropriateIoControl
+            )
+        )),
+        "{errors}"
+    );
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn sudo_reads_an_overlong_password_to_the_end_of_its_line_and_refuses_it() {
+    let mut input = vec![b'x'; crate::sudo::MAXIMUM_PASSWORD_BYTES + 50];
+    input.extend_from_slice(b"\necho next\n");
+    let (mut shell, state, _, _) = sudo_shell("sudo_long", true, &input).await;
+
+    assert_eq!(
+        shell.execute_line("sudo identify sudo_long").await.unwrap(),
+        1
+    );
+
+    assert!(identify_runs("sudo_long").is_empty());
+    // The whole line was read with echo off, and nothing after it.
+    let line = crate::sudo::MAXIMUM_PASSWORD_BYTES + 50 + 1;
+    assert_eq!(state.echo_per_byte(), vec![false; line]);
+    assert_eq!(state.unread(), b"echo next\n");
+    assert_eq!(
+        state.attributes(),
+        xila::file_system::character_device::TerminalAttributes::INTERACTIVE
+    );
+    assert_eq!(
+        sudo_errors(&mut shell).await,
+        format!("{}\n", crate::Error::SudoPasswordTooLong)
+    );
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn sudo_accepts_a_password_of_the_maximum_length() {
+    let password = "p".repeat(crate::sudo::MAXIMUM_PASSWORD_BYTES);
+    let mut input = password.clone().into_bytes();
+    input.push(b'\n');
+    let (mut shell, _, user, group) = sudo_shell("sudo_maximum", true, &input).await;
+    become_root(&shell).await;
+    xila::authentication::change_user_password(
+        &xila::authentication::Context {
+            virtual_file_system: shell.context.virtual_file_system,
+            task_manager: shell.context.task_manager,
+            users_manager: shell.context.users_manager,
+            task: shell.task,
+        },
+        "sudo_maximum",
+        &password,
+    )
+    .await
+    .unwrap();
+    let manager = shell.context.task_manager;
+    manager.set_user(shell.task, user).await.unwrap();
+    manager.set_group(shell.task, group).await.unwrap();
+
+    assert_eq!(
+        shell
+            .execute_line("sudo identify sudo_maximum")
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(identify_runs("sudo_maximum").len(), 1);
 }

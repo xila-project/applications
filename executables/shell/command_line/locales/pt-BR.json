@@ -131,9 +131,13 @@
     "errors": {
       "aborted": "Autenticação interrompida",
       "built_in": "sudo executa somente comandos externos, e {arg0} é um comando interno",
+      "busy": "Outra tentativa de sudo está em andamento para este usuário",
+      "command_not_allowed": "Com sudo só é possível executar comandos de /applications/executables, indicados pelo nome ou pelo caminho absoluto: {arg0}",
+      "echo_not_suppressed": "Não é possível pedir a senha: a entrada padrão não consegue desativar o eco ({arg0})",
       "failed_to_execute": "Não foi possível executar o comando: {arg0}",
       "locked_out": "Muitas tentativas malsucedidas: tente novamente em {arg0} segundos",
       "not_allowed": "Não permitido: somente membros do grupo administrator podem usar sudo",
+      "password_too_long": "A senha é longa demais",
       "unknown_user": "Usuário desconhecido: {arg0}",
       "usage": "Uso: sudo [-u USUÁRIO] COMANDO [ARGUMENTO]..."
     },

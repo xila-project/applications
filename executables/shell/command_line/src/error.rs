@@ -78,6 +78,16 @@ pub enum Error<'a> {
     /// Standard input ended or the task was asked to stop during the prompt.
     SudoAborted,
     SudoFailedToExecute(xila::executable::Error),
+    /// The command is neither a name nor an absolute path of an entry of the
+    /// secure path.
+    SudoCommandNotAllowed(alloc::string::String),
+    /// Another `sudo` attempt of the same user is in progress.
+    SudoBusy,
+    /// Standard input cannot turn echo off, or echo stayed on, so the
+    /// password is not prompted for.
+    SudoEchoNotSuppressed(virtual_file_system::IoErrorKind),
+    /// The password line is longer than the maximum; it was read to its end.
+    SudoPasswordTooLong,
 }
 
 impl<A: getargs::Argument> From<getargs::Error<A>> for Error<'_> {
@@ -398,6 +408,20 @@ impl Display for Error<'_> {
                 "{}",
                 t!("sudo.errors.failed_to_execute", arg0 = error)
             ),
+            Error::SudoCommandNotAllowed(command) => write!(
+                formatter,
+                "{}",
+                t!("sudo.errors.command_not_allowed", arg0 = command.as_str())
+            ),
+            Error::SudoBusy => write!(formatter, "{}", t!("sudo.errors.busy")),
+            Error::SudoEchoNotSuppressed(error) => write!(
+                formatter,
+                "{}",
+                t!("sudo.errors.echo_not_suppressed", arg0 = error)
+            ),
+            Error::SudoPasswordTooLong => {
+                write!(formatter, "{}", t!("sudo.errors.password_too_long"))
+            }
             Error::FailedToReadEnvironmentVariable(error) => {
                 write!(
                     formatter,

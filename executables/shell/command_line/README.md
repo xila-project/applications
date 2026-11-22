@@ -121,21 +121,39 @@ as `USER`, for example
 
 - Only members of the `administrator` group may use it. Anyone else is refused
   before any prompt. A root caller is not prompted.
-- It asks for the caller's own password, with terminal echo off, and stops at
-  the end of input like the login prompt. The password is never taken from the
-  arguments or the environment, and its buffer is overwritten after use.
-  Account records are readable by root only, so the password is checked in a
+- It asks for the caller's own password. Standard input must be a terminal
+  whose echo can be turned off: sudo turns it off, reads the attributes back,
+  and writes the prompt only once echo is known to be off. A pipe, a file or a
+  console without terminal attributes is refused before the prompt. Input that
+  ends during the prompt aborts it. The password is never taken from the
+  arguments or the environment.
+- The password is at most 256 bytes. A longer line is read to its end while
+  echo is still off, so that none of it reaches the shell, and refused.
+- Account records are readable by root only, so the password is checked in a
   short-lived task of its own that runs as root and runs nothing else.
-- After 3 failed attempts in a row, the caller is locked out for 30 seconds,
-  doubled by each further failure up to 5 minutes. The count is shared by every
-  shell and reset by a success.
-- A command given by name is searched in `/applications/executables` only, not
-  in the caller's `Paths`; a path containing `/` is used as given. Built-ins
-  are refused. The command runs in its own task with the target user and its
-  primary group, and an environment of `User`, `HOME`, `Host`,
-  `Current_directory` and `Paths` (the secure path) only. The shell's own task
-  keeps the caller's identity. Core refuses to start WebAssembly and other
-  registered formats with another identity.
+- The Shell overwrites its password buffer and each input byte after use. The
+  hash device that the check writes the password to keeps its own state; see
+  xila-project/platforms#168.
+- Each user has at most one attempt in progress, across every shell; a
+  concurrent attempt is refused. An attempt counts as a failure from the moment
+  its password is read until it succeeds, so interrupting the check cannot hide
+  a failure. After 3 failures in a row, the user is locked out for 30 seconds,
+  doubled by each further failure up to 5 minutes.
+- The command is an entry of `/applications/executables`, given by name or by
+  absolute path (`/applications/executables/NAME`). Relative paths, other
+  directories, `..` components and built-ins are refused before the prompt. The
+  caller's `Paths` and working directory are not used.
+- The command runs in its own task with the target user and its primary group.
+  Its environment is fixed: `User` and `HOME` from the target's account, `Host`
+  set to `xila`, `Paths` set to `/applications/executables`, `Sudo_user` set to
+  the caller's name, and `Current_directory` set to the target's home if it
+  exists, `/` otherwise. The shell's own task keeps the caller's identity.
+- WebAssembly guests never run under `sudo`, even when the Wasm runner is the
+  command given to it: every task started by the command inherits `Sudo_user`,
+  and the Wasm runtime refuses to start a guest in such a task. Core also
+  refuses to launch a registered file format with another identity. A native
+  program run by `sudo` could clear the variable, but it already runs with the
+  elevated identity.
 - Every attempt is logged with the caller, the target user, the command and
-  the outcome.
+  the outcome, with the fields that the caller chooses escaped.
 - Successful authentications are not remembered.

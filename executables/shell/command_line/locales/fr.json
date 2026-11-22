@@ -131,9 +131,13 @@
     "errors": {
       "aborted": "Authentification interrompue",
       "built_in": "sudo n’exécute que des commandes externes, et {arg0} est une commande intégrée",
+      "busy": "Une autre tentative sudo est en cours pour cet utilisateur",
+      "command_not_allowed": "Seules les commandes de /applications/executables, données par leur nom ou leur chemin absolu, peuvent être exécutées avec sudo : {arg0}",
+      "echo_not_suppressed": "Impossible de demander le mot de passe : l’entrée standard ne peut pas désactiver l’écho ({arg0})",
       "failed_to_execute": "Impossible d’exécuter la commande : {arg0}",
       "locked_out": "Trop de tentatives échouées : réessayez dans {arg0} secondes",
       "not_allowed": "Non autorisé : seuls les membres du groupe administrator peuvent utiliser sudo",
+      "password_too_long": "Mot de passe trop long",
       "unknown_user": "Utilisateur inconnu : {arg0}",
       "usage": "Utilisation : sudo [-u UTILISATEUR] COMMANDE [ARGUMENT]..."
     },

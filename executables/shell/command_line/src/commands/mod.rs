@@ -291,7 +291,7 @@ const BUILTINS: &[(&str, UserCommandKind, &str)] = &[
     (
         "sudo",
         UserCommandKind::Sudo,
-        "Usage: sudo [-u USER] COMMAND [ARGUMENT]...\nRun one external command as root, or as USER, after entering your password. Only members of the administrator group may use it. A command given by name is searched in /applications/executables only, and runs with a minimal environment.",
+        "Usage: sudo [-u USER] COMMAND [ARGUMENT]...\nRun one external command as root, or as USER, after entering your password. Only members of the administrator group may use it, from a terminal that can hide the password. COMMAND is an entry of /applications/executables, given by name or absolute path, and runs with a fixed, minimal environment. WebAssembly guests do not run under sudo.",
     ),
 ];
 

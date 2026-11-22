@@ -68,37 +68,120 @@ fn the_lockout_starts_after_three_failures_and_doubles_up_to_five_minutes() {
     assert_eq!(lockout_after(u32::MAX), Some(seconds(300)));
 }
 
+/// One failed attempt of `user` at `now`, run to its end.
+fn fail(limiter: &mut RateLimiter, user: UserIdentifier, now: Duration) {
+    assert_eq!(limiter.admit(user, now), Ok(()));
+    limiter.record_failure(user, now);
+    limiter.finish(user);
+}
+
 #[test]
 fn the_rate_limiter_locks_out_one_user_until_the_delay_ends() {
     let mut limiter = RateLimiter::new();
-    limiter.record_failure(USER, seconds(100));
-    limiter.record_failure(USER, seconds(101));
-    assert_eq!(limiter.remaining_lockout(USER, seconds(101)), None);
-    limiter.record_failure(USER, seconds(102));
+    fail(&mut limiter, USER, seconds(100));
+    fail(&mut limiter, USER, seconds(101));
+    fail(&mut limiter, USER, seconds(102));
     assert_eq!(
-        limiter.remaining_lockout(USER, seconds(102)),
-        Some(seconds(30))
+        limiter.admit(USER, seconds(102)),
+        Err(Refusal::LockedOut(seconds(30)))
     );
     assert_eq!(
-        limiter.remaining_lockout(USER, seconds(122)),
-        Some(seconds(10))
+        limiter.admit(USER, seconds(122)),
+        Err(Refusal::LockedOut(seconds(10)))
     );
-    assert_eq!(limiter.remaining_lockout(USER, seconds(132)), None);
     // Other users are not affected.
-    assert_eq!(limiter.remaining_lockout(OTHER, seconds(102)), None);
+    assert_eq!(limiter.admit(OTHER, seconds(102)), Ok(()));
+    limiter.finish(OTHER);
 
     // One more failure after the lockout doubles it.
-    limiter.record_failure(USER, seconds(140));
+    fail(&mut limiter, USER, seconds(132));
     assert_eq!(
-        limiter.remaining_lockout(USER, seconds(140)),
-        Some(seconds(60))
+        limiter.admit(USER, seconds(132)),
+        Err(Refusal::LockedOut(seconds(60)))
     );
 
     // A success forgets every failure.
+    assert_eq!(limiter.admit(USER, seconds(192)), Ok(()));
+    limiter.record_failure(USER, seconds(192));
     limiter.record_success(USER);
-    assert_eq!(limiter.remaining_lockout(USER, seconds(140)), None);
-    limiter.record_failure(USER, seconds(150));
-    assert_eq!(limiter.remaining_lockout(USER, seconds(150)), None);
+    limiter.finish(USER);
+    assert!(limiter.users.is_empty());
+    fail(&mut limiter, USER, seconds(193));
+    assert_eq!(limiter.admit(USER, seconds(193)), Ok(()));
+}
+
+#[test]
+fn the_rate_limiter_admits_one_attempt_per_user_at_a_time() {
+    let mut limiter = RateLimiter::new();
+    assert_eq!(limiter.admit(USER, seconds(1)), Ok(()));
+    // A concurrent attempt from another Shell is refused, so concurrent
+    // prompts cannot all pass before a failure is counted.
+    assert_eq!(limiter.admit(USER, seconds(1)), Err(Refusal::Busy));
+    assert_eq!(limiter.admit(OTHER, seconds(1)), Ok(()));
+    // An attempt that ends without reaching the check (cancelled at the
+    // prompt) is not counted.
+    limiter.finish(USER);
+    assert_eq!(limiter.admit(USER, seconds(2)), Ok(()));
+    // An attempt interrupted during the check stays counted: it was counted
+    // before the check and only a success clears it.
+    limiter.record_failure(USER, seconds(2));
+    limiter.finish(USER);
+    assert_eq!(limiter.users[&USER].failures, 1);
+}
+
+#[test]
+fn concurrent_attempts_cannot_pass_the_threshold() {
+    let mut limiter = RateLimiter::new();
+    fail(&mut limiter, USER, seconds(1));
+    fail(&mut limiter, USER, seconds(1));
+    // The third attempt is in progress: every concurrent one is refused, and
+    // once it fails, the user is locked out.
+    assert_eq!(limiter.admit(USER, seconds(1)), Ok(()));
+    for _ in 0..10 {
+        assert_eq!(limiter.admit(USER, seconds(1)), Err(Refusal::Busy));
+    }
+    limiter.record_failure(USER, seconds(1));
+    limiter.finish(USER);
+    assert_eq!(
+        limiter.admit(USER, seconds(1)),
+        Err(Refusal::LockedOut(seconds(30)))
+    );
+}
+
+#[test]
+fn only_direct_entries_of_the_secure_path_are_allowed() {
+    for (name, entry) in [
+        ("package", Some("package")),
+        ("/applications/executables/package", Some("package")),
+        ("./package", None),
+        ("executables/package", None),
+        ("../applications/executables/package", None),
+        ("/applications/executables/../../users/package", None),
+        ("/applications/executables/sub/package", None),
+        ("/applications/executables/", None),
+        ("/applications/executables", None),
+        ("/applications/executablesX/package", None),
+        ("/users/administrator/package", None),
+        (".", None),
+        ("..", None),
+        ("/applications/executables/..", None),
+    ] {
+        assert_eq!(secure_entry(name), entry, "{name}");
+    }
+}
+
+#[test]
+fn the_password_is_capped_without_reallocating() {
+    let mut password = Password::new();
+    let pointer = password.0.as_ptr();
+    for _ in 0..MAXIMUM_PASSWORD_BYTES {
+        assert!(password.push(0xFF));
+    }
+    assert!(!password.push(b'x'));
+    assert_eq!(password.0.len(), MAXIMUM_PASSWORD_BYTES);
+    assert_eq!(password.0.as_ptr(), pointer);
+    // Not UTF-8, so it cannot match any account.
+    assert_eq!(password.as_str(), None);
 }
 
 #[test]
@@ -113,7 +196,7 @@ fn the_audit_record_names_caller_target_command_and_outcome() {
     };
     assert_eq!(
         format!("{record}"),
-        "sudo: caller administrator (1000), target root, command \
+        "sudo: caller \"administrator\" (1000), target \"root\", command \
          \"/applications/executables/package install a\\\"b\": ran, exit status 0"
     );
     for (outcome, text) in [
@@ -131,19 +214,36 @@ fn the_audit_record_names_caller_target_command_and_outcome() {
 }
 
 #[test]
+fn the_audit_record_escapes_the_fields_the_caller_chooses() {
+    let command = strings(&["identify\nsudo: forged"]);
+    let record = AuditRecord {
+        caller: "administrator\"",
+        caller_identifier: UserIdentifier::new(1000),
+        target: "root\n\u{1b}[2Jsudo: caller \"x\"",
+        command: &command,
+        outcome: Outcome::UnknownTargetUser,
+    };
+    let text = format!("{record}");
+    assert!(!text.contains('\n'));
+    assert!(!text.contains('\u{1b}'));
+    assert_eq!(
+        text,
+        "sudo: caller \"administrator\\\"\" (1000), target \"root\\n\\u{1b}[2Jsudo: caller \\\"x\\\"\", \
+         command \"identify\\nsudo: forged\": refused, unknown target user"
+    );
+}
+
+#[test]
 fn wiping_overwrites_the_whole_allocation() {
-    let mut password = Password::new();
-    assert!(password.0.capacity() >= PASSWORD_CAPACITY);
-    password.0.push_str("a longer secret");
-    password.0.clear();
-    password.0.push_str("secret");
-    let mut text = core::mem::take(&mut password.0);
-    let capacity = text.capacity();
-    wipe(&mut text);
-    assert!(text.is_empty());
-    assert_eq!(text.capacity(), capacity);
-    // SAFETY: the allocation is still owned by `text` and every byte of it
+    let mut bytes = Vec::with_capacity(MAXIMUM_PASSWORD_BYTES);
+    bytes.extend_from_slice(b"a longer secret");
+    bytes.truncate(3);
+    let capacity = bytes.capacity();
+    wipe(&mut bytes);
+    assert!(bytes.is_empty());
+    assert_eq!(bytes.capacity(), capacity);
+    // SAFETY: the allocation is still owned by `bytes` and every byte of it
     // was just written.
-    let bytes = unsafe { core::slice::from_raw_parts(text.as_ptr(), capacity) };
-    assert_eq!(bytes, vec![0; capacity].as_slice());
+    let written = unsafe { core::slice::from_raw_parts(bytes.as_ptr(), capacity) };
+    assert_eq!(written, vec![0; capacity].as_slice());
 }
