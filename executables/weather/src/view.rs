@@ -1,44 +1,62 @@
 //! Presentation helpers: readable labels and chart series from API values.
 
 use alloc::{format, string::String, vec::Vec};
+use embedded_i18n::t;
 
 /// Short description of a WMO weather interpretation code, as used by
 /// Open-Meteo's `weather_code`.
 pub const fn condition(code: u16) -> &'static str {
     match code {
-        0 => "Clear sky",
-        1 => "Mainly clear",
-        2 => "Partly cloudy",
-        3 => "Overcast",
-        45 | 48 => "Fog",
-        51 | 53 | 55 => "Drizzle",
-        56 | 57 => "Freezing drizzle",
-        61 => "Light rain",
-        63 => "Rain",
-        65 => "Heavy rain",
-        66 | 67 => "Freezing rain",
-        71 => "Light snow",
-        73 => "Snow",
-        75 => "Heavy snow",
-        77 => "Snow grains",
-        80..=82 => "Rain showers",
-        85 | 86 => "Snow showers",
-        95 => "Thunderstorm",
-        96 | 99 => "Thunderstorm, hail",
-        _ => "Unknown",
+        0 => t!("conditions.clear_sky"),
+        1 => t!("conditions.mainly_clear"),
+        2 => t!("conditions.partly_cloudy"),
+        3 => t!("conditions.overcast"),
+        45 | 48 => t!("conditions.fog"),
+        51 | 53 | 55 => t!("conditions.drizzle"),
+        56 | 57 => t!("conditions.freezing_drizzle"),
+        61 => t!("conditions.light_rain"),
+        63 => t!("conditions.rain"),
+        65 => t!("conditions.heavy_rain"),
+        66 | 67 => t!("conditions.freezing_rain"),
+        71 => t!("conditions.light_snow"),
+        73 => t!("conditions.snow"),
+        75 => t!("conditions.heavy_snow"),
+        77 => t!("conditions.snow_grains"),
+        80..=82 => t!("conditions.rain_showers"),
+        85 | 86 => t!("conditions.snow_showers"),
+        95 => t!("conditions.thunderstorm"),
+        96 | 99 => t!("conditions.thunderstorm_with_hail"),
+        _ => t!("conditions.unknown"),
     }
 }
 
 /// Eight-point compass direction the wind comes from.
 pub const fn compass(degrees: u16) -> &'static str {
-    const POINTS: [&str; 8] = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+    const POINTS: [&str; 8] = [
+        t!("compass.north"),
+        t!("compass.north_east"),
+        t!("compass.east"),
+        t!("compass.south_east"),
+        t!("compass.south"),
+        t!("compass.south_west"),
+        t!("compass.west"),
+        t!("compass.north_west"),
+    ];
     // Each point covers 45 degrees centred on its heading.
     POINTS[(((degrees % 360) as u32 * 2 + 45) / 90 % 8) as usize]
 }
 
 /// Weekday of an ISO `YYYY-MM-DD` date (Gregorian calendar).
 pub fn weekday(date: &str) -> Option<&'static str> {
-    const NAMES: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const NAMES: [&str; 7] = [
+        t!("weekdays.sunday"),
+        t!("weekdays.monday"),
+        t!("weekdays.tuesday"),
+        t!("weekdays.wednesday"),
+        t!("weekdays.thursday"),
+        t!("weekdays.friday"),
+        t!("weekdays.saturday"),
+    ];
     const OFFSETS: [i32; 12] = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
     let mut parts = date.get(..10)?.split('-');
     let mut year: i32 = parts.next()?.parse().ok()?;

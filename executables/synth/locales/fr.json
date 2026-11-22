@@ -1,0 +1,27 @@
+{
+  "controls": {
+    "octave_down": "Oct -",
+    "octave_up": "Oct +",
+    "retry_audio": "Réessayer l’audio",
+    "volume": "Volume",
+    "volume_short": "Vol"
+  },
+  "playing": {
+    "hint": "Maintenez une touche pour jouer",
+    "notes": "Lecture de {notes}"
+  },
+  "settings": {
+    "octave": "Octave {octave}",
+    "summary": "Octave {octave} | {tone} | Volume {volume} %"
+  },
+  "status": {
+    "ready": "Audio prêt",
+    "silent": "Mode silencieux : activez l’audio de l’hôte, puis Réessayer l’audio",
+    "silent_compact": "Mode silencieux : pas d’audio"
+  },
+  "tones": {
+    "sine": "Sinus",
+    "square": "Carré",
+    "triangle": "Triangle"
+  }
+}

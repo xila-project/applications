@@ -1,0 +1,79 @@
+{
+  "compass": {
+    "east": "E",
+    "north": "N",
+    "north_east": "NE",
+    "north_west": "NO",
+    "south": "S",
+    "south_east": "SE",
+    "south_west": "SO",
+    "west": "O"
+  },
+  "conditions": {
+    "clear_sky": "Ciel dégagé",
+    "drizzle": "Bruine",
+    "fog": "Brouillard",
+    "freezing_drizzle": "Bruine verglaçante",
+    "freezing_rain": "Pluie verglaçante",
+    "heavy_rain": "Forte pluie",
+    "heavy_snow": "Forte neige",
+    "light_rain": "Pluie faible",
+    "light_snow": "Neige faible",
+    "mainly_clear": "Plutôt dégagé",
+    "overcast": "Couvert",
+    "partly_cloudy": "Partiellement nuageux",
+    "rain": "Pluie",
+    "rain_showers": "Averses de pluie",
+    "snow": "Neige",
+    "snow_grains": "Neige en grains",
+    "snow_showers": "Averses de neige",
+    "thunderstorm": "Orage",
+    "thunderstorm_with_hail": "Orage, grêle",
+    "unknown": "Inconnu"
+  },
+  "daily": {
+    "no_data": "Aucune prévision quotidienne.",
+    "rain_chance": "pluie {chance} %"
+  },
+  "hourly": {
+    "no_data": "Aucune prévision horaire.",
+    "rain_chart": "Risque de pluie (%)",
+    "range": "{start} à {end}  •  {minimum}° à {maximum}°",
+    "temperature_chart": "Température, 24 prochaines heures (°C)"
+  },
+  "now": {
+    "feels_like": "Ressenti {temperature}°C",
+    "gusts": "Rafales",
+    "humidity": "Humidité",
+    "no_data": "Aucune donnée actuelle",
+    "precipitation": "Précipitations",
+    "wind": "Vent"
+  },
+  "search": {
+    "empty": "Recherchez une ville pour voir sa météo.",
+    "refresh": "Actualiser"
+  },
+  "status": {
+    "api_error": "Erreur de l’API : {code}",
+    "display_error": "Erreur d’affichage {error}",
+    "enter_city": "Saisissez un nom de ville",
+    "invalid_response": "Réponse de l’API invalide",
+    "loading": "Chargement…",
+    "network_error": "Erreur réseau",
+    "no_location": "Aucun lieu trouvé"
+  },
+  "tabs": {
+    "daily": "Par jour",
+    "hourly": "Par heure",
+    "now": "Maintenant"
+  },
+  "weekdays": {
+    "friday": "Ven",
+    "monday": "Lun",
+    "saturday": "Sam",
+    "sunday": "Dim",
+    "thursday": "Jeu",
+    "tuesday": "Mar",
+    "wednesday": "Mer"
+  }
+}

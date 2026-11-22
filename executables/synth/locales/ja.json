@@ -1,0 +1,27 @@
+{
+  "controls": {
+    "octave_down": "オクターブ -",
+    "octave_up": "オクターブ +",
+    "retry_audio": "音声を再試行",
+    "volume": "音量",
+    "volume_short": "音量"
+  },
+  "playing": {
+    "hint": "キーを押し続けると再生します",
+    "notes": "再生中 {notes}"
+  },
+  "settings": {
+    "octave": "オクターブ {octave}",
+    "summary": "オクターブ {octave} | {tone} | 音量 {volume}%"
+  },
+  "status": {
+    "ready": "オーディオ準備完了",
+    "silent": "サイレントモード: ホストの音声を有効にしてから「音声を再試行」",
+    "silent_compact": "サイレントモード: 音声なし"
+  },
+  "tones": {
+    "sine": "サイン波",
+    "square": "矩形波",
+    "triangle": "三角波"
+  }
+}

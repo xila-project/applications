@@ -1,0 +1,79 @@
+{
+  "compass": {
+    "east": "東",
+    "north": "北",
+    "north_east": "北東",
+    "north_west": "北西",
+    "south": "南",
+    "south_east": "南東",
+    "south_west": "南西",
+    "west": "西"
+  },
+  "conditions": {
+    "clear_sky": "快晴",
+    "drizzle": "霧雨",
+    "fog": "霧",
+    "freezing_drizzle": "着氷性の霧雨",
+    "freezing_rain": "着氷性の雨",
+    "heavy_rain": "大雨",
+    "heavy_snow": "大雪",
+    "light_rain": "小雨",
+    "light_snow": "小雪",
+    "mainly_clear": "晴れ",
+    "overcast": "曇り",
+    "partly_cloudy": "晴れ時々曇り",
+    "rain": "雨",
+    "rain_showers": "にわか雨",
+    "snow": "雪",
+    "snow_grains": "霧雪",
+    "snow_showers": "にわか雪",
+    "thunderstorm": "雷雨",
+    "thunderstorm_with_hail": "雷雨、ひょう",
+    "unknown": "不明"
+  },
+  "daily": {
+    "no_data": "日ごとの予報がありません。",
+    "rain_chance": "降水 {chance}%"
+  },
+  "hourly": {
+    "no_data": "1時間ごとの予報がありません。",
+    "rain_chart": "降水確率 (%)",
+    "range": "{start}〜{end}  •  {minimum}°〜{maximum}°",
+    "temperature_chart": "気温、今後 24 時間 (°C)"
+  },
+  "now": {
+    "feels_like": "体感 {temperature}°C",
+    "gusts": "突風",
+    "humidity": "湿度",
+    "no_data": "現在のデータがありません",
+    "precipitation": "降水量",
+    "wind": "風"
+  },
+  "search": {
+    "empty": "都市を検索すると天気が表示されます。",
+    "refresh": "更新"
+  },
+  "status": {
+    "api_error": "API エラー: {code}",
+    "display_error": "表示エラー {error}",
+    "enter_city": "都市名を入力してください",
+    "invalid_response": "API の応答が無効です",
+    "loading": "読み込み中…",
+    "network_error": "ネットワークエラー",
+    "no_location": "場所が見つかりません"
+  },
+  "tabs": {
+    "daily": "日ごと",
+    "hourly": "1時間ごと",
+    "now": "現在"
+  },
+  "weekdays": {
+    "friday": "金",
+    "monday": "月",
+    "saturday": "土",
+    "sunday": "日",
+    "thursday": "木",
+    "tuesday": "火",
+    "wednesday": "水"
+  }
+}

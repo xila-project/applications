@@ -1,7 +1,8 @@
 use core::ffi::CStr;
 use core::ptr::null_mut;
-use std::{ffi::CString, thread::sleep};
+use std::{ffi::CString, string::ToString, thread::sleep};
 
+use embedded_i18n::t;
 use wasm::*;
 
 use weather::{
@@ -148,7 +149,7 @@ impl Interface {
             let refresh_button = button_create(search)?;
             object_set_theme_variant(refresh_button, PRIMARY)?;
             let refresh_label = label_create(refresh_button)?;
-            label_set_text(refresh_label, c"Refresh".as_ptr())?;
+            label_set_text(refresh_label, t!(c"search.refresh").as_ptr())?;
             object_align(refresh_label, Align::Center, 0, 0)?;
 
             // Status: spinner while a request runs, then the outcome.
@@ -188,12 +189,12 @@ impl Interface {
                 object_set_padding(page, 6)?;
                 Ok(page)
             };
-            let now_tab = tab(c"Now")?;
-            let hourly_tab = tab(c"Hourly")?;
-            let daily_tab = tab(c"Daily")?;
+            let now_tab = tab(t!(c"tabs.now"))?;
+            let hourly_tab = tab(t!(c"tabs.hourly"))?;
+            let daily_tab = tab(t!(c"tabs.daily"))?;
 
             let empty = |page: *mut Object| -> wasm::Result<*mut Object> {
-                let text = label(page, "Search for a city to see its weather.", FONT_MEDIUM)?;
+                let text = label(page, t!("search.empty"), FONT_MEDIUM)?;
                 object_set_width(text, percentage(100)?)?;
                 object_set_text_align(text, TextAlign::Center as u32, 0)?;
                 Ok(text)
@@ -236,13 +237,13 @@ impl Interface {
                 let value = label(card, "", FONT_LARGE)?;
                 Ok((card, Tile { value }))
             };
-            let (humidity_card, humidity) = tile("Humidity")?;
+            let (humidity_card, humidity) = tile(t!("now.humidity"))?;
             let humidity_bar = bar_create(humidity_card)?;
             object_set_size(humidity_bar, percentage(100)?, 6)?;
             range_set_range(humidity_bar, 0, 100)?;
-            let (_, wind) = tile("Wind")?;
-            let (_, gusts) = tile("Gusts")?;
-            let (_, precipitation) = tile("Precipitation")?;
+            let (_, wind) = tile(t!("now.wind"))?;
+            let (_, gusts) = tile(t!("now.gusts"))?;
+            let (_, precipitation) = tile(t!("now.precipitation"))?;
             let details = label(now_tab, "", FONT_SMALL)?;
             object_set_width(details, percentage(100)?)?;
             object_set_text_align(details, TextAlign::Center as u32, 0)?;
@@ -266,10 +267,10 @@ impl Interface {
                 chart_set_point_count(chart, HOURS as u32)?;
                 Ok(chart)
             };
-            let temperature_chart = chart_card("Temperature, next 24 hours (°C)")?;
+            let temperature_chart = chart_card(t!("hourly.temperature_chart"))?;
             chart_set_type(temperature_chart, ChartType::Line)?;
             let temperature_series = chart_add_series_slot(temperature_chart, TEMPERATURE_RGB)?;
-            let rain_chart = chart_card("Chance of rain (%)")?;
+            let rain_chart = chart_card(t!("hourly.rain_chart"))?;
             chart_set_type(rain_chart, ChartType::Bar)?;
             chart_set_axis_range(rain_chart, ChartAxis::PrimaryY, 0, 100)?;
             let rain_series = chart_add_series_slot(rain_chart, RAIN_RGB)?;
@@ -356,10 +357,12 @@ impl Interface {
                     )?;
                     set_text(
                         self.feels_like,
-                        &format!(
-                            "Feels like {:.1}°C",
-                            now.apparent_temperature.unwrap_or_default()
-                        ),
+                        &t!(
+                            "now.feels_like",
+                            temperature =
+                                format!("{:.1}", now.apparent_temperature.unwrap_or_default())
+                        )
+                        .to_string(),
                     )?;
                     let humidity = now.relative_humidity_2m.unwrap_or_default();
                     set_text(self.humidity.value, &format!("{humidity}%"))?;
@@ -383,7 +386,7 @@ impl Interface {
                 }
                 None => {
                     set_text(self.temperature, "--")?;
-                    set_text(self.condition, "No current data")?;
+                    set_text(self.condition, t!("now.no_data"))?;
                     set_text(self.feels_like, "")?;
                 }
             }
@@ -415,7 +418,7 @@ impl Interface {
             set_hidden(self.hourly_empty, count != 0)?;
             set_hidden(self.hourly_content, count == 0)?;
             if count == 0 {
-                set_text(self.hourly_empty, "No hourly forecast.")?;
+                set_text(self.hourly_empty, t!("hourly.no_data"))?;
                 return Ok(());
             }
             let hourly = hourly.expect("times come from hourly data");
@@ -447,13 +450,14 @@ impl Interface {
                 .fold((f64::MAX, f64::MIN), |(lo, hi), t| (lo.min(*t), hi.max(*t)));
             set_text(
                 self.hourly_range,
-                &format!(
-                    "{} to {}  •  {:.0}° to {:.0}°",
-                    hour_label(&times[0]),
-                    hour_label(&times[count - 1]),
-                    minimum,
-                    maximum
-                ),
+                &t!(
+                    "hourly.range",
+                    start = hour_label(&times[0]),
+                    end = hour_label(&times[count - 1]),
+                    minimum = format!("{minimum:.0}"),
+                    maximum = format!("{maximum:.0}")
+                )
+                .to_string(),
             )?;
         }
         Ok(())
@@ -465,7 +469,7 @@ impl Interface {
             set_hidden(self.daily_empty, !times.is_empty())?;
             set_hidden(self.daily_list, times.is_empty())?;
             if times.is_empty() {
-                set_text(self.daily_empty, "No daily forecast.")?;
+                set_text(self.daily_empty, t!("daily.no_data"))?;
                 return Ok(());
             }
             let daily = daily.expect("times come from daily data");
@@ -506,9 +510,10 @@ impl Interface {
                     )
                 } else {
                     format!(
-                        "{}   {low:.0}° / {high:.0}°   {}   rain {rain}%",
+                        "{}   {low:.0}° / {high:.0}°   {}   {}",
                         day_label(date),
-                        condition(code)
+                        condition(code),
+                        t!("daily.rain_chance", chance = rain)
                     )
                 };
                 let text = CString::new(text).map_err(|_| -1)?;
@@ -545,12 +550,12 @@ impl Interface {
 
         let city = city.trim();
         if city.is_empty() {
-            self.set_status(Some("Enter a city name"), false);
+            self.set_status(Some(t!("status.enter_city")), false);
             self.in_flight = false;
             return;
         }
 
-        self.set_status(Some("Loading..."), true);
+        self.set_status(Some(t!("status.loading")), true);
 
         match fetch_weather(city) {
             Ok(data) => {
@@ -561,7 +566,10 @@ impl Interface {
                 };
                 match shown {
                     Ok(()) => self.set_status(None, false),
-                    Err(error) => self.set_status(Some(&format!("Display error {error}")), false),
+                    Err(error) => self.set_status(
+                        Some(&t!("status.display_error", error = error).to_string()),
+                        false,
+                    ),
                 }
             }
             Err(error) => {

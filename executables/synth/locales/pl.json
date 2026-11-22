@@ -1,0 +1,27 @@
+{
+  "controls": {
+    "octave_down": "Okt -",
+    "octave_up": "Okt +",
+    "retry_audio": "Ponów dźwięk",
+    "volume": "Głośność",
+    "volume_short": "Głośn."
+  },
+  "playing": {
+    "hint": "Przytrzymaj klawisz, aby grać",
+    "notes": "Gra {notes}"
+  },
+  "settings": {
+    "octave": "Oktawa {octave}",
+    "summary": "Oktawa {octave} | {tone} | Głośność {volume}%"
+  },
+  "status": {
+    "ready": "Dźwięk gotowy",
+    "silent": "Tryb cichy: włącz dźwięk hosta, a potem Ponów dźwięk",
+    "silent_compact": "Tryb cichy: brak dźwięku"
+  },
+  "tones": {
+    "sine": "Sinus",
+    "square": "Prostokąt",
+    "triangle": "Trójkąt"
+  }
+}

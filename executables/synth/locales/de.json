@@ -1,0 +1,27 @@
+{
+  "controls": {
+    "octave_down": "Okt -",
+    "octave_up": "Okt +",
+    "retry_audio": "Audio erneut versuchen",
+    "volume": "Lautstärke",
+    "volume_short": "Lautst."
+  },
+  "playing": {
+    "hint": "Halten Sie eine Taste gedrückt, um zu spielen",
+    "notes": "Spielt {notes}"
+  },
+  "settings": {
+    "octave": "Oktave {octave}",
+    "summary": "Oktave {octave} | {tone} | Lautstärke {volume}%"
+  },
+  "status": {
+    "ready": "Audio bereit",
+    "silent": "Stummmodus: Host-Audio aktivieren, dann Audio erneut versuchen",
+    "silent_compact": "Stummmodus: kein Audio"
+  },
+  "tones": {
+    "sine": "Sinus",
+    "square": "Rechteck",
+    "triangle": "Dreieck"
+  }
+}

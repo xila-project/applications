@@ -1,0 +1,79 @@
+{
+  "compass": {
+    "east": "E",
+    "north": "N",
+    "north_east": "NE",
+    "north_west": "NW",
+    "south": "S",
+    "south_east": "SE",
+    "south_west": "SW",
+    "west": "W"
+  },
+  "conditions": {
+    "clear_sky": "Clear sky",
+    "drizzle": "Drizzle",
+    "fog": "Fog",
+    "freezing_drizzle": "Freezing drizzle",
+    "freezing_rain": "Freezing rain",
+    "heavy_rain": "Heavy rain",
+    "heavy_snow": "Heavy snow",
+    "light_rain": "Light rain",
+    "light_snow": "Light snow",
+    "mainly_clear": "Mainly clear",
+    "overcast": "Overcast",
+    "partly_cloudy": "Partly cloudy",
+    "rain": "Rain",
+    "rain_showers": "Rain showers",
+    "snow": "Snow",
+    "snow_grains": "Snow grains",
+    "snow_showers": "Snow showers",
+    "thunderstorm": "Thunderstorm",
+    "thunderstorm_with_hail": "Thunderstorm, hail",
+    "unknown": "Unknown"
+  },
+  "daily": {
+    "no_data": "No daily forecast.",
+    "rain_chance": "rain {chance}%"
+  },
+  "hourly": {
+    "no_data": "No hourly forecast.",
+    "rain_chart": "Chance of rain (%)",
+    "range": "{start} to {end}  •  {minimum}° to {maximum}°",
+    "temperature_chart": "Temperature, next 24 hours (°C)"
+  },
+  "now": {
+    "feels_like": "Feels like {temperature}°C",
+    "gusts": "Gusts",
+    "humidity": "Humidity",
+    "no_data": "No current data",
+    "precipitation": "Precipitation",
+    "wind": "Wind"
+  },
+  "search": {
+    "empty": "Search for a city to see its weather.",
+    "refresh": "Refresh"
+  },
+  "status": {
+    "api_error": "API error: {code}",
+    "display_error": "Display error {error}",
+    "enter_city": "Enter a city name",
+    "invalid_response": "Invalid API response",
+    "loading": "Loading...",
+    "network_error": "Network error",
+    "no_location": "No location found"
+  },
+  "tabs": {
+    "daily": "Daily",
+    "hourly": "Hourly",
+    "now": "Now"
+  },
+  "weekdays": {
+    "friday": "Fri",
+    "monday": "Mon",
+    "saturday": "Sat",
+    "sunday": "Sun",
+    "thursday": "Thu",
+    "tuesday": "Tue",
+    "wednesday": "Wed"
+  }
+}

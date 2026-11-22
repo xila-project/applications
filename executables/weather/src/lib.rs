@@ -1,5 +1,7 @@
 #![no_std]
 
+embedded_i18n::i18n!("locales");
+
 extern crate alloc;
 #[cfg(target_arch = "wasm32")]
 extern crate std;
@@ -7,7 +9,6 @@ extern crate std;
 pub mod api;
 #[cfg(test)]
 mod docs;
-pub mod format;
 pub mod model;
 pub mod net;
 pub mod state;

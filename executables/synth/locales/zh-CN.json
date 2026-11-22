@@ -1,0 +1,27 @@
+{
+  "controls": {
+    "octave_down": "八度 -",
+    "octave_up": "八度 +",
+    "retry_audio": "重试音频",
+    "volume": "音量",
+    "volume_short": "音量"
+  },
+  "playing": {
+    "hint": "按住琴键即可演奏",
+    "notes": "正在演奏 {notes}"
+  },
+  "settings": {
+    "octave": "八度 {octave}",
+    "summary": "八度 {octave} | {tone} | 音量 {volume}%"
+  },
+  "status": {
+    "ready": "音频已就绪",
+    "silent": "静音模式：请启用主机音频，然后点击“重试音频”",
+    "silent_compact": "静音模式：无音频"
+  },
+  "tones": {
+    "sine": "正弦波",
+    "square": "方波",
+    "triangle": "三角波"
+  }
+}
