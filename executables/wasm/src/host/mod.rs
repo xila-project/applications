@@ -11,6 +11,7 @@ mod store;
 pub mod translation;
 mod wasi;
 
+pub use engine::{Translation, configuration as engine_configuration};
 pub use executable::*;
 pub use main::execute_with_control;
 pub use store::GlobalStore;

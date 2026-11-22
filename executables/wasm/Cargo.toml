@@ -36,6 +36,9 @@ host = [
 ]
 default = ["host", "memory_32"]
 memory_32 = []
+# Translate guest functions at their first call by default (`--translation`
+# still overrides it), for targets where the load peak matters most.
+lazy_translation = []
 # 64-bit guest addresses: the engine's memory64 support is only built for it.
 memory_64 = ["wasmi?/memory64"]
 graphics = [
