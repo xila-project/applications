@@ -14,6 +14,19 @@ level. Wasmi's memory64 support is only built for the `memory_64` configuration
 (`memory_64 = ["wasmi?/memory64"]`); the translation test harness enables it
 for both widths because it exercises both.
 
+## Guests and `sudo`
+
+Guests are untrusted code, so they never run with an identity granted by the
+Shell's `sudo`. `sudo` launches its command with `Launch::with_identity`, and
+Core marks that task and every task it starts as running with a granted
+identity (`task::Manager::is_identity_granted`). The mark is set with the
+identity and nothing clears it, whatever the environment holds and even once
+the command has exited and its descendants have been reparented. The runtime
+refuses to start a guest, with exit status 1, in a marked task. This covers the
+mounted runner given to `sudo` directly (`sudo wasm GUEST`) and any native
+program run by `sudo` that starts the runner. Core separately refuses to launch
+a registered file format with another identity.
+
 ## WebAssembly features
 
 `src/host/engine.rs` writes the validated feature set out explicitly, so a

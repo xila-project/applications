@@ -126,5 +126,23 @@
     "errors": {
       "invalid_duration": "Ungültige Wartezeit: Nichtnegative ganze Zahl mit ms, s, m oder h verwenden (maximal 18446744073709551615 Nanosekunden)"
     }
+  },
+  "sudo": {
+    "errors": {
+      "aborted": "Authentifizierung abgebrochen",
+      "built_in": "sudo führt nur externe Befehle aus, und {arg0} ist ein eingebauter Befehl",
+      "busy": "Für diesen Benutzer läuft bereits ein anderer sudo-Versuch",
+      "command_not_allowed": "Mit sudo können nur Befehle aus /applications/executables ausgeführt werden, angegeben per Name oder absolutem Pfad: {arg0}",
+      "echo_not_suppressed": "Passwortabfrage nicht möglich: Die Standardeingabe kann das Echo nicht abschalten ({arg0})",
+      "failed_to_execute": "Befehl konnte nicht ausgeführt werden: {arg0}",
+      "locked_out": "Zu viele fehlgeschlagene Versuche: in {arg0} Sekunden erneut versuchen",
+      "not_allowed": "Nicht erlaubt: Nur Mitglieder der Gruppe administrator dürfen sudo verwenden",
+      "password_too_long": "Passwort ist zu lang",
+      "unknown_user": "Unbekannter Benutzer: {arg0}",
+      "usage": "Verwendung: sudo [-u BENUTZER] BEFEHL [ARGUMENT]..."
+    },
+    "prompts": {
+      "password": "[sudo] Passwort für {arg0}: "
+    }
   }
 }

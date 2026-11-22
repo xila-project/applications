@@ -66,6 +66,28 @@ pub enum Error<'a> {
     FailedToRestoreTerminalEcho(virtual_file_system::IoErrorKind),
     #[cfg(feature = "network")]
     NetworkUnavailable,
+    /// `sudo` was given no command, an unknown option or `-u` without a user.
+    SudoUsage,
+    /// The caller is not a member of the administrator group.
+    SudoNotAllowed,
+    SudoUnknownUser(alloc::string::String),
+    /// `sudo` runs external commands only.
+    SudoBuiltIn(alloc::string::String),
+    /// Too many failed attempts: the caller must wait this many seconds.
+    SudoLockedOut(u64),
+    /// Standard input ended or the task was asked to stop during the prompt.
+    SudoAborted,
+    SudoFailedToExecute(xila::executable::Error),
+    /// The command is neither a name nor an absolute path of an entry of the
+    /// secure path.
+    SudoCommandNotAllowed(alloc::string::String),
+    /// Another `sudo` attempt of the same user is in progress.
+    SudoBusy,
+    /// Standard input cannot turn echo off, or echo stayed on, so the
+    /// password is not prompted for.
+    SudoEchoNotSuppressed(virtual_file_system::IoErrorKind),
+    /// The password line is longer than the maximum; it was read to its end.
+    SudoPasswordTooLong,
 }
 
 impl<A: getargs::Argument> From<getargs::Error<A>> for Error<'_> {
@@ -362,6 +384,43 @@ impl Display for Error<'_> {
             }
             Error::Format => {
                 write!(formatter, "{}", t!("errors.format_failed"))
+            }
+            Error::SudoUsage => write!(formatter, "{}", t!("sudo.errors.usage")),
+            Error::SudoNotAllowed => write!(formatter, "{}", t!("sudo.errors.not_allowed")),
+            Error::SudoUnknownUser(user) => write!(
+                formatter,
+                "{}",
+                t!("sudo.errors.unknown_user", arg0 = user.as_str())
+            ),
+            Error::SudoBuiltIn(command) => write!(
+                formatter,
+                "{}",
+                t!("sudo.errors.built_in", arg0 = command.as_str())
+            ),
+            Error::SudoLockedOut(seconds) => write!(
+                formatter,
+                "{}",
+                t!("sudo.errors.locked_out", arg0 = seconds)
+            ),
+            Error::SudoAborted => write!(formatter, "{}", t!("sudo.errors.aborted")),
+            Error::SudoFailedToExecute(error) => write!(
+                formatter,
+                "{}",
+                t!("sudo.errors.failed_to_execute", arg0 = error)
+            ),
+            Error::SudoCommandNotAllowed(command) => write!(
+                formatter,
+                "{}",
+                t!("sudo.errors.command_not_allowed", arg0 = command.as_str())
+            ),
+            Error::SudoBusy => write!(formatter, "{}", t!("sudo.errors.busy")),
+            Error::SudoEchoNotSuppressed(error) => write!(
+                formatter,
+                "{}",
+                t!("sudo.errors.echo_not_suppressed", arg0 = error)
+            ),
+            Error::SudoPasswordTooLong => {
+                write!(formatter, "{}", t!("sudo.errors.password_too_long"))
             }
             Error::FailedToReadEnvironmentVariable(error) => {
                 write!(

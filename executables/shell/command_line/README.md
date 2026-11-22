@@ -112,3 +112,50 @@ the source or destination cannot be renamed.
 the destination is an existing directory, the source filename is appended to
 it. Directory sources, recursive copies, and copying a file onto itself are
 unsupported. The copy uses a fixed 512-byte buffer.
+
+## Running a command as root
+
+`sudo [-u USER] COMMAND [ARGUMENT]...` runs one external command as root, or
+as `USER`, for example
+`sudo /applications/executables/package install xila.text-editor`.
+
+- Only members of the `administrator` group may use it. Anyone else is refused
+  before any prompt. A root caller is not prompted.
+- It asks for the caller's own password. Standard input must be a terminal
+  whose echo can be turned off: sudo turns it off, reads the attributes back,
+  and writes the prompt only once echo is known to be off. A pipe, a file or a
+  console without terminal attributes is refused before the prompt. Input that
+  ends during the prompt aborts it. The password is never taken from the
+  arguments or the environment.
+- The password is at most 256 bytes. A longer line is read to its end while
+  echo is still off, so that none of it reaches the shell, and refused. If
+  reading fails during the prompt, the rest of the line cannot be discarded, so
+  the shell ends instead of reading it as a command.
+- Account records are readable by root only, so the password is checked in a
+  short-lived task of its own that runs as root and runs nothing else.
+- The Shell overwrites its password buffer and each input byte after use. The
+  hash device that the check writes the password to keeps its own state; see
+  xila-project/platforms#168.
+- Each user has at most one attempt in progress, across every shell; a
+  concurrent attempt is refused. An attempt counts as a failure from the moment
+  its password is read until it succeeds, so interrupting the check cannot hide
+  a failure. After 3 failures in a row, the user is locked out for 30 seconds,
+  doubled by each further failure up to 5 minutes.
+- The command is an entry of `/applications/executables`, given by name or by
+  absolute path (`/applications/executables/NAME`). Relative paths, other
+  directories, `..` components and built-ins are refused before the prompt. The
+  caller's `Paths` and working directory are not used.
+- The command runs in its own task with the target user and its primary group.
+  Its environment is fixed: `User` and `HOME` from the target's account, `Host`
+  set to `xila`, `Paths` set to `/applications/executables`, `Sudo_user` set to
+  the caller's name, and `Current_directory` set to the target's home if it
+  exists, `/` otherwise. The shell's own task keeps the caller's identity.
+- WebAssembly guests never run under `sudo`, even when the Wasm runner is the
+  command given to it. Core marks the command's task, and every task it starts,
+  as running with a granted identity, and the Wasm runtime refuses to start a
+  guest in a marked task. The mark cannot be cleared, so it does not depend on
+  `Sudo_user`, which only tells the command who ran it. Core also refuses to
+  launch a registered file format with another identity.
+- Every attempt is logged with the caller, the target user, the command and
+  the outcome, with the fields that the caller chooses escaped.
+- Successful authentications are not remembered.

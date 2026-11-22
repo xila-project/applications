@@ -347,6 +347,10 @@ impl Shell {
         let Some(name) = arguments.first() else {
             return 0;
         };
+        // Before `Paths` and built-ins: `sudo` uses neither.
+        if name == "sudo" {
+            return self.sudo(arguments).await;
+        }
         let paths = self
             .context
             .task_manager

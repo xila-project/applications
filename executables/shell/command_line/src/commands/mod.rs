@@ -147,6 +147,8 @@ pub enum UserCommandKind {
     Link,
     ReadLink,
     Find,
+    /// Handled by `Shell::run_arguments` before built-ins; listed for `help`.
+    Sudo,
 }
 
 /// Names and help text shared by command resolution and `help`.
@@ -286,6 +288,11 @@ const BUILTINS: &[(&str, UserCommandKind, &str)] = &[
         UserCommandKind::Touch,
         "Usage: touch FILE...\nCreate missing files and update access and modification times.",
     ),
+    (
+        "sudo",
+        UserCommandKind::Sudo,
+        "Usage: sudo [-u USER] COMMAND [ARGUMENT]...\nRun one external command as root, or as USER, after entering your password. Only members of the administrator group may use it, from a terminal that can hide the password. COMMAND is an entry of /applications/executables, given by name or absolute path, and runs with a fixed, minimal environment. WebAssembly guests do not run under sudo.",
+    ),
 ];
 
 pub fn resolve_user_command(name: &str) -> Option<UserCommandKind> {
@@ -384,6 +391,9 @@ where
         UserCommandKind::Copy => CopyCommand.execute(context, options, paths).await,
         UserCommandKind::Link => ln::LinkCommand.execute(context, options, paths).await,
         UserCommandKind::ReadLink => ln::ReadLinkCommand.execute(context, options, paths).await,
+        // `sudo` reads a password from the Shell's own input, so the Shell runs
+        // it before resolving built-ins and it never reaches this dispatch.
+        UserCommandKind::Sudo => Err(crate::Error::SudoUsage),
     };
 
     match result {

@@ -126,5 +126,23 @@
     "errors": {
       "invalid_duration": "Duración de espera no válida: usa un entero no negativo con ms, s, m o h (máximo de 18446744073709551615 nanosegundos)"
     }
+  },
+  "sudo": {
+    "errors": {
+      "aborted": "Autenticación interrumpida",
+      "built_in": "sudo solo ejecuta comandos externos, y {arg0} es un comando integrado",
+      "busy": "Hay otro intento de sudo en curso para este usuario",
+      "command_not_allowed": "Con sudo solo se pueden ejecutar comandos de /applications/executables, indicados por nombre o ruta absoluta: {arg0}",
+      "echo_not_suppressed": "No se puede pedir la contraseña: la entrada estándar no puede desactivar el eco ({arg0})",
+      "failed_to_execute": "No se pudo ejecutar el comando: {arg0}",
+      "locked_out": "Demasiados intentos fallidos: vuelva a intentarlo en {arg0} segundos",
+      "not_allowed": "No permitido: solo los miembros del grupo administrator pueden usar sudo",
+      "password_too_long": "La contraseña es demasiado larga",
+      "unknown_user": "Usuario desconocido: {arg0}",
+      "usage": "Uso: sudo [-u USUARIO] COMANDO [ARGUMENTO]..."
+    },
+    "prompts": {
+      "password": "[sudo] Contraseña de {arg0}: "
+    }
   }
 }

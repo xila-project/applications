@@ -126,5 +126,23 @@
     "errors": {
       "invalid_duration": "Invalid sleep duration: use a nonnegative integer with ms, s, m, or h (maximum 18446744073709551615 nanoseconds)"
     }
+  },
+  "sudo": {
+    "errors": {
+      "aborted": "Authentication aborted",
+      "built_in": "sudo runs external commands only, and {arg0} is a built-in command",
+      "busy": "Another sudo attempt is in progress for this user",
+      "command_not_allowed": "Only commands in /applications/executables can be run with sudo, given by name or absolute path: {arg0}",
+      "echo_not_suppressed": "Cannot ask for the password: standard input cannot turn echo off ({arg0})",
+      "failed_to_execute": "Failed to run the command: {arg0}",
+      "locked_out": "Too many failed attempts: try again in {arg0} seconds",
+      "not_allowed": "Not allowed: only members of the administrator group can use sudo",
+      "password_too_long": "Password is too long",
+      "unknown_user": "Unknown user: {arg0}",
+      "usage": "Usage: sudo [-u USER] COMMAND [ARGUMENT]..."
+    },
+    "prompts": {
+      "password": "[sudo] Password for {arg0}: "
+    }
   }
 }

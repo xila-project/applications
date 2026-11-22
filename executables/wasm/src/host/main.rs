@@ -23,6 +23,7 @@ use crate::host::{
 };
 
 const DEFAULT_STACK_SIZE: usize = 4096;
+
 const START_FUNCTION_NAME: &str = "_start";
 
 #[cfg(test)]
@@ -174,6 +175,24 @@ pub async fn execute_with_control(
     arguments: Vec<String>,
     control: xila::synchronization::Arc<super::ExecutionControl>,
 ) -> core::result::Result<(), NonZeroUsize> {
+    // - Admission: guests are untrusted, so they never run with an identity
+    //   that a launcher granted, such as the Shell's `sudo`. Core marks the
+    //   task launched with that identity and every task it starts, and the
+    //   mark cannot be cleared, so this covers the runner given to `sudo` as
+    //   well as any native program that `sudo` ran and its descendants. A
+    //   task whose mark cannot be read is refused too.
+    let task_manager = standard.context.task_manager;
+    let task = task_manager.get_current_task_identifier().await;
+    if !matches!(task_manager.is_identity_granted(task).await, Ok(false)) {
+        log::warning!("WebAssembly guest refused: the task runs with a granted identity");
+        writeln!(
+            standard.error(),
+            "Error: WebAssembly guests do not run with an identity granted by sudo"
+        )
+        .ok();
+        return Err(NonZeroUsize::new(1).unwrap());
+    }
+
     let (runtime_arguments, guest_arguments) = split_guest_arguments(&arguments);
     let arguments = match WasmArguments::from_args(runtime_arguments.iter().map(|s| s.as_str())) {
         Ok(args) => args,

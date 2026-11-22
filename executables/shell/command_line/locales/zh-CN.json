@@ -123,5 +123,23 @@
     "errors": {
       "invalid_duration": "无效的休眠时长：请使用非负整数，单位为 ms、s、m 或 h（最大值为 18446744073709551615 纳秒）"
     }
+  },
+  "sudo": {
+    "errors": {
+      "aborted": "身份验证已中止",
+      "built_in": "sudo 只运行外部命令，而 {arg0} 是内置命令",
+      "busy": "此用户的另一个 sudo 尝试正在进行",
+      "command_not_allowed": "sudo 只能运行 /applications/executables 中的命令（按名称或绝对路径指定）：{arg0}",
+      "echo_not_suppressed": "无法询问密码：标准输入无法关闭回显（{arg0}）",
+      "failed_to_execute": "无法运行命令：{arg0}",
+      "locked_out": "失败次数过多：请在 {arg0} 秒后重试",
+      "not_allowed": "不允许：只有 administrator 组的成员可以使用 sudo",
+      "password_too_long": "密码过长",
+      "unknown_user": "未知用户：{arg0}",
+      "usage": "用法：sudo [-u 用户] 命令 [参数]..."
+    },
+    "prompts": {
+      "password": "[sudo] {arg0} 的密码："
+    }
   }
 }
