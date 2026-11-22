@@ -507,6 +507,61 @@ mod tests {
                 .unwrap();
         }
 
+        #[xila::task::test(task_path = xila::task)]
+        async fn restarted_shell_adopts_the_windows_left_on_the_screen() {
+            let standard = testing::initialize(false, false).await;
+            let context = standard.context;
+            let manager = headless_graphics_manager().await;
+            let screen = manager.get_current_screen().unwrap();
+
+            let first_layout = Layout::new(context, false).await.unwrap();
+            let mut first_window =
+                graphics::lock!(manager, { manager.create_window().await.unwrap() });
+            let mut second_window =
+                graphics::lock!(manager, { manager.create_window().await.unwrap() });
+            let first_window_object = first_window.as_object_mutable();
+            let second_window_object = second_window.as_object_mutable();
+            drop(first_layout);
+
+            // A plain object on the screen is not a window and stays there.
+            let other_object = manager
+                .lock_function_sync(|| unsafe {
+                    assert_eq!(lvgl::lv_obj_get_parent(first_window_object), screen);
+                    assert_eq!(lvgl::lv_obj_get_parent(second_window_object), screen);
+                    let other_object = lvgl::lv_obj_create(screen);
+                    assert!(!other_object.is_null());
+                    Ok(other_object)
+                })
+                .unwrap();
+
+            let second_layout = Layout::new(context, false).await.unwrap();
+            let body = second_layout.body_object();
+            manager
+                .lock_function_sync(|| unsafe {
+                    assert_eq!(lvgl::lv_obj_get_parent(first_window_object), body);
+                    assert_eq!(lvgl::lv_obj_get_parent(second_window_object), body);
+                    assert!(
+                        lvgl::lv_obj_get_index(first_window_object)
+                            < lvgl::lv_obj_get_index(second_window_object),
+                        "adopted windows keep their stacking order"
+                    );
+                    assert_eq!(lvgl::lv_obj_get_parent(other_object), screen);
+                    lvgl::lv_obj_delete(other_object);
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(manager.get_window_count().await.unwrap(), 2);
+            assert_eq!(
+                manager.get_window_identifier(0).await.unwrap(),
+                first_window_object as usize,
+                "adopted windows are listed by the dock"
+            );
+
+            drop(second_layout);
+            drop(second_window);
+            drop(first_window);
+        }
+
         static APP_EVENTS: Mutex<Vec<&'static str>> = Mutex::new(Vec::new());
 
         /// The tests that inject pointer input share one LVGL pointer device,
@@ -1003,6 +1058,41 @@ mod tests {
             });
             handle.join().unwrap();
             result
+        }
+
+        #[xila::task::test(task_path = xila::task)]
+        #[allow(clippy::await_holding_lock)]
+        async fn desk_logo_stays_above_the_dock_on_a_compact_display() {
+            let _input = POINTER_INPUT
+                .lock()
+                .unwrap_or_else(|error| error.into_inner());
+            let manager = headless_graphics_manager().await;
+            let (shell, _desk_window) = shell_with_home(manager).await;
+            let desk = shell.desk.as_ref().unwrap();
+            let logo = desk
+                .logo_object()
+                .expect("a 320x240 desk has room for a logo");
+            let dock = desk.dock_object();
+
+            manager
+                .lock_function_sync(|| unsafe {
+                    lvgl::lv_obj_update_layout(lvgl::lv_screen_active());
+                    let mut logo_area = core::mem::zeroed::<lvgl::lv_area_t>();
+                    let mut dock_area = core::mem::zeroed::<lvgl::lv_area_t>();
+                    lvgl::lv_obj_get_coords(logo, &mut logo_area);
+                    lvgl::lv_obj_get_coords(dock, &mut dock_area);
+                    assert!(
+                        logo_area.y2 < dock_area.y1,
+                        "the logo ({}..{}) overlaps the dock ({}..{})",
+                        logo_area.y1,
+                        logo_area.y2,
+                        dock_area.y1,
+                        dock_area.y2
+                    );
+                    Ok(())
+                })
+                .unwrap();
+            drop(shell);
         }
 
         #[xila::task::test(task_path = xila::task)]
