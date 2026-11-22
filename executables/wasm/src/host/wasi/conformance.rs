@@ -470,6 +470,94 @@ async fn a_real_guest_creates_resizes_renames_and_removes() {
     assert!(!guest.exists("a.txt").await);
 }
 
+/// Decode the directory records `fd_readdir` wrote: (next cookie, inode, name, type).
+fn directory_records(bytes: &[u8]) -> Vec<(u64, u64, String, u8)> {
+    let mut records = Vec::new();
+    let mut offset = 0;
+    while offset < bytes.len() {
+        let next = u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap());
+        let inode = u64::from_le_bytes(bytes[offset + 8..offset + 16].try_into().unwrap());
+        let name_length =
+            u32::from_le_bytes(bytes[offset + 16..offset + 20].try_into().unwrap()) as usize;
+        let kind = bytes[offset + 20];
+        assert_eq!(&bytes[offset + 21..offset + 24], &[0, 0, 0]);
+        let name = core::str::from_utf8(&bytes[offset + 24..offset + 24 + name_length]).unwrap();
+        records.push((next, inode, name.to_string(), kind));
+        offset += 24 + name_length;
+    }
+    records
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn fd_readdir_writes_whole_records_and_resumes_from_the_cookie() {
+    let mut guest = Guest::new().await;
+    assert_eq!(guest.with_path("path_create_directory", ROOT, "list"), 0);
+    for name in ["alpha", "beta", "gamma"] {
+        File::write_to_path(
+            guest.vfs,
+            guest.task,
+            format!("/sandbox/list/{name}").as_str(),
+            b"",
+        )
+        .await
+        .unwrap();
+    }
+    let directory = guest.open_directory("list");
+    let readdir = |guest: &mut Guest, length: i32, cookie: i64| -> (i32, Vec<u8>) {
+        guest.put(2000, &[0xee; 512]);
+        let status = guest.call(
+            "fd_readdir",
+            &[i(directory), i(2000), i(length), l(cookie), i(1300)],
+        );
+        let written = guest.u32_at(1300) as usize;
+        (status, guest.get(2000, written))
+    };
+
+    // A large buffer returns every entry in order, "." and ".." first, and the
+    // cookie of each record is the index of the entry that follows it.
+    let (status, bytes) = readdir(&mut guest, 512, 0);
+    assert_eq!(status, 0);
+    let all = directory_records(&bytes);
+    let names: Vec<&str> = all.iter().map(|record| record.2.as_str()).collect();
+    assert_eq!(names, [".", "..", "alpha", "beta", "gamma"]);
+    let cookies: Vec<u64> = all.iter().map(|record| record.0).collect();
+    assert_eq!(cookies, [1, 2, 3, 4, 5]);
+    assert_eq!(all[2].3, 4, "a regular file");
+
+    // A small buffer stops after the last whole record that fits and leaves the
+    // rest of the buffer untouched.
+    let first_two = 25 + 26;
+    let (status, bytes) = readdir(&mut guest, (first_two + 24 + 5 - 1) as i32, 0);
+    assert_eq!(status, 0);
+    assert_eq!(directory_records(&bytes), all[..2]);
+    assert_eq!(guest.get(2000 + first_two, 4), [0xee; 4]);
+
+    // Resuming from a record's cookie continues with the next entry.
+    let (status, bytes) = readdir(&mut guest, 512, 2);
+    assert_eq!(status, 0);
+    assert_eq!(directory_records(&bytes), all[2..]);
+    let (status, bytes) = readdir(&mut guest, 24 + 4, 3);
+    assert_eq!(status, 0);
+    assert_eq!(directory_records(&bytes), all[3..4]);
+
+    // At the end the call succeeds with no bytes; past it the cookie is invalid.
+    let (status, bytes) = readdir(&mut guest, 512, 5);
+    assert_eq!(status, 0);
+    assert!(bytes.is_empty());
+    let (status, _) = readdir(&mut guest, 512, 6);
+    assert_eq!(status, errno(Error::Inval));
+
+    // A buffer too small for the first record writes nothing.
+    let (status, bytes) = readdir(&mut guest, 24, 0);
+    assert_eq!(status, 0);
+    assert!(bytes.is_empty());
+
+    // The end-of-directory cookie reports no bytes without touching the directory.
+    let (status, bytes) = readdir(&mut guest, 512, -1);
+    assert_eq!(status, 0);
+    assert!(bytes.is_empty());
+}
+
 #[xila::task::test(task_path = xila::task)]
 async fn fd_advise_validates_and_otherwise_succeeds() {
     let mut guest = Guest::new().await;

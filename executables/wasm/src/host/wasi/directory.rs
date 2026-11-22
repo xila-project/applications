@@ -1,4 +1,3 @@
-use alloc::vec::Vec;
 use wasmi::Caller;
 
 use crate::{
@@ -13,6 +12,9 @@ use crate::{
         },
     },
 };
+
+/// Size of the fixed part of a directory record: next cookie, inode, name length, type, padding.
+const RECORD_HEADER_LENGTH: usize = 24;
 
 fn kind_to_filetype(kind: &xila::file_system::Kind) -> u8 {
     use xila::file_system::Kind;
@@ -45,31 +47,49 @@ define_wasi_module! {
                 return Ok(());
             }
             let start = usize::try_from(cookie).map_err(|_| Error::Inval)?;
-            let entries = {
-                let dir = caller.data_mut().wasi.get_synchronous_directory(fd as u32).ok_or(Error::Badf)?;
-                dir.rewind().map_err(kind_error)?;
-                let mut entries = Vec::new();
-                while let Some(entry) = dir.read().map_err(kind_error)? { entries.push(entry); }
-                entries
-            };
-            if start > entries.len() { return Err(Error::Inval.into()); }
-            let mut encoded = Vec::new();
-            for (index, entry) in entries.iter().enumerate().skip(start) {
-                let mut record = Vec::with_capacity(24 + entry.name.len());
-                let next = u64::try_from(index + 1).unwrap_or(u64::MAX);
-                record.extend_from_slice(&next.to_le_bytes());
-                record.extend_from_slice(&entry.inode.to_le_bytes());
-                record.extend_from_slice(&u32::try_from(entry.name.len()).map_err(|_| Error::Overflow)?.to_le_bytes());
-                record.push(kind_to_filetype(&entry.kind));
-                record.extend_from_slice(&[0; 3]);
-                record.extend_from_slice(entry.name.as_bytes());
-                if encoded.len().checked_add(record.len()).ok_or(Error::Overflow)? > buf_len as usize { break; }
-                encoded.extend_from_slice(&record);
+            // Walk the directory entry by entry: skip to the cookie, then write each
+            // record straight into the guest buffer. Only the current entry is held
+            // on the host, so the space used does not grow with the directory.
+            {
+                let directory = caller.data_mut().wasi.get_synchronous_directory(fd as u32).ok_or(Error::Badf)?;
+                directory.rewind().map_err(kind_error)?;
+                for _ in 0..start {
+                    if directory.read().map_err(kind_error)?.is_none() {
+                        return Err(Error::Inval.into());
+                    }
+                }
             }
-            let mut guest = borrow_memory(&memory, &mut caller);
-            guest.bytes_mut(GuestSlice::new(buf_ptr, encoded.len() as WasmUsize))
-                .ok_or(Error::Fault)?.copy_from_slice(&encoded);
-            guest.write(GuestPointer::new(nread_ptr), encoded.len() as WasmUsize).ok_or(Error::Fault)?;
+            let capacity = buf_len as usize;
+            let mut written = 0usize;
+            let mut index = start;
+            loop {
+                let entry = {
+                    let directory = caller.data_mut().wasi.get_synchronous_directory(fd as u32).ok_or(Error::Badf)?;
+                    directory.read().map_err(kind_error)?
+                };
+                let Some(entry) = entry else { break };
+                let name = entry.name.as_bytes();
+                let name_length = u32::try_from(name.len()).map_err(|_| Error::Overflow)?;
+                let record_length = RECORD_HEADER_LENGTH.checked_add(name.len()).ok_or(Error::Overflow)?;
+                if written.checked_add(record_length).ok_or(Error::Overflow)? > capacity { break; }
+                index += 1;
+                let next = u64::try_from(index).unwrap_or(u64::MAX);
+                let mut header = [0u8; RECORD_HEADER_LENGTH];
+                header[0..8].copy_from_slice(&next.to_le_bytes());
+                header[8..16].copy_from_slice(&entry.inode.to_le_bytes());
+                header[16..20].copy_from_slice(&name_length.to_le_bytes());
+                header[20] = kind_to_filetype(&entry.kind);
+                let mut guest = borrow_memory(&memory, &mut caller);
+                let record = guest
+                    .bytes_mut(GuestSlice::new(buf_ptr + written as WasmUsize, record_length as WasmUsize))
+                    .ok_or(Error::Fault)?;
+                record[..RECORD_HEADER_LENGTH].copy_from_slice(&header);
+                record[RECORD_HEADER_LENGTH..].copy_from_slice(name);
+                written += record_length;
+            }
+            borrow_memory(&memory, &mut caller)
+                .write(GuestPointer::new(nread_ptr), written as WasmUsize)
+                .ok_or(Error::Fault)?;
             Ok(())
         })
     }
