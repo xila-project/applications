@@ -2,6 +2,7 @@
 rust_version = "1.97.0"
 node_version = "24.22.0"
 taplo_version = "0.10.0"
+nextest_version = "0.9.148"
 actionlint_version = "1.7.7"
 shellcheck_version = "0.11.0"
 
@@ -15,7 +16,12 @@ run = "cargo build --locked --target wasm32-wasip1 --profile release-wasm -p xil
 
 [tasks."test:workspace"]
 description = "Test application crates on the host"
-run = "cargo test --locked --workspace --features xila/graphics_rendering_xrgb8888"
+tools."github:nextest-rs/nextest" = "cargo-nextest-{{ vars.nextest_version }}"
+run = """
+set -eu
+cargo nextest run --locked --workspace --features xila/graphics_rendering_xrgb8888
+cargo test --locked --workspace --features xila/graphics_rendering_xrgb8888 --doc
+"""
 
 [tasks."localization:lint"]
 description = "Validate application translation keys and catalogs"

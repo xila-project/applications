@@ -177,5 +177,25 @@ class ApplicationPolicy(unittest.TestCase):
         self.assertNotIn('mr-boxington', str(config.get('task_templates', {})))
 
 
+    def test_host_test_suites_use_pinned_nextest_and_run_doctests(self):
+        self.assertRegex(manifest('mise.toml')['vars']['nextest_version'], r'^\d+\.\d+\.\d+$')
+        expected = 'cargo-nextest-{{ vars.nextest_version }}'
+        for path, name in (('mise.toml', 'test:workspace'), ('mise.ci.toml', 'ci:abi')):
+            with self.subTest(task=name):
+                task = manifest(path)['tasks'][name]
+                self.assertEqual(task['tools']['github:nextest-rs/nextest'], expected)
+                self.assertIn('cargo nextest run --locked', task['run'])
+                self.assertRegex(task['run'], r'cargo test [^\n]*--doc')
+        ci = (ROOT / '.github/workflows/ci.yml').read_text()
+        self.assertIn('mise run ci:abi', ci)
+        self.assertNotIn('dtolnay/rust-toolchain', ci)
+
+    def test_workspace_actions_share_one_pinned_revision(self):
+        ci = (ROOT / '.github/workflows/ci.yml').read_text()
+        revisions = set(re.findall(
+            r'xila-project/workspace/\.github/(?:actions/setup-rust|workflows/quality\.yml)@([0-9a-f]{40})', ci))
+        self.assertEqual(len(revisions), 1, revisions)
+
+
 if __name__ == '__main__':
     unittest.main()
