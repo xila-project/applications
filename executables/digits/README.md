@@ -33,7 +33,16 @@ issues `COMPUTE`, then reads 10 floats. Every inference seeks both input and out
 to zero and rewrites the entire input. Closing the descriptor releases its arena.
 The ABI identifiers and tensor layouts come from Core, not private copies.
 The model must have one unquantized FLOAT32 input `[1,784]` and one FLOAT32 output
-`[1,10]` containing softmax probabilities. Incompatible models and unavailable
+`[1,10]` containing softmax probabilities. After each recognition Digits shows the inference time and, when the platform
+reports it, the backend. The time is the monotonic clock of the runtime's time
+device (through WASI `clock_time_get`) around `COMPUTE` alone, in milliseconds. The
+backend is read once, when the model loads, from the optional read-only text node
+`/devices/nn/backend` that Platforms' shared driver can mount: the kernel backends
+built into the platform, fastest first (`esp-nn`, `cmsis-nn`, `kernels` for the
+portable Rust kernels). Operators fall back down that list, so it names what the
+model may use, not what each operator ran on. If the node is absent or its content
+is not a short printable word list, the backend is simply not shown.
+Incompatible models and unavailable
 NN devices show an error while leaving drawing and closing usable. Recognize
 retries opening the device, so an unavailable backend can recover.
 

@@ -1,4 +1,4 @@
-use crate::device::Classifier;
+use crate::device::{Classifier, Prediction};
 use embedded_i18n::t;
 use pixel_painter::drawing::{Drawing, HEIGHT, Viewport, WIDTH};
 use std::{ffi::CString, ptr::null_mut, thread::sleep, time::Duration};
@@ -204,19 +204,30 @@ impl Interface {
             return self.status(t!("errors.unavailable"));
         };
         match classifier.predict(&input) {
-            Ok(scores) => self.status(&format!(
-                "{}: {} ({:.0}%)\n{}: {} {:.0}%   {} {:.0}%   {} {:.0}%",
-                t!("results.digit"),
-                scores[0].0,
-                scores[0].1 * 100.0,
-                t!("results.scores"),
-                scores[0].0,
-                scores[0].1 * 100.0,
-                scores[1].0,
-                scores[1].1 * 100.0,
-                scores[2].0,
-                scores[2].1 * 100.0
-            )),
+            Ok(Prediction {
+                top: scores,
+                inference,
+            }) => {
+                let mut text = format!(
+                    "{}: {} ({:.0}%)\n{}: {} {:.0}%   {} {:.0}%   {} {:.0}%\n{}: {:.1} ms",
+                    t!("results.digit"),
+                    scores[0].0,
+                    scores[0].1 * 100.0,
+                    t!("results.scores"),
+                    scores[0].0,
+                    scores[0].1 * 100.0,
+                    scores[1].0,
+                    scores[1].1 * 100.0,
+                    scores[2].0,
+                    scores[2].1 * 100.0,
+                    t!("results.inference"),
+                    inference.as_secs_f64() * 1000.0
+                );
+                if let Some(backend) = classifier.backend() {
+                    text.push_str(&format!("   {}: {backend}", t!("results.backend")));
+                }
+                self.status(&text)
+            }
             Err(error) => {
                 eprintln!("Digits inference: {error}");
                 self.classifier = None;

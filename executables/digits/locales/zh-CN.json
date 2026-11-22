@@ -19,6 +19,8 @@
   },
   "results": {
     "digit": "数字",
-    "scores": "模型评分"
+    "scores": "模型评分",
+    "inference": "推理时间",
+    "backend": "后端"
   }
 }
