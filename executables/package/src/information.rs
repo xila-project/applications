@@ -8,6 +8,8 @@ use alloc::{
 };
 use xila_package_manifest::{Manifest, Metadata, Origin, RegistryEntry, XilaVersion};
 
+use crate::repository::Offer;
+
 /// The fields an installed manifest and a registry entry have in common.
 pub struct Details<'a> {
     pub name: &'a str,
@@ -123,6 +125,45 @@ pub fn available(entry: &RegistryEntry, repository: &str, installed: Option<&str
             ("archive sha256:", entry.archive.sha256.clone()),
         ],
     )
+}
+
+/// The warnings and blocks `package info` prints for the repositories'
+/// offers of `wanted`: one block per repository that has the package and
+/// one warning per repository that could not be checked, which is skipped
+/// like in `package search`. An error only when no repository has it.
+pub fn offered(
+    offers: &[Offer],
+    wanted: &str,
+    installed: Option<&str>,
+) -> (Vec<String>, Result<Vec<Vec<String>>, String>) {
+    let mut blocks = Vec::new();
+    let mut warnings = Vec::new();
+    for offer in offers {
+        match &offer.entry {
+            Ok(Some(entry)) => blocks.push(available(entry, &offer.repository, installed)),
+            Ok(None) => {}
+            Err(problem) => warnings.push(format!(
+                "package: skipping repository {}: {problem}",
+                offer.repository
+            )),
+        }
+    }
+    let result = if !blocks.is_empty() {
+        Ok(blocks)
+    } else if !offers.is_empty() && warnings.len() == offers.len() {
+        Err(format!(
+            "cannot look up {wanted}: no configured repository could be checked"
+        ))
+    } else if !warnings.is_empty() {
+        Err(format!(
+            "{wanted} not found for this device in the repositories that could be checked"
+        ))
+    } else {
+        Err(format!(
+            "{wanted} not found for this device in the configured repositories"
+        ))
+    };
+    (warnings, result)
 }
 
 #[cfg(test)]
@@ -252,5 +293,54 @@ mod tests {
         assert_eq!(value(&lines, "archive:"), Some("4096 bytes"));
         let lines = available(&entry(), "community", None);
         assert_eq!(value(&lines, "status:"), Some("available"));
+    }
+
+    #[test]
+    fn describes_a_match_when_another_repository_fails() {
+        let offer = |repository: &str, entry: Result<Option<RegistryEntry>, String>| Offer {
+            repository: repository.into(),
+            entry,
+        };
+        let (warnings, blocks) = offered(
+            &[
+                offer("offline", Err("cannot reach offline".into())),
+                offer("empty", Ok(None)),
+                offer("xila", Ok(Some(entry()))),
+            ],
+            "xila.clock",
+            None,
+        );
+        assert_eq!(
+            warnings,
+            ["package: skipping repository offline: cannot reach offline"]
+        );
+        let blocks = blocks.unwrap();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(value(&blocks[0], "repository:"), Some("xila"));
+
+        let (warnings, result) = offered(
+            &[
+                offer("offline", Err("down".into())),
+                offer("empty", Ok(None)),
+            ],
+            "xila.clock",
+            None,
+        );
+        assert_eq!(warnings.len(), 1);
+        assert_eq!(
+            result.unwrap_err(),
+            "xila.clock not found for this device in the repositories that could be checked"
+        );
+        let (_, result) = offered(&[offer("offline", Err("down".into()))], "xila.clock", None);
+        assert_eq!(
+            result.unwrap_err(),
+            "cannot look up xila.clock: no configured repository could be checked"
+        );
+        let (warnings, result) = offered(&[offer("empty", Ok(None))], "xila.clock", None);
+        assert!(warnings.is_empty());
+        assert_eq!(
+            result.unwrap_err(),
+            "xila.clock not found for this device in the configured repositories"
+        );
     }
 }

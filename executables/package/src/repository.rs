@@ -643,32 +643,38 @@ async fn configured(
     Ok(repositories)
 }
 
-/// A registry entry offered by a repository, authenticated from its root key.
-pub struct Available {
+/// What one repository offers for `package info`.
+pub struct Offer {
     pub repository: String,
-    pub entry: RegistryEntry,
+    /// Its newest compatible entry, authenticated from its root key; `None`
+    /// when it has none, or why the repository could not be checked.
+    pub entry: Result<Option<RegistryEntry>, String>,
 }
 
 /// The newest compatible entry of `name` (or the entry of `version`) in
-/// each of the configured repositories (or only `only`) that has one.
-/// Read-only: nothing is installed and no repository state is written.
+/// each of the configured repositories (or only `only`). A repository that
+/// cannot be checked is reported in its offer, not fatal, so another one can
+/// still describe the package. Read-only: nothing is installed and no
+/// repository state is written.
 pub async fn available(
     vfs: &'static VirtualFileSystem,
     task: TaskIdentifier,
     name: &str,
     version: Option<&str>,
     only: Option<&str>,
-) -> Result<Vec<Available>, String> {
-    let mut found = Vec::new();
+) -> Result<Vec<Offer>, String> {
+    let mut offers = Vec::new();
     for repository in configured(vfs, task, only).await? {
-        if let Some(entry) = find(vfs, task, repository, name, version, Persist::ReadOnly).await? {
-            found.push(Available {
-                repository: entry.repository.name,
-                entry: entry.entry,
-            });
-        }
+        let repository_name = repository.name.clone();
+        let entry = find(vfs, task, repository, name, version, Persist::ReadOnly)
+            .await
+            .map(|found| found.map(|found| found.entry));
+        offers.push(Offer {
+            repository: repository_name,
+            entry,
+        });
     }
-    Ok(found)
+    Ok(offers)
 }
 
 /// A package listed in a repository's index.
@@ -820,7 +826,7 @@ mod tests {
             file("packages/xila/clock/0.2.0.json"),
             file("packages/xila/clock/0.3.0-rc.1.json"),
             file("packages/xila/clockwork/1.0.0-rc.1.json"),
-            file("packages/community/weather/2.0.0.json"),
+            file("packages/org/example/weather/2.0.0.json"),
         ];
         files.sort_by(|a, b| a.path.cmp(&b.path));
         let index = Index {
@@ -844,7 +850,7 @@ mod tests {
         assert_eq!(matching(&index, None).len(), 3);
         assert_eq!(
             matching(&index, Some("weather")),
-            [listed("community.weather", "2.0.0")]
+            [listed("org.example.weather", "2.0.0")]
         );
         assert!(matching(&index, Some("developers")).is_empty());
     }

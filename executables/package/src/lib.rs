@@ -247,19 +247,17 @@ async fn information_command(
         }
         installed => {
             let installed = installed.as_ref().map(|manifest| manifest.version.as_str());
-            let available =
+            let offers =
                 repository::available(vfs, task, name, version, options.repository).await?;
-            if available.is_empty() {
-                return Err(format!(
-                    "{}{} not found for this device in the configured repositories",
-                    name,
-                    version.map(|v| format!(" {v}")).unwrap_or_default()
-                ));
+            let wanted = match version {
+                Some(version) => format!("{name} {version}"),
+                None => name.to_string(),
+            };
+            let (warnings, blocks) = information::offered(&offers, &wanted, installed);
+            for warning in warnings {
+                let _ = writeln!(standard.error(), "{warning}");
             }
-            available
-                .iter()
-                .map(|found| information::available(&found.entry, &found.repository, installed))
-                .collect()
+            blocks?
         }
     };
     for (position, lines) in blocks.iter().enumerate() {
