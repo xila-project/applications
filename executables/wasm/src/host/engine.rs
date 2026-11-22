@@ -34,6 +34,20 @@
 //! or each one at its first call ([`Translation::Lazy`]). Lazy translation
 //! lowers the load peak and the resident size of guests that never call most
 //! of their code, at the cost of a translation pause on each first call.
+//!
+//! Translation charges no fuel (see [`configuration`]), so it runs to its end
+//! without yielding to the executor. The pause at a first call is bounded:
+//!
+//! - it translates one function body, in a single pass roughly linear in the
+//!   size of that body;
+//! - a body is never larger than the module, which is read whole into memory
+//!   before loading, so the available heap caps it (Wasmi 2.0 has no limit
+//!   on the size of one body);
+//! - each function is translated at most once, so a guest cannot repeat it.
+//!
+//! All lazy pauses together never do more work than eager translation does in
+//! one go inside `Module::new`, which never yields either. A guest therefore
+//! cannot hold the executor any longer than loading it eagerly already does.
 
 use getargs_derive::ValueEnum;
 use wasmi::{CompilationMode, Config, CustomFuelCosts};

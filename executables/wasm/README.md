@@ -93,8 +93,12 @@ Wasmi charges lazy translation to the running guest's fuel, and in Wasmi 2.0
 running out of fuel while translating a callee is a plain error, not a
 resumable pause ([Wasmi PR #2055](https://github.com/wasmi-labs/wasmi/pull/2055)).
 The engine therefore charges no fuel for translation or validation, so a slice
-can never end inside one; translation is bounded by the module size and runs
-once per function.
+can never end inside one. Translating one function does not yield to the
+executor, but it is bounded: a function body is never larger than the module,
+which is read whole into memory, and each function is translated at most once.
+All lazy pauses together never exceed the work eager translation does in one
+go while loading, so a guest cannot hold the executor any longer than eager
+loading already allows.
 
 Wasmi 2 has no streaming module constructor (`Module::new_streaming` was
 removed in Wasmi 1.0), so the source is still read whole and released as soon
