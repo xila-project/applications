@@ -13,7 +13,7 @@ use alloc::{
 };
 use wasmi::{Engine, Instance, Linker, Module, Store, Val};
 use xila::{
-    file_system::{AccessFlags, Flags, PathOwned},
+    file_system::{AccessFlags, Flags},
     task::TaskIdentifier,
     virtual_file_system::{File, SynchronousDirectory, SynchronousFile, VirtualFileSystem},
 };
@@ -96,6 +96,12 @@ struct Guest {
 
 impl Guest {
     async fn new() -> Self {
+        Self::with_preopen(&[], "/sandbox").await
+    }
+
+    /// A guest whose preopen is `preopen`, resolved once after the host
+    /// created each `(target, link)` symbolic link.
+    async fn with_preopen(links: &[(&str, &str)], preopen: &str) -> Self {
         let task_manager = xila::task::test_manager();
         let users_manager = Box::leak(Box::new(xila::users::Manager::new()));
         let clock = Box::leak(Box::new(
@@ -116,6 +122,15 @@ impl Guest {
         File::write_to_path(vfs, task, "/outside/secret", b"secret")
             .await
             .unwrap();
+        for (target, link) in links {
+            vfs.create_symlink(
+                task,
+                xila::file_system::Path::new(target),
+                xila::file_system::Path::new(link),
+            )
+            .await
+            .unwrap();
+        }
         let context = Box::leak(Box::new(xila::executable::ExecutableContext {
             task_manager,
             users_manager,
@@ -138,11 +153,7 @@ impl Guest {
         };
         wasi.files.insert(
             ROOT as u32,
-            FileSystemItem::Directory(DirectoryVariant {
-                confinement_root: None,
-                path: PathOwned::try_from("/sandbox").unwrap(),
-                directory: SynchronousDirectory::open(vfs, task, "/sandbox").unwrap(),
-            }),
+            FileSystemItem::Directory(DirectoryVariant::preopen(vfs, task, preopen).await.unwrap()),
         );
         wasi.prestats.insert(
             ROOT as u32,
@@ -238,15 +249,26 @@ impl Guest {
         self.call(name, &[i(directory), pointer, length])
     }
 
-    /// `path_open` below the preopen; the descriptor or the errno.
+    /// `path_open` below the preopen, following a final link; the descriptor or the errno.
     fn open_with(&mut self, path: &str, oflags: i32, rights: i64) -> Result<i32, i32> {
+        self.open_lookup(FOLLOW, path, oflags, rights)
+    }
+
+    /// `path_open` below the preopen with explicit `lookupflags`.
+    fn open_lookup(
+        &mut self,
+        lookup: i32,
+        path: &str,
+        oflags: i32,
+        rights: i64,
+    ) -> Result<i32, i32> {
         self.sync_all();
         let [pointer, length] = self.text(0, path);
         let status = self.call(
             "path_open",
             &[
                 i(ROOT),
-                i(1),
+                i(lookup),
                 pointer,
                 length,
                 i(oflags),
@@ -437,6 +459,15 @@ impl Guest {
         }
     }
 }
+
+/// `lookupflags::SYMLINK_FOLLOW`.
+const FOLLOW: i32 = 1;
+const NO_FOLLOW: i32 = 0;
+/// `oflags`.
+const CREATE: i32 = 1;
+const DIRECTORY: i32 = 2;
+const EXCLUSIVE: i32 = 4;
+const TRUNCATE: i32 = 8;
 
 const READ: i64 = 1 << 1;
 const WRITE: i64 = 1 << 6;
@@ -1639,4 +1670,316 @@ async fn socket_imports_fail_cleanly_because_no_socket_is_preopened() {
             );
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// path_open looks the final component up once, honouring SYMLINK_FOLLOW
+// ---------------------------------------------------------------------------
+
+impl Guest {
+    /// Read a whole small file opened through `path` with `lookup`.
+    fn read_through(&mut self, lookup: i32, path: &str) -> Result<Vec<u8>, i32> {
+        let fd = self.open_lookup(lookup, path, 0, READ)?;
+        let bytes = self.pread(fd, 0, 64);
+        assert_eq!(self.call("fd_close", &[i(fd)]), 0);
+        bytes
+    }
+
+    /// Open `path` as a directory with `lookup` and close it again.
+    fn open_directory_through(&mut self, lookup: i32, path: &str) -> Result<(), i32> {
+        let fd = self.open_lookup(lookup, path, DIRECTORY, 0)?;
+        assert_eq!(self.call("fd_close", &[i(fd)]), 0);
+        Ok(())
+    }
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn path_open_follows_a_final_link_only_with_symlink_follow() {
+    let mut guest = Guest::new().await;
+    assert_eq!(guest.with_path("path_create_directory", ROOT, "sub"), 0);
+    guest.seed("data", b"hello").await;
+    guest.seed("sub/inner", b"inner").await;
+    guest.symlink("data", "file_link");
+    guest.symlink("sub", "directory_link");
+    guest.symlink("missing", "dangling");
+    let looping = errno(Error::Loop);
+
+    // With SYMLINK_FOLLOW the final link is followed, to a file or a directory.
+    assert_eq!(
+        guest.read_through(FOLLOW, "file_link"),
+        Ok(b"hello".to_vec())
+    );
+    assert_eq!(
+        guest.open_directory_through(FOLLOW, "directory_link"),
+        Ok(())
+    );
+    assert_eq!(
+        guest.read_through(FOLLOW, "dangling"),
+        Err(errno(Error::Noent))
+    );
+
+    // Without it, a final link is never opened, whatever it points to and
+    // whatever the open flags ask for.
+    for link in ["file_link", "directory_link", "dangling"] {
+        for oflags in [0, CREATE, CREATE | TRUNCATE, DIRECTORY, CREATE | DIRECTORY] {
+            assert_eq!(
+                guest.open_lookup(NO_FOLLOW, link, oflags, READ | WRITE),
+                Err(looping),
+                "{link} {oflags}"
+            );
+        }
+        // An exclusive creation finds the link itself already there.
+        assert_eq!(
+            guest.open_lookup(NO_FOLLOW, link, CREATE | EXCLUSIVE, READ | WRITE),
+            Err(errno(Error::Exist)),
+            "{link}"
+        );
+        assert_eq!(
+            guest.open_lookup(FOLLOW, link, CREATE | EXCLUSIVE, READ | WRITE),
+            Err(errno(Error::Exist)),
+            "{link}"
+        );
+    }
+    // Refused opens changed nothing: the target of the dangling link was not
+    // created and the file behind the link was not truncated.
+    assert!(!guest.exists("missing").await);
+    assert_eq!(guest.contents("data").await, b"hello");
+
+    // Only the final component is affected: a link earlier in the path is
+    // still followed without SYMLINK_FOLLOW.
+    assert_eq!(
+        guest.read_through(NO_FOLLOW, "directory_link/inner"),
+        Ok(b"inner".to_vec())
+    );
+    assert_eq!(
+        guest.open_directory_through(NO_FOLLOW, "directory_link"),
+        Err(looping)
+    );
+
+    // Ordinary entries open the same way with or without the flag.
+    for lookup in [NO_FOLLOW, FOLLOW] {
+        assert_eq!(guest.read_through(lookup, "data"), Ok(b"hello".to_vec()));
+        assert_eq!(guest.open_directory_through(lookup, "sub"), Ok(()));
+        assert_eq!(
+            guest.open_lookup(lookup, "data", DIRECTORY, 0),
+            Err(errno(Error::Notdir))
+        );
+    }
+
+    // Undefined lookup bits are rejected before the path is looked at.
+    assert_eq!(
+        guest.open_lookup(2, "data", 0, READ),
+        Err(errno(Error::Inval))
+    );
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn path_open_follows_chained_links_and_stops_at_loops() {
+    let mut guest = Guest::new().await;
+    assert_eq!(guest.with_path("path_create_directory", ROOT, "sub"), 0);
+    guest.seed("data", b"hello").await;
+    guest.seed("sub/inner", b"inner").await;
+    guest.symlink("data", "first");
+    guest.symlink("first", "second");
+    guest.symlink("second", "third");
+    guest.symlink("sub", "directory_first");
+    guest.symlink("directory_first", "directory_second");
+    // A link to a link in another directory, relative to its own directory.
+    guest.symlink("../third", "sub/back");
+
+    // Every link of a chain is followed with SYMLINK_FOLLOW.
+    for link in ["first", "second", "third", "sub/back"] {
+        assert_eq!(
+            guest.read_through(FOLLOW, link),
+            Ok(b"hello".to_vec()),
+            "{link}"
+        );
+        // Without it the final link is not followed, even to another link.
+        assert_eq!(
+            guest.read_through(NO_FOLLOW, link),
+            Err(errno(Error::Loop)),
+            "{link}"
+        );
+    }
+    assert_eq!(
+        guest.open_directory_through(FOLLOW, "directory_second"),
+        Ok(())
+    );
+    assert_eq!(
+        guest.open_directory_through(NO_FOLLOW, "directory_second"),
+        Err(errno(Error::Loop))
+    );
+    // A chain earlier in the path is followed either way.
+    for lookup in [NO_FOLLOW, FOLLOW] {
+        assert_eq!(
+            guest.read_through(lookup, "directory_second/inner"),
+            Ok(b"inner".to_vec())
+        );
+    }
+
+    // Cycles and over-long chains end in ELOOP instead of being followed forever.
+    guest.symlink("cycle_b", "cycle_a");
+    guest.symlink("cycle_a", "cycle_b");
+    guest.symlink("itself", "itself");
+    for path in ["cycle_a", "itself"] {
+        assert_eq!(guest.read_through(FOLLOW, path), Err(errno(Error::Loop)));
+        assert_eq!(guest.read_through(NO_FOLLOW, path), Err(errno(Error::Loop)));
+        assert_eq!(
+            guest.open_lookup(FOLLOW, path, CREATE, READ | WRITE),
+            Err(errno(Error::Loop))
+        );
+    }
+    for lookup in [NO_FOLLOW, FOLLOW] {
+        assert_eq!(
+            guest.read_through(lookup, "cycle_a/inner"),
+            Err(errno(Error::Loop))
+        );
+    }
+    guest.symlink("data", "chain_0");
+    for index in 1..48 {
+        guest.symlink(&format!("chain_{}", index - 1), &format!("chain_{index}"));
+    }
+    assert_eq!(guest.read_through(FOLLOW, "chain_8"), Ok(b"hello".to_vec()));
+    assert_eq!(
+        guest.read_through(FOLLOW, "chain_47"),
+        Err(errno(Error::Loop))
+    );
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn path_open_cannot_escape_through_a_final_or_chained_link() {
+    // `absolute`, `parent` and `chain` lead to `/outside`.
+    let mut guest = Guest::with_escape_routes().await;
+    assert_eq!(guest.with_path("path_create_directory", ROOT, "sub"), 0);
+    for (target, link) in [
+        ("/outside/secret", "/sandbox/escape_file"),
+        ("../outside/secret", "/sandbox/escape_relative"),
+        ("escape_file", "/sandbox/escape_chain"),
+        ("../../outside", "/sandbox/sub/up"),
+        ("sub/up", "/sandbox/escape_nested"),
+        ("/outside/planted", "/sandbox/escape_dangling"),
+    ] {
+        guest
+            .vfs
+            .create_symlink(
+                guest.task,
+                xila::file_system::Path::new(target),
+                xila::file_system::Path::new(link),
+            )
+            .await
+            .unwrap();
+    }
+    let escape = errno(Error::Notcapable);
+
+    // A final link that leads outside is ENOTCAPABLE when followed, for
+    // reading, creating and truncating, and ELOOP when it is not.
+    for link in [
+        "escape_file",
+        "escape_relative",
+        "escape_chain",
+        "escape_dangling",
+    ] {
+        for oflags in [0, CREATE, CREATE | TRUNCATE] {
+            assert_eq!(
+                guest.open_lookup(FOLLOW, link, oflags, READ | WRITE),
+                Err(escape),
+                "{link} {oflags}"
+            );
+            assert_eq!(
+                guest.open_lookup(NO_FOLLOW, link, oflags, READ | WRITE),
+                Err(errno(Error::Loop)),
+                "{link} {oflags}"
+            );
+        }
+    }
+    for link in ["absolute", "parent", "chain", "escape_nested", "sub/up"] {
+        assert_eq!(
+            guest.open_directory_through(FOLLOW, link),
+            Err(escape),
+            "{link}"
+        );
+        assert_eq!(
+            guest.open_directory_through(NO_FOLLOW, link),
+            Err(errno(Error::Loop)),
+            "{link}"
+        );
+    }
+    // An escaping link earlier in the path is followed, and refused, either way.
+    for lookup in [NO_FOLLOW, FOLLOW] {
+        for path in [
+            "absolute/secret",
+            "parent/secret",
+            "chain/secret",
+            "escape_nested/secret",
+            "sub/up/secret",
+        ] {
+            assert_eq!(
+                guest.read_through(lookup, path),
+                Err(escape),
+                "{path} {lookup}"
+            );
+            assert_eq!(
+                guest.open_lookup(lookup, path, CREATE | TRUNCATE, READ | WRITE),
+                Err(escape),
+                "{path} {lookup}"
+            );
+        }
+        assert_eq!(
+            guest.open_lookup(lookup, "chain/planted", CREATE, READ | WRITE),
+            Err(escape)
+        );
+    }
+    guest.assert_outside_untouched().await;
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn a_preopen_reached_through_a_link_is_resolved_once() {
+    let mut guest = Guest::with_preopen(&[("/sandbox", "/alias")], "/alias").await;
+    // The preopen names the directory the link led to when it was resolved.
+    guest.seed("data", b"hello").await;
+    assert_eq!(guest.read_through(NO_FOLLOW, "data"), Ok(b"hello".to_vec()));
+    // Retargeting the link afterwards does not move the preopen.
+    guest.vfs.remove(guest.task, "/alias").await.unwrap();
+    guest
+        .vfs
+        .create_symlink(
+            guest.task,
+            xila::file_system::Path::new("/outside"),
+            xila::file_system::Path::new("/alias"),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        guest.read_through(FOLLOW, "secret"),
+        Err(errno(Error::Noent))
+    );
+    assert_eq!(guest.read_through(FOLLOW, "data"), Ok(b"hello".to_vec()));
+    let fd = guest.create("fresh");
+    assert_eq!(guest.call("fd_close", &[i(fd)]), 0);
+    assert!(guest.exists("fresh").await);
+    guest.assert_outside_untouched().await;
+
+    // Only an existing directory can become a preopen.
+    for path in ["/outside/secret", "/missing", "/sandbox/data"] {
+        assert!(
+            DirectoryVariant::preopen(guest.vfs, guest.task, path)
+                .await
+                .is_err(),
+            "{path}"
+        );
+    }
+    guest
+        .vfs
+        .create_symlink(
+            guest.task,
+            xila::file_system::Path::new("/missing"),
+            xila::file_system::Path::new("/dangling"),
+        )
+        .await
+        .unwrap();
+    assert!(
+        DirectoryVariant::preopen(guest.vfs, guest.task, "/dangling")
+            .await
+            .is_err()
+    );
 }

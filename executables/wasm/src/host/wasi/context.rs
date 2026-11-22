@@ -1,9 +1,9 @@
 use super::Error;
 use alloc::{collections::btree_map::BTreeMap, string::String, vec::Vec};
 use xila::{
-    file_system::PathOwned,
+    file_system::{Path, PathOwned},
     task::TaskIdentifier,
-    virtual_file_system::{SynchronousDirectory, SynchronousFile},
+    virtual_file_system::{SynchronousDirectory, SynchronousFile, VirtualFileSystem},
 };
 
 pub struct WasiContext {
@@ -81,6 +81,33 @@ pub struct DirectoryVariant {
     pub confinement_root: Option<PathOwned>,
     pub path: PathOwned,
     pub directory: SynchronousDirectory<'static>,
+}
+
+impl DirectoryVariant {
+    /// Open `path` as a preopened directory.
+    ///
+    /// The path is resolved once, following symbolic links, to the canonical
+    /// root that every later `*_beneath` lookup revalidates without following
+    /// links. The directory itself is then opened beneath that root, so a link
+    /// swapped in after the resolution cannot redirect it.
+    pub async fn preopen(
+        virtual_file_system: &'static VirtualFileSystem,
+        task: TaskIdentifier,
+        path: impl AsRef<Path>,
+    ) -> xila::file_system::Result<Self> {
+        let root = virtual_file_system
+            .resolve_directory_root(task, path)
+            .await?;
+        let directory = virtual_file_system
+            .open_directory_beneath_with_lookup(task, &Path::new(""), &root, false)
+            .await?
+            .into_synchronous_directory();
+        Ok(Self {
+            confinement_root: Some(root.clone()),
+            path: root,
+            directory,
+        })
+    }
 }
 
 pub enum FileSystemItem {
