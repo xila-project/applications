@@ -22,16 +22,6 @@ use crate::host::{
 
 const DEFAULT_STACK_SIZE: usize = 4096;
 
-/// Environment variable that marks a task started by the Shell's `sudo`, and
-/// every task it starts. It matches `command_line_shell::SUDO_USER_VARIABLE`.
-///
-/// Guests are untrusted code, so they never run with an identity granted by
-/// `sudo`, even when the Wasm runner itself is the command given to `sudo`:
-/// the runtime refuses to start a guest in a task that holds this variable.
-/// Core already refuses to launch a registered file format with another
-/// identity; this check covers the mounted runner and any native program
-/// started under `sudo` that launches it.
-pub const SUDO_USER_VARIABLE: &str = "Sudo_user";
 const START_FUNCTION_NAME: &str = "_start";
 
 #[cfg(test)]
@@ -149,18 +139,19 @@ pub async fn execute_with_control(
     arguments: Vec<String>,
     control: xila::synchronization::Arc<super::ExecutionControl>,
 ) -> core::result::Result<(), NonZeroUsize> {
-    // - Admission: no guest runs with an identity granted by `sudo`.
+    // - Admission: guests are untrusted, so they never run with an identity
+    //   that a launcher granted, such as the Shell's `sudo`. Core marks the
+    //   task launched with that identity and every task it starts, and the
+    //   mark cannot be cleared, so this covers the runner given to `sudo` as
+    //   well as any native program that `sudo` ran and its descendants. A
+    //   task whose mark cannot be read is refused too.
     let task_manager = standard.context.task_manager;
     let task = task_manager.get_current_task_identifier().await;
-    if task_manager
-        .get_environment_variable(task, SUDO_USER_VARIABLE)
-        .await
-        .is_ok()
-    {
-        log::warning!("WebAssembly guest refused: the task was started by sudo");
+    if !matches!(task_manager.is_identity_granted(task).await, Ok(false)) {
+        log::warning!("WebAssembly guest refused: the task runs with a granted identity");
         writeln!(
             standard.error(),
-            "Error: WebAssembly guests do not run under sudo"
+            "Error: WebAssembly guests do not run with an identity granted by sudo"
         )
         .ok();
         return Err(NonZeroUsize::new(1).unwrap());

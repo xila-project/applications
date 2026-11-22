@@ -128,7 +128,9 @@ as `USER`, for example
   ends during the prompt aborts it. The password is never taken from the
   arguments or the environment.
 - The password is at most 256 bytes. A longer line is read to its end while
-  echo is still off, so that none of it reaches the shell, and refused.
+  echo is still off, so that none of it reaches the shell, and refused. If
+  reading fails during the prompt, the rest of the line cannot be discarded, so
+  the shell ends instead of reading it as a command.
 - Account records are readable by root only, so the password is checked in a
   short-lived task of its own that runs as root and runs nothing else.
 - The Shell overwrites its password buffer and each input byte after use. The
@@ -149,11 +151,11 @@ as `USER`, for example
   the caller's name, and `Current_directory` set to the target's home if it
   exists, `/` otherwise. The shell's own task keeps the caller's identity.
 - WebAssembly guests never run under `sudo`, even when the Wasm runner is the
-  command given to it: every task started by the command inherits `Sudo_user`,
-  and the Wasm runtime refuses to start a guest in such a task. Core also
-  refuses to launch a registered file format with another identity. A native
-  program run by `sudo` could clear the variable, but it already runs with the
-  elevated identity.
+  command given to it. Core marks the command's task, and every task it starts,
+  as running with a granted identity, and the Wasm runtime refuses to start a
+  guest in a marked task. The mark cannot be cleared, so it does not depend on
+  `Sudo_user`, which only tells the command who ran it. Core also refuses to
+  launch a registered file format with another identity.
 - Every attempt is logged with the caller, the target user, the command and
   the outcome, with the fields that the caller chooses escaped.
 - Successful authentications are not remembered.

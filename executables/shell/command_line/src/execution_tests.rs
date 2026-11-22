@@ -1257,6 +1257,8 @@ struct LoginTerminalState {
     set_attempts: std::sync::Mutex<usize>,
     /// While set, reads stay pending.
     blocked: std::sync::Mutex<bool>,
+    /// Fail one read after this many bytes have been read.
+    read_error_after: std::sync::Mutex<Option<usize>>,
     /// When set, setting attributes reports success but changes nothing.
     ignores_changes: bool,
 }
@@ -1294,6 +1296,7 @@ impl LoginTerminalState {
             set_errors: std::sync::Mutex::new(set_errors.iter().rev().copied().collect()),
             set_attempts: std::sync::Mutex::new(0),
             blocked: std::sync::Mutex::new(false),
+            read_error_after: std::sync::Mutex::new(None),
             ignores_changes,
         }))
     }
@@ -1334,6 +1337,11 @@ impl xila::file_system::DirectBaseOperations for LoginTerminal {
         }
         let echo = self.0.attributes().is_echo_enabled();
         let (remaining, echo_per_byte) = &mut *self.0.input.lock().unwrap();
+        let mut read_error_after = self.0.read_error_after.lock().unwrap();
+        if *read_error_after == Some(echo_per_byte.len()) {
+            *read_error_after = None;
+            return core::task::Poll::Ready(Err(xila::file_system::IoErrorKind::InputOutput));
+        }
         let Some(byte) = remaining.pop() else {
             return core::task::Poll::Ready(Ok(0));
         };
@@ -2343,6 +2351,24 @@ async fn sudo_reads_an_overlong_password_to_the_end_of_its_line_and_refuses_it()
     assert_eq!(
         sudo_errors(&mut shell).await,
         format!("{}\n", crate::Error::SudoPasswordTooLong)
+    );
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn sudo_stops_the_shell_when_hidden_input_cannot_be_drained() {
+    let mut input = b"sudo identify sudo_read_error\n".to_vec();
+    input.extend(core::iter::repeat_n(b'x', 257));
+    let error_after = input.len();
+    input.extend_from_slice(b"unread password bytes\n");
+    let (mut shell, state, _, _) = sudo_shell("sudo_read_error", true, &input).await;
+    *state.read_error_after.lock().unwrap() = Some(error_after);
+
+    shell.main_interactive().await.unwrap();
+
+    assert_eq!(state.unread(), b"unread password bytes\n");
+    assert_eq!(
+        state.attributes(),
+        xila::file_system::character_device::TerminalAttributes::INTERACTIVE
     );
 }
 

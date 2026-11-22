@@ -12,9 +12,10 @@
 //! - The command is a direct entry of [`SECURE_PATH`]. It runs in its own task
 //!   with the target identity and a fixed, minimal environment that does not
 //!   depend on the caller's. The Shell's own task never changes identity.
-//! - WebAssembly guests never run under `sudo`: the command's environment
-//!   holds [`SUDO_USER_VARIABLE`], which every task it starts inherits, and the
-//!   Wasm runtime refuses to start a guest in such a task.
+//! - WebAssembly guests never run under `sudo`: Core marks the command's task
+//!   and every task it starts as running with a granted identity
+//!   (`task::Manager::is_identity_granted`), a mark nothing clears, and the
+//!   Wasm runtime refuses to start a guest in a marked task.
 //! - Every attempt is logged with the caller, the target user, the command and
 //!   the outcome. The password is never logged.
 
@@ -44,9 +45,9 @@ use xila::{
 /// program runs. Only root can add entries to it.
 pub(crate) const SECURE_PATH: &str = "/applications/executables";
 
-/// Environment variable that marks a task started by `sudo` and every task
-/// it starts; its value is the name of the user who ran `sudo`. The Wasm
-/// runtime refuses to start a guest when it is set.
+/// Environment variable that tells a command run by `sudo` the name of the
+/// user who ran it. It is information only: the command can change it, so no
+/// check relies on it (the Wasm runtime uses Core's granted identity mark).
 pub const SUDO_USER_VARIABLE: &str = "Sudo_user";
 
 /// `Host` of a command run by `sudo`, instead of the caller's, which the
@@ -616,7 +617,9 @@ impl Shell {
     /// Write the prompt and read one line into `password`, with echo off.
     ///
     /// A line longer than [`MAXIMUM_PASSWORD_BYTES`] is read to its end, so
-    /// that none of it reaches the Shell's command reader, and refused.
+    /// that none of it reaches the Shell's command reader, and refused. If a
+    /// read fails, the rest of the line cannot be discarded, so the Shell
+    /// stops instead of reading it as a command once echo is back on.
     async fn read_hidden_line(&mut self, caller_name: &str, password: &mut Password) -> Result<()> {
         write!(
             self.standard.out(),
@@ -632,7 +635,14 @@ impl Shell {
             let value = byte[0];
             // SAFETY: `byte` is a live local array.
             unsafe { core::ptr::write_volatile(&mut byte[0], 0) };
-            match read? {
+            let read = match read {
+                Ok(read) => read,
+                Err(error) => {
+                    self.running = false;
+                    return Err(error);
+                }
+            };
+            match read {
                 Some(count) if count > 0 => {}
                 // The input ended or the task was asked to stop.
                 _ if too_long => return Err(Error::SudoPasswordTooLong),

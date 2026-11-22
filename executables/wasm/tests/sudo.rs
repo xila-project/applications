@@ -1,6 +1,7 @@
 //! WebAssembly guests never run with an identity granted by the Shell's
 //! `sudo`, whether the runner is the command given to `sudo` or is started by
-//! a native program that `sudo` ran.
+//! a native program that `sudo` ran. The runtime checks Core's granted
+//! identity mark, not the environment.
 #![cfg(all(
     feature = "host",
     any(target_os = "linux", target_os = "macos", target_os = "windows")
@@ -24,17 +25,21 @@ const GUEST_RAN: isize = -7;
 const GUEST_REFUSED: isize = -1;
 
 /// A native program that runs the guest through the runner, like any native
-/// wrapper started by `sudo` could.
+/// wrapper started by `sudo` could. It gives the runner an explicit
+/// environment without `Sudo_user`, so only Core's mark can stop the guest.
 struct Wrapper;
 impl ExecutableTrait for Wrapper {
     fn main(standard: Standard<'static>, _: Vec<String>) -> MainFuture {
         Box::pin(async move {
-            let status = executable::execute(
+            let launch =
+                Launch::default().with_environment(vec![EnvironmentVariable::new("User", "root")]);
+            let status = executable::execute_with(
                 standard.context,
                 RUNNER,
                 vec![GUEST.into()],
                 standard.duplicate().await.unwrap(),
                 None,
+                launch,
             )
             .await
             .unwrap()
@@ -69,16 +74,13 @@ async fn setup() -> Standard<'static> {
     standard
 }
 
-/// Launch `path` with `arguments` the way `sudo` does: as root, with an
-/// explicit environment holding the `sudo` marker.
-async fn launch_as_sudo(standard: &Standard<'static>, path: &str, arguments: Vec<String>) -> isize {
-    let launch = Launch::default()
-        .with_environment(vec![
-            EnvironmentVariable::new("User", "root"),
-            EnvironmentVariable::new("Paths", "/applications/executables"),
-            EnvironmentVariable::new(wasm::SUDO_USER_VARIABLE, "administrator"),
-        ])
-        .with_identity(UserIdentifier::ROOT, GroupIdentifier::ROOT);
+/// Launch `path` with `arguments` and `launch`, and return its exit status.
+async fn launch(
+    standard: &Standard<'static>,
+    path: &str,
+    arguments: Vec<String>,
+    launch: Launch,
+) -> isize {
     executable::execute_with(
         standard.context,
         path,
@@ -93,36 +95,45 @@ async fn launch_as_sudo(standard: &Standard<'static>, path: &str, arguments: Vec
     .await
 }
 
-#[test]
-fn the_marker_matches_the_shell() {
+/// The launch that `sudo` uses: root identity and an explicit environment.
+fn as_sudo() -> Launch {
+    Launch::default()
+        .with_environment(vec![
+            EnvironmentVariable::new("User", "root"),
+            EnvironmentVariable::new("Paths", "/applications/executables"),
+            EnvironmentVariable::new(command_line_shell::SUDO_USER_VARIABLE, "administrator"),
+        ])
+        .with_identity(UserIdentifier::ROOT, GroupIdentifier::ROOT)
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn guests_run_without_a_granted_identity() {
+    let standard = setup().await;
     assert_eq!(
-        wasm::SUDO_USER_VARIABLE,
-        command_line_shell::SUDO_USER_VARIABLE
+        launch(&standard, RUNNER, vec![GUEST.into()], Launch::default()).await,
+        GUEST_RAN
     );
 }
 
 #[xila::task::test(task_path = xila::task)]
-async fn guests_run_without_the_sudo_marker() {
+async fn the_sudo_variable_alone_does_not_refuse_a_guest() {
+    // The check does not read the environment, which any task can change.
     let standard = setup().await;
-    let status = executable::execute(
-        standard.context,
-        RUNNER,
-        vec![GUEST.into()],
-        standard.duplicate().await.unwrap(),
-        None,
-    )
-    .await
-    .unwrap()
-    .join()
-    .await;
-    assert_eq!(status, GUEST_RAN);
+    let environment = Launch::default().with_environment(vec![EnvironmentVariable::new(
+        command_line_shell::SUDO_USER_VARIABLE,
+        "administrator",
+    )]);
+    assert_eq!(
+        launch(&standard, RUNNER, vec![GUEST.into()], environment).await,
+        GUEST_RAN
+    );
 }
 
 #[xila::task::test(task_path = xila::task)]
 async fn the_runner_given_to_sudo_refuses_to_start_a_guest() {
     let standard = setup().await;
     assert_eq!(
-        launch_as_sudo(&standard, RUNNER, vec![GUEST.into()]).await,
+        launch(&standard, RUNNER, vec![GUEST.into()], as_sudo()).await,
         GUEST_REFUSED
     );
 }
@@ -130,9 +141,28 @@ async fn the_runner_given_to_sudo_refuses_to_start_a_guest() {
 #[xila::task::test(task_path = xila::task)]
 async fn a_native_program_run_by_sudo_cannot_start_a_guest() {
     let standard = setup().await;
-    // The runner inherits the marker from the wrapper's environment.
+    // The wrapper drops `Sudo_user` from the runner's environment, and the
+    // runner still inherits Core's mark.
     assert_eq!(
-        launch_as_sudo(&standard, WRAPPER, Vec::new()).await,
+        launch(&standard, WRAPPER, Vec::new(), as_sudo()).await,
+        GUEST_REFUSED
+    );
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn a_granted_identity_of_another_user_also_refuses_a_guest() {
+    // `sudo -u USER` grants an identity too.
+    let standard = setup().await;
+    let task = standard
+        .context
+        .task_manager
+        .get_current_task_identifier()
+        .await;
+    let user = standard.context.task_manager.get_user(task).await.unwrap();
+    let group = standard.context.task_manager.get_group(task).await.unwrap();
+    let same_identity = Launch::default().with_identity(user, group);
+    assert_eq!(
+        launch(&standard, RUNNER, vec![GUEST.into()], same_identity).await,
         GUEST_REFUSED
     );
 }
