@@ -46,12 +46,12 @@ Other hosts can load `target/wasm32-wasip1/release-wasm/clock.wasm` into the VFS
 at `/applications/executables/clock`, then run these commands in **Xila's shell**:
 
 ```sh
-wasm --install /applications/executables/clock
 wasm /applications/executables/clock
 ```
 
-The install export creates `/configuration/shared/applications/shortcuts/clock.json`.
-The launcher provisions a writable
+The launcher discovers Clock from its installed bundle's `shortcut.json` (see
+[Shell shortcuts](../../docs/shell-shortcuts.md)); running the guest never
+installs or creates a shortcut. The launcher provisions a writable
 `<home>/applications/clock/configuration` directory in each user's home
 (`/users/<user name>` for new accounts).
 

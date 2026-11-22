@@ -36,7 +36,7 @@ The drawer discovers bundle shortcuts lazily when opened, minimizing startup
 I/O and making newly available bundles visible on refresh. Legacy
 `/configuration/shared/applications/shortcuts/*.json` shortcuts remain readable
 during migration, chiefly for native/system apps. They are *data files* seeded
-by Platforms, not produced by a guest `__install` hook. The Dock continues
+by Platforms, never produced by running guest code. The Dock continues
 showing open windows, not every installed shortcut.
 
 **Scope:** The initial scanner supports one active directory directly beneath

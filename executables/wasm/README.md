@@ -269,8 +269,10 @@ not an independent hardware monotonic-clock source.
 Fuel exhaustion and `sched_yield` yield to the executor. Clock polling uses
 resumable Wasmi host calls; suspension is VM-local. WebAssembly start-section
 suspension is not supported; WASI command guests should use exported `_start`.
-`--install` selects the guest's `__install: () -> ()` export instead of `_start`.
-A missing or incorrectly typed install export fails without launching main.
+The former `--install` option and the guest `__install` export are removed:
+the host rejects `--install` and never runs an `__install` export, so installing
+or discovering an application never executes guest code. Applications supply
+their launcher metadata in a bundle-local `shortcut.json`.
 The command-line stack-size option remains unimplemented.
 
 The current graphics ABI audit and staged delivery roadmap are tracked in
