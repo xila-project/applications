@@ -220,12 +220,10 @@ async fn open_protected<'a>(
             return Err(IntegrityError::FileSystem(error));
         }
     };
-    let checked = check_entry(&opened, Kind::File).and_then(|()| {
-        if opened.inode == inspected.inode {
-            Ok(opened.size)
-        } else {
-            Err(IntegrityError::Replaced)
-        }
+    let checked = check_entry(&opened, Kind::File).and(if opened.inode == inspected.inode {
+        Ok(opened.size)
+    } else {
+        Err(IntegrityError::Replaced)
     });
     match checked {
         Ok(size) => Ok((file, size)),

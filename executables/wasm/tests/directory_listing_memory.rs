@@ -166,7 +166,7 @@ async fn directory_listing_uses_space_bounded_by_the_guest_buffer() {
         let baseline = TRACKING_MEMORY_MANAGER.reset_peak_to_current();
         let result = wasm::execute_with_control(
             standard.duplicate().await.unwrap(),
-            vec![path.to_string()],
+            vec!["--developer-mode".to_string(), path.to_string()],
             Arc::new(wasm::ExecutionControl::new()),
         )
         .await;
