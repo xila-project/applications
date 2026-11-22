@@ -826,7 +826,7 @@ mod tests {
             file("packages/xila/clock/0.2.0.json"),
             file("packages/xila/clock/0.3.0-rc.1.json"),
             file("packages/xila/clockwork/1.0.0-rc.1.json"),
-            file("packages/org/example/weather/2.0.0.json"),
+            file("packages/example/xila/weather/2.0.0.json"),
         ];
         files.sort_by(|a, b| a.path.cmp(&b.path));
         let index = Index {
@@ -850,7 +850,7 @@ mod tests {
         assert_eq!(matching(&index, None).len(), 3);
         assert_eq!(
             matching(&index, Some("weather")),
-            [listed("org.example.weather", "2.0.0")]
+            [listed("example.xila.weather", "2.0.0")]
         );
         assert!(matching(&index, Some("developers")).is_empty());
     }

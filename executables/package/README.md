@@ -18,7 +18,7 @@ package list
 package info xila.clock
 package info xila.clock@0.2.0 --repository xila
 package search clock
-package repository add community https://registry.example.org
+package repository add community https://registry.xila.example
 package repository list
 package repository remove community
 ```

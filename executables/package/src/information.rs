@@ -226,7 +226,7 @@ mod tests {
             metadata: None,
             publisher: "xila".into(),
             archive: Archive {
-                url: "https://example.org/clock.xpk".into(),
+                url: "https://xila.example/clock.xpk".into(),
                 sha256: "c".repeat(64),
                 size: 4096,
             },
