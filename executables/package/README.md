@@ -15,6 +15,9 @@ package upgrade /temporary/clock-0.2.0.xpk
 package remove xila.clock
 package recover
 package list
+package info xila.clock
+package info xila.clock@0.2.0 --repository xila
+package search clock
 package repository add community https://registry.example.org
 package repository list
 package repository remove community
@@ -73,6 +76,32 @@ temporary entries (`.incoming-*`, `.previous-*`, `.removing-*`,
 `.download-*`); an interrupted upgrade always leaves the old or the new
 version. `package recover` does only that, and `package list` warns when an
 interrupted operation is pending.
+
+## Information and search
+
+`package info NAME` describes an installed package offline, from the manifest
+verified at installation and kept in its sealed bundle, and from its recorded
+origin. When the package is not installed, or when a version
+(`NAME@VERSION`) or `--repository` is given, it describes the newest
+compatible registry entry instead (or that version's entry), authenticated
+from each repository's root key like an installation, and shows the installed
+version next to it.
+
+`package search [QUERY]` lists the packages whose name contains `QUERY`
+(ignoring case) in each repository's signed index, with their newest listed
+version, and marks the installed ones. It reads only the authenticated index
+and fetches no registry entry, so it does not tell whether a version suits
+this device: `info` and `install` check that. A repository that cannot be
+reached is reported and skipped.
+
+Both commands are read-only and need no privilege. They refuse a root or index
+older than the one the device already accepted, but only commands that change
+packages record a newer one.
+
+`pkg` is not a separate program: a platform that wants the short name mounts
+this same executable under it. Dependency installation will be planned by
+`package install` itself, through package_manager's planner, once registry
+entries declare dependencies.
 
 ## Who may change packages
 

@@ -83,6 +83,42 @@ pub enum RepositoryOperation<'a> {
     },
 }
 
+/// Show one package: the installed copy, or what the repositories offer.
+#[derive(Debug, Clone, PartialEq, Eq, GetArgs)]
+pub struct Information<'a> {
+    /// Package name, e.g. xila.clock, or name@version.
+    pub package: &'a str,
+    /// Look only in this repository (implies a repository lookup).
+    #[arg(long)]
+    pub repository: Option<&'a str>,
+}
+
+impl<'a> Information<'a> {
+    /// The package name and the requested version, if any.
+    pub fn name_and_version(&self) -> (&'a str, Option<&'a str>) {
+        match self.package.split_once('@') {
+            Some((name, version)) => (name, Some(version)),
+            None => (self.package, None),
+        }
+    }
+
+    /// Whether to describe the repositories' version instead of the
+    /// installed one: a version or a repository was given.
+    pub fn queries_repositories(&self) -> bool {
+        self.repository.is_some() || self.package.contains('@')
+    }
+}
+
+/// Search the configured repositories' signed indexes.
+#[derive(Debug, Clone, PartialEq, Eq, GetArgs)]
+pub struct Search<'a> {
+    /// Part of a package name (case-insensitive); every package when omitted.
+    pub query: Option<&'a str>,
+    /// Search only this repository.
+    #[arg(long)]
+    pub repository: Option<&'a str>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Subcommand)]
 pub enum Command<'a> {
     /// Verify and install a package.
@@ -98,6 +134,12 @@ pub enum Command<'a> {
     Recover,
     /// List installed application bundles.
     List,
+    /// Show an installed package offline, or, when it is not installed or a
+    /// version or --repository is given, the newest compatible version in the
+    /// configured repositories.
+    Info(Information<'a>),
+    /// Find packages in the configured repositories by name.
+    Search(Search<'a>),
     /// Manage package repositories.
     Repository(RepositoryCommand<'a>),
 }
@@ -239,6 +281,50 @@ mod tests {
     }
 
     #[test]
+    fn information_and_search() {
+        let input = args(&["info", "xila.clock"]);
+        let Ok(Command::Info(information)) = parse(&input) else {
+            panic!("info not parsed");
+        };
+        assert_eq!(information.name_and_version(), ("xila.clock", None));
+        assert!(!information.queries_repositories());
+
+        let input = args(&["info", "xila.clock@0.2.0"]);
+        let Ok(Command::Info(information)) = parse(&input) else {
+            panic!("info not parsed");
+        };
+        assert_eq!(
+            information.name_and_version(),
+            ("xila.clock", Some("0.2.0"))
+        );
+        assert!(information.queries_repositories());
+
+        let input = args(&["info", "xila.clock", "--repository", "xila"]);
+        let Ok(Command::Info(information)) = parse(&input) else {
+            panic!("info not parsed");
+        };
+        assert_eq!(information.repository, Some("xila"));
+        assert!(information.queries_repositories());
+        assert!(parse(&args(&["info"])).is_err());
+
+        assert_eq!(
+            parse(&args(&["search"])),
+            Ok(Command::Search(Search {
+                query: None,
+                repository: None
+            }))
+        );
+        let input = args(&["search", "clock", "--repository", "community"]);
+        assert_eq!(
+            parse(&input),
+            Ok(Command::Search(Search {
+                query: Some("clock"),
+                repository: Some("community")
+            }))
+        );
+    }
+
+    #[test]
     fn help_and_listing() {
         assert_eq!(parse(&args(&["list"])), Ok(Command::List));
         for parts in [vec!["--help"], vec!["install", "--help"], vec!["--version"]] {
@@ -250,5 +336,7 @@ mod tests {
         assert!(Cli::HELP.contains("repository"));
         assert!(Cli::HELP.contains("upgrade"));
         assert!(Cli::HELP.contains("recover"));
+        assert!(Cli::HELP.contains("info"));
+        assert!(Cli::HELP.contains("search"));
     }
 }

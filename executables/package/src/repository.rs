@@ -20,6 +20,7 @@ use xila_package_manager::trust::{self, TrustedRoot};
 use xila_package_manifest::{
     INDEX_PATH, Index, MAX_MANIFEST_BYTES, ORIGIN_SCHEMA_URL, Origin, REPOSITORY_FORMAT_VERSION,
     ROOT_PATH, RegistryEntry, Repository, SIGNATURE_SUFFIX, decode_repository, encode_repository,
+    index_packages, index_versions,
 };
 use xila_package_verification::{ContentVerifier, PublicKey};
 
@@ -328,15 +329,27 @@ struct Match {
     entry: RegistryEntry,
 }
 
+/// Whether a lookup records the newly accepted root and index versions.
+/// Read-only commands run unprivileged and cannot; they still refuse
+/// anything older than what the device already accepted.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Persist {
+    Save,
+    ReadOnly,
+}
+
 async fn find(
     vfs: &'static VirtualFileSystem,
     task: TaskIdentifier,
     repository: Repository,
     name: &str,
     version: Option<&str>,
+    persist: Persist,
 ) -> Result<Option<Match>, String> {
     let (repository, trusted, index) = synchronize(vfs, task, repository).await?;
-    save(vfs, task, &repository).await?;
+    if persist == Persist::Save {
+        save(vfs, task, &repository).await?;
+    }
     let paths = match trust::candidates(&index, name, version) {
         Ok(paths) => paths,
         Err(trust::Error::NotListed) => return Ok(None),
@@ -526,13 +539,7 @@ async fn sources(
             (Some(from), _) => Some(from.as_str()),
         },
     };
-    let repositories = match only {
-        Some(only) => alloc::vec![load(vfs, task, only).await?],
-        None => list(vfs, task).await?,
-    };
-    if repositories.is_empty() {
-        return Err("no repository configured; add one with `package repository add`".into());
-    }
+    let repositories = configured(vfs, task, only).await?;
     Ok((installed, repositories))
 }
 
@@ -546,7 +553,7 @@ async fn resolve(
 ) -> Result<Match, String> {
     let mut matches = Vec::new();
     for repository in repositories {
-        if let Some(found) = find(vfs, task, repository, name, version).await? {
+        if let Some(found) = find(vfs, task, repository, name, version, Persist::Save).await? {
             matches.push(found);
         }
     }
@@ -618,6 +625,116 @@ pub async fn install(
         installed: result?,
         repository: found.repository.name,
     })
+}
+
+/// The configured repositories, or only `only`; an error when there is none.
+async fn configured(
+    vfs: &'static VirtualFileSystem,
+    task: TaskIdentifier,
+    only: Option<&str>,
+) -> Result<Vec<Repository>, String> {
+    let repositories = match only {
+        Some(only) => alloc::vec![load(vfs, task, only).await?],
+        None => list(vfs, task).await?,
+    };
+    if repositories.is_empty() {
+        return Err("no repository configured; add one with `package repository add`".into());
+    }
+    Ok(repositories)
+}
+
+/// What one repository offers for `package info`.
+pub struct Offer {
+    pub repository: String,
+    /// Its newest compatible entry, authenticated from its root key; `None`
+    /// when it has none, or why the repository could not be checked.
+    pub entry: Result<Option<RegistryEntry>, String>,
+}
+
+/// The newest compatible entry of `name` (or the entry of `version`) in
+/// each of the configured repositories (or only `only`). A repository that
+/// cannot be checked is reported in its offer, not fatal, so another one can
+/// still describe the package. Read-only: nothing is installed and no
+/// repository state is written.
+pub async fn available(
+    vfs: &'static VirtualFileSystem,
+    task: TaskIdentifier,
+    name: &str,
+    version: Option<&str>,
+    only: Option<&str>,
+) -> Result<Vec<Offer>, String> {
+    let mut offers = Vec::new();
+    for repository in configured(vfs, task, only).await? {
+        let repository_name = repository.name.clone();
+        let entry = find(vfs, task, repository, name, version, Persist::ReadOnly)
+            .await
+            .map(|found| found.map(|found| found.entry));
+        offers.push(Offer {
+            repository: repository_name,
+            entry,
+        });
+    }
+    Ok(offers)
+}
+
+/// A package listed in a repository's index.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Listed {
+    pub name: String,
+    /// Newest listed version (a prerelease only when there is no release).
+    pub version: String,
+}
+
+/// Packages of `index` whose name contains `query`, ignoring ASCII case.
+/// Only the signed index is read: compatibility with this device is checked
+/// by `info` and `install`, which fetch the registry entries.
+pub fn matching(index: &Index, query: Option<&str>) -> Vec<Listed> {
+    let query = query.map(str::to_ascii_lowercase);
+    index_packages(index)
+        .into_iter()
+        .filter(|name| {
+            query
+                .as_deref()
+                .is_none_or(|query| name.to_ascii_lowercase().contains(query))
+        })
+        .filter_map(|name| {
+            let version = index_versions(index, &name, false)
+                .into_iter()
+                .next()
+                .or_else(|| index_versions(index, &name, true).into_iter().next())?
+                .to_string();
+            Some(Listed { name, version })
+        })
+        .collect()
+}
+
+/// The packages matching `query` in one repository.
+pub struct Searched {
+    pub repository: String,
+    pub packages: Result<Vec<Listed>, String>,
+}
+
+/// Search the authenticated index of each configured repository (or only
+/// `only`). A repository that cannot be reached is reported, not fatal.
+/// Read-only: no repository state is written.
+pub async fn search(
+    vfs: &'static VirtualFileSystem,
+    task: TaskIdentifier,
+    query: Option<&str>,
+    only: Option<&str>,
+) -> Result<Vec<Searched>, String> {
+    let mut results = Vec::new();
+    for repository in configured(vfs, task, only).await? {
+        let name = repository.name.clone();
+        let packages = synchronize(vfs, task, repository)
+            .await
+            .map(|(_, _, index)| matching(&index, query));
+        results.push(Searched {
+            repository: name,
+            packages,
+        });
+    }
+    Ok(results)
 }
 
 /// Install or upgrade a local archive, trusted through the configured
@@ -693,6 +810,49 @@ mod tests {
         let repository =
             Repository::new("xila", "https://registry.xila.dev", &base64(&[7u8; 32])).unwrap();
         assert_eq!(repository.root_key_bytes().unwrap(), [7u8; 32]);
+    }
+
+    #[test]
+    fn searches_names_in_the_signed_index() {
+        use xila_package_manifest::{INDEX_SCHEMA_URL, IndexFile, TRUST_FORMAT_VERSION};
+        let file = |path: &str| IndexFile {
+            path: path.into(),
+            sha256: "a".repeat(64),
+            size: 1,
+        };
+        let mut files = alloc::vec![
+            file("keys/developers/xila.json"),
+            file("packages/xila/clock/0.1.0.json"),
+            file("packages/xila/clock/0.2.0.json"),
+            file("packages/xila/clock/0.3.0-rc.1.json"),
+            file("packages/xila/clockwork/1.0.0-rc.1.json"),
+            file("packages/org/example/weather/2.0.0.json"),
+        ];
+        files.sort_by(|a, b| a.path.cmp(&b.path));
+        let index = Index {
+            schema: Some(INDEX_SCHEMA_URL.into()),
+            format_version: TRUST_FORMAT_VERSION,
+            version: 1,
+            expires: 2,
+            files,
+        };
+        let listed = |name: &str, version: &str| Listed {
+            name: name.into(),
+            version: version.into(),
+        };
+        assert_eq!(
+            matching(&index, Some("CLOCK")),
+            [
+                listed("xila.clock", "0.2.0"),
+                listed("xila.clockwork", "1.0.0-rc.1")
+            ]
+        );
+        assert_eq!(matching(&index, None).len(), 3);
+        assert_eq!(
+            matching(&index, Some("weather")),
+            [listed("org.example.weather", "2.0.0")]
+        );
+        assert!(matching(&index, Some("developers")).is_empty());
     }
 
     #[test]
