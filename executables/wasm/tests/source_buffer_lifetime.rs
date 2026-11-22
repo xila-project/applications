@@ -1,89 +1,11 @@
 #![cfg(feature = "host")]
 #![allow(clippy::disallowed_types, reason = "host-only integration test")]
 
-use core::{
-    alloc::GlobalAlloc,
-    ptr::NonNull,
-    sync::atomic::{AtomicIsize, AtomicUsize, Ordering},
-};
-use std::alloc::System;
+#[path = "support/heap.rs"]
+mod heap;
 
-use xila::{
-    memory::{CapabilityFlags, Layout, ManagerTrait},
-    synchronization::Arc,
-    virtual_file_system::File,
-};
-
-struct TrackingMemoryManager {
-    live_bytes: AtomicIsize,
-    peak_bytes: AtomicUsize,
-}
-
-impl TrackingMemoryManager {
-    const fn new() -> Self {
-        Self {
-            live_bytes: AtomicIsize::new(0),
-            peak_bytes: AtomicUsize::new(0),
-        }
-    }
-
-    fn record_allocation(&self, size: usize) {
-        let next = self.live_bytes.fetch_add(size as isize, Ordering::Relaxed) + size as isize;
-        if next > 0 {
-            self.peak_bytes.fetch_max(next as usize, Ordering::Relaxed);
-        }
-    }
-
-    fn record_deallocation(&self, size: usize) {
-        self.live_bytes.fetch_sub(size as isize, Ordering::Relaxed);
-    }
-
-    fn current_live_bytes(&self) -> usize {
-        self.live_bytes.load(Ordering::Acquire).max(0) as usize
-    }
-
-    fn reset_peak_to_current(&self) -> usize {
-        let current = self.current_live_bytes();
-        self.peak_bytes.store(current, Ordering::Release);
-        current
-    }
-
-    fn peak_bytes(&self) -> usize {
-        self.peak_bytes.load(Ordering::Acquire)
-    }
-}
-
-unsafe impl Send for TrackingMemoryManager {}
-unsafe impl Sync for TrackingMemoryManager {}
-
-impl ManagerTrait for TrackingMemoryManager {
-    unsafe fn allocate(
-        &self,
-        _capabilities: CapabilityFlags,
-        layout: Layout,
-    ) -> Option<NonNull<u8>> {
-        let pointer = unsafe { System.alloc(layout) };
-        let non_null = NonNull::new(pointer)?;
-        self.record_allocation(layout.size());
-        Some(non_null)
-    }
-
-    unsafe fn deallocate(&self, pointer: NonNull<u8>, layout: Layout) {
-        self.record_deallocation(layout.size());
-        unsafe { System.dealloc(pointer.as_ptr(), layout) };
-    }
-
-    fn get_used(&self) -> usize {
-        self.current_live_bytes()
-    }
-
-    fn get_free(&self) -> usize {
-        0
-    }
-}
-
-static TRACKING_MEMORY_MANAGER: TrackingMemoryManager = TrackingMemoryManager::new();
-xila::memory::instantiate_global_allocator!(&TRACKING_MEMORY_MANAGER);
+use heap::TRACKING_MEMORY_MANAGER;
+use xila::{synchronization::Arc, virtual_file_system::File};
 
 fn encode_unsigned_leb128(mut value: usize, output: &mut Vec<u8>) {
     loop {
@@ -144,6 +66,30 @@ fn build_yielding_guest_with_data_segment(data_bytes: usize) -> Vec<u8> {
     .unwrap()
 }
 
+/// A guest carrying `functions` bodies it never calls, each `operations`
+/// arithmetic steps long, like the library code a real application links.
+fn build_yielding_guest_with_uncalled_code(functions: usize, operations: usize) -> Vec<u8> {
+    let body =
+        "local.get 0 i32.const 3 i32.mul i32.const 7 i32.add local.set 0 ".repeat(operations);
+    let mut text = String::from(
+        r#"(module
+            (import "wasi_snapshot_preview1" "sched_yield" (func $yield (result i32)))
+            (memory (export "memory") 1)
+            (func (export "_start")
+                (loop $spin
+                    call $yield
+                    drop
+                    br $spin))"#,
+    );
+    for index in 0..functions {
+        text.push_str(&format!(
+            "\n(func (export \"uncalled_{index}\") (param i32) (result i32) {body} local.get 0)"
+        ));
+    }
+    text.push(')');
+    wat::parse_str(text).unwrap()
+}
+
 #[xila::task::test(task_path = xila::task)]
 async fn launcher_releases_webassembly_source_bytes_after_compilation() {
     let standard = testing::initialize(false, false).await;
@@ -153,10 +99,12 @@ async fn launcher_releases_webassembly_source_bytes_after_compilation() {
     const CUSTOM_PADDING_BYTES: usize = 256 * 1024;
     const DATA_SEGMENT_BYTES: usize = 128 * 1024;
     const INVALID_BYTES: usize = 256 * 1024;
+    const CODE_FUNCTIONS: usize = 128;
+    const CODE_FUNCTION_OPERATIONS: usize = 128;
 
     let path = "/measured-guest.wasm";
 
-    let scenarios: [(&str, Vec<u8>); 3] = [
+    let scenarios: [(&str, Vec<u8>); 4] = [
         ("custom_0k", build_yielding_guest_with_custom_padding(0)),
         (
             "custom_256k",
@@ -166,67 +114,95 @@ async fn launcher_releases_webassembly_source_bytes_after_compilation() {
             "data_128k",
             build_yielding_guest_with_data_segment(DATA_SEGMENT_BYTES),
         ),
+        (
+            "code_heavy",
+            build_yielding_guest_with_uncalled_code(CODE_FUNCTIONS, CODE_FUNCTION_OPERATIONS),
+        ),
     ];
 
     let mut small_running_delta = 0;
     let mut padded_running_delta = 0;
+    let mut code_heavy_peak = [0; 2];
 
+    println!(
+        "| Scenario | Source | Translation | Peak launch heap delta | Live heap delta while running |"
+    );
+    println!("|---|---:|---|---:|---:|");
     for (label, binary) in scenarios {
+        let source_length = binary.len();
         File::write_to_path(context.virtual_file_system, task, path, &binary)
             .await
             .unwrap();
         drop(binary);
 
-        let baseline = TRACKING_MEMORY_MANAGER.reset_peak_to_current();
-        let control = Arc::new(wasm::ExecutionControl::new());
-        let guest_control = control.clone();
-        let guest_standard = standard.duplicate().await.unwrap();
-        let path_owned = path.to_string();
+        for (mode_index, translation) in ["eager", "lazy"].into_iter().enumerate() {
+            let baseline = TRACKING_MEMORY_MANAGER.reset_peak_to_current();
+            let control = Arc::new(wasm::ExecutionControl::new());
+            let guest_control = control.clone();
+            let guest_standard = standard.duplicate().await.unwrap();
+            let arguments = vec![
+                "--developer-mode".to_string(),
+                "--translation".to_string(),
+                translation.to_string(),
+                path.to_string(),
+            ];
 
-        let (handle, _) = context
-            .task_manager
-            .spawn(task, "MeasuredGuest", None, move |_| async move {
-                wasm::execute_with_control(
-                    guest_standard,
-                    vec!["--developer-mode".into(), path_owned],
-                    guest_control,
-                )
+            let (handle, _) = context
+                .task_manager
+                .spawn(task, "MeasuredGuest", None, move |_| async move {
+                    wasm::execute_with_control(guest_standard, arguments, guest_control).await
+                })
                 .await
-            })
-            .await
-            .unwrap();
+                .unwrap();
 
-        // Let the guest load, compile, instantiate, and enter its cooperative yield loop.
-        for _ in 0..32 {
-            xila::task::yield_now().await;
-        }
-        assert!(
-            !handle.is_finished(),
-            "{label}: guest exited unexpectedly before stop request"
-        );
-
-        let running_live = TRACKING_MEMORY_MANAGER.current_live_bytes();
-        let launch_peak = TRACKING_MEMORY_MANAGER.peak_bytes();
-
-        control.request_stop();
-        let result = handle.join().await;
-        assert!(
-            result.is_err(),
-            "{label}: stopped guest should report interruption"
-        );
-
-        let peak_delta = launch_peak.saturating_sub(baseline);
-        let running_delta = running_live.saturating_sub(baseline);
-        if label == "custom_0k" {
-            small_running_delta = running_delta;
-        } else if label == "custom_256k" {
+            // Let the guest load, compile, instantiate, and enter its cooperative yield loop.
+            for _ in 0..32 {
+                xila::task::yield_now().await;
+            }
             assert!(
-                peak_delta >= CUSTOM_PADDING_BYTES,
-                "positive control: allocator must observe the {CUSTOM_PADDING_BYTES}-byte source buffer during load (peak delta {peak_delta} B)"
+                !handle.is_finished(),
+                "{label} ({translation}): guest exited unexpectedly before stop request"
             );
-            padded_running_delta = running_delta;
+
+            let running_live = TRACKING_MEMORY_MANAGER.current_live_bytes();
+            let launch_peak = TRACKING_MEMORY_MANAGER.peak_bytes();
+
+            control.request_stop();
+            let result = handle.join().await;
+            assert!(
+                result.is_err(),
+                "{label} ({translation}): stopped guest should report interruption"
+            );
+
+            let peak_delta = launch_peak.saturating_sub(baseline);
+            let running_delta = running_live.saturating_sub(baseline);
+            println!(
+                "| {label} | {source_length} B | {translation} | {peak_delta} B | {running_delta} B |"
+            );
+            match (label, translation) {
+                ("custom_0k", "eager") => small_running_delta = running_delta,
+                ("custom_256k", _) => {
+                    assert!(
+                        peak_delta >= CUSTOM_PADDING_BYTES,
+                        "positive control: allocator must observe the {CUSTOM_PADDING_BYTES}-byte source buffer during load (peak delta {peak_delta} B)"
+                    );
+                    if translation == "eager" {
+                        padded_running_delta = running_delta;
+                    }
+                }
+                ("code_heavy", _) => code_heavy_peak[mode_index] = peak_delta,
+                _ => {}
+            }
         }
     }
+
+    // Translating only the functions that run must lower the load peak of a
+    // guest that carries much more code than it calls.
+    let [eager_peak, lazy_peak] = code_heavy_peak;
+    assert!(
+        lazy_peak < eager_peak,
+        "expected lazy translation to lower the load peak ({lazy_peak} B lazy, {eager_peak} B eager)"
+    );
 
     // The 256 KiB custom section only exists in the source bytes and must be
     // released once compilation finishes, before the guest executes.

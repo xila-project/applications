@@ -15,6 +15,7 @@ use xila::{
 };
 
 use crate::host::{
+    engine::Translation,
     error::{Error, Result},
     integrity,
     store::GlobalStore,
@@ -38,6 +39,22 @@ mod parser_tests {
         assert_eq!(parsed.path, "app.wasm");
         assert_eq!(parsed.stack_size, 4096);
         assert_eq!(parsed.instruction_limit.get(), 100_000);
+        assert_eq!(parsed.translation, super::Translation::DEFAULT);
+    }
+
+    #[test]
+    fn selects_the_translation_mode() {
+        for (value, expected) in [
+            ("eager", super::Translation::Eager),
+            ("lazy", super::Translation::Lazy),
+        ] {
+            let parsed =
+                WasmArguments::from_args(["--translation", value, "app.wasm"].into_iter()).unwrap();
+            assert_eq!(parsed.translation, expected);
+        }
+        assert!(
+            WasmArguments::from_args(["--translation", "later", "app.wasm"].into_iter()).is_err()
+        );
     }
 
     #[test]
@@ -138,6 +155,9 @@ struct WasmArguments<'a> {
     /// Installed package executables are always verified.
     #[arg(long = "developer-mode")]
     developer_mode: bool,
+    /// When to translate functions: all while loading, or each at its first call.
+    #[arg(long, value_enum, default_value_t = Translation::DEFAULT)]
+    translation: Translation,
 }
 
 pub async fn main(
@@ -280,12 +300,13 @@ async fn main_inner(
         stack_size: _stack_size,
         instruction_limit,
         developer_mode,
+        translation,
     } = arguments;
 
     let task = context.task_manager.get_current_task_identifier().await;
 
     // Refuse an executable before provisioning anything on its behalf.
-    let engine = Engine::new(&super::engine::configuration());
+    let engine = Engine::new(&super::engine::configuration(translation));
     let module = load_module(&engine, path, developer_mode, context).await?;
 
     // Application directory provisioning is a convenience for the Wasm runner,

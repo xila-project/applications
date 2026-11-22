@@ -24,17 +24,69 @@
 //! | custom page sizes       | disabled | no toolchain emits it                            |
 //! | wide arithmetic         | disabled | no toolchain emits it                            |
 //! | threads / atomics       | unsupported by Wasmi                                       |
+//!
+//! # Translation
+//!
+//! Guests are always validated in full before anything is instantiated, so
+//! only Wasmi's validator ever sees bytes that were not accepted. What
+//! [`Translation`] chooses is when each function body is translated to
+//! Wasmi's internal code: all of them while loading ([`Translation::Eager`]),
+//! or each one at its first call ([`Translation::Lazy`]). Lazy translation
+//! lowers the load peak and the resident size of guests that never call most
+//! of their code, at the cost of a translation pause on each first call.
 
-use wasmi::{CompilationMode, Config};
+use getargs_derive::ValueEnum;
+use wasmi::{CompilationMode, Config, CustomFuelCosts};
+
+/// When function bodies are translated to Wasmi's internal code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum Translation {
+    /// Translate every function while the module loads.
+    Eager,
+    /// Translate each function at its first call.
+    Lazy,
+}
+
+impl Translation {
+    /// The mode used when the command line does not choose one: lazy when the
+    /// `lazy_translation` feature is enabled, so a target can make it its
+    /// default, and eager otherwise.
+    pub const DEFAULT: Self = if cfg!(feature = "lazy_translation") {
+        Self::Lazy
+    } else {
+        Self::Eager
+    };
+
+    fn compilation_mode(self) -> CompilationMode {
+        match self {
+            Self::Eager => CompilationMode::Eager,
+            // Validation stays eager: a module is accepted or refused as a
+            // whole before it is instantiated, never halfway through a run.
+            Self::Lazy => CompilationMode::LazyTranslation,
+        }
+    }
+}
+
+/// Wasmi's default for copying bytes (`memory.copy`, `table.grow`, ...).
+const BYTES_COPIED_PER_FUEL: u32 = 64;
 
 /// Engine configuration shared by every guest instance.
-pub(super) fn configuration() -> Config {
+pub fn configuration(translation: Translation) -> Config {
     let mut configuration = Config::default();
     configuration.consume_fuel(true);
-    // Wasmi 2.0.0 cannot resume fuel exhaustion during lazy callee translation
-    // (https://github.com/wasmi-labs/wasmi/pull/2032). Compile
-    // before execution so even small scheduling slices can make progress.
-    configuration.compilation_mode(CompilationMode::Eager);
+    configuration.compilation_mode(translation.compilation_mode());
+    // Fuel is a scheduling slice here, not a budget. Wasmi charges lazy
+    // translation to the running guest's fuel, and in Wasmi 2.0 running out of
+    // fuel while translating a callee is a plain error rather than a resumable
+    // pause (https://github.com/wasmi-labs/wasmi/pull/2055): the caller has
+    // already run, so the guest cannot be restarted either. Translation is
+    // bounded by the module size and happens once per function, so charge
+    // nothing for it and the slice can never end inside a translation.
+    configuration.fuel_cost(CustomFuelCosts {
+        bytes_copied_per_fuel: BYTES_COPIED_PER_FUEL,
+        fuel_per_bytes_translated: 0,
+        fuel_per_bytes_validated: 0,
+    });
     configuration
         .wasm_mutable_global(true)
         .wasm_sign_extension(true)
@@ -55,12 +107,24 @@ pub(super) fn configuration() -> Config {
 #[cfg(test)]
 mod tests {
     extern crate std;
-    use super::configuration;
+    use super::{Translation, configuration};
     use wasmi::{Engine, Module};
 
+    /// Validation does not depend on the translation mode: both must agree.
     fn validates(text: &str) -> bool {
         let bytes = wat::parse_str(text).unwrap();
-        Module::new(&Engine::new(&configuration()), &bytes[..]).is_ok()
+        let eager = Module::new(&Engine::new(&configuration(Translation::Eager)), &bytes[..]);
+        let lazy = Module::new(&Engine::new(&configuration(Translation::Lazy)), &bytes[..]);
+        assert_eq!(eager.is_ok(), lazy.is_ok(), "{text}");
+        eager.is_ok()
+    }
+
+    #[test]
+    fn lazy_translation_still_validates_every_function_body() {
+        // The invalid body is never called, but the module is still refused.
+        assert!(!validates(
+            "(module (func (export \"_start\")) (func (result i32) (i64.const 0)))"
+        ));
     }
 
     #[test]
