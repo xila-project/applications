@@ -204,6 +204,17 @@ async fn read_file(path: &str, context: &'static ExecutableContext) -> Result<Ve
     Ok(buffer)
 }
 
+async fn load_module(
+    engine: &Engine,
+    path: &str,
+    context: &'static ExecutableContext,
+) -> Result<Module> {
+    let source = read_file(path, context).await?;
+    let module = Module::new(engine, &source)?;
+    drop(source);
+    Ok(module)
+}
+
 async fn main_inner(
     standard: Standard<'static>,
     arguments: WasmArguments<'_>,
@@ -269,9 +280,7 @@ async fn main_inner(
 
     let engine = Engine::new(&super::engine::configuration());
 
-    let buffer = read_file(path, context).await?;
-
-    let module = Module::new(&engine, &buffer)?;
+    let module = load_module(&engine, path, context).await?;
 
     let (_standard_in, standard_out, standard_error) = standard.split();
     let root_dir = xila::virtual_file_system::SynchronousDirectory::open(
@@ -374,13 +383,10 @@ async fn main_inner(
     )?;
 
     store.set_fuel(instruction_limit.get() as u64)?;
-    match linker.instantiate_and_start(&mut store, &module) {
-        Ok(instance) => {
-            let start = instance.get_typed_func::<(), ()>(&store, START_FUNCTION_NAME)?;
-            super::execution::run(&mut store, start, instruction_limit).await
-        }
+    let start = match linker.instantiate_and_start(&mut store, &module) {
+        Ok(instance) => instance.get_typed_func::<(), ()>(&store, START_FUNCTION_NAME)?,
         Err(e) => {
-            if let Some(code) = store.data().wasi.exit_code {
+            return if let Some(code) = store.data().wasi.exit_code {
                 if code == 0 {
                     Ok(())
                 } else {
@@ -388,7 +394,10 @@ async fn main_inner(
                 }
             } else {
                 Err(Error::Wasm(e))
-            }
+            };
         }
-    }
+    };
+    drop(linker);
+    drop(module);
+    super::execution::run(&mut store, start, instruction_limit).await
 }
