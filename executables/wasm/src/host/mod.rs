@@ -4,6 +4,7 @@ mod executable;
 pub mod execution;
 #[cfg(feature = "graphics")]
 pub mod graphics;
+pub mod integrity;
 mod main;
 mod registrable;
 mod store;

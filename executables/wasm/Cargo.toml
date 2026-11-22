@@ -17,6 +17,8 @@ getargs-derive = { workspace = true, optional = true }
 getargs = { version = "0.5", optional = true }
 embassy-time = { workspace = true, optional = true }
 portable-atomic = { workspace = true, optional = true }
+manifest = { workspace = true, optional = true }
+verification = { workspace = true, optional = true, features = ["sha256"] }
 
 [features]
 guest = []
@@ -29,6 +31,8 @@ host = [
   "dep:getargs",
   "dep:embassy-time",
   "dep:portable-atomic",
+  "dep:manifest",
+  "dep:verification",
 ]
 default = ["host", "memory_32"]
 memory_32 = []

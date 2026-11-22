@@ -44,7 +44,10 @@ async fn main() {
     let result = executable::execute(
         context,
         "/applications/executables/wasm",
-        vec!["/test_wasm.wasm".to_string()],
+        vec![
+            "--developer-mode".to_string(),
+            "/test_wasm.wasm".to_string(),
+        ],
         standard,
         None,
     )

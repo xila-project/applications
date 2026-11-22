@@ -16,6 +16,7 @@ use xila::{
 
 use crate::host::{
     error::{Error, Result},
+    integrity,
     store::GlobalStore,
     wasi::{self, DirectoryVariant, FileSystemItem, FileVariant, Prestat, WasiContext},
 };
@@ -49,6 +50,17 @@ mod parser_tests {
             assert_eq!(parsed.stack_size, 8192);
             assert_eq!(parsed.instruction_limit.get(), 42);
         }
+    }
+
+    #[test]
+    fn developer_mode_is_off_unless_requested() {
+        let parsed = WasmArguments::from_args(["app.wasm"].into_iter()).unwrap();
+        assert!(!parsed.developer_mode);
+        let parsed =
+            WasmArguments::from_args(["--developer-mode", "/temporary/app.wasm"].into_iter())
+                .unwrap();
+        assert!(parsed.developer_mode);
+        assert_eq!(parsed.path, "/temporary/app.wasm");
     }
 
     #[test]
@@ -122,6 +134,10 @@ struct WasmArguments<'a> {
     /// Maximum number of instructions per execution slice.
     #[arg(long, default_value_t = NonZeroU32::new(100_000).unwrap())]
     instruction_limit: NonZeroU32,
+    /// Run an executable outside installed packages without integrity verification.
+    /// Installed package executables are always verified.
+    #[arg(long = "developer-mode")]
+    developer_mode: bool,
 }
 
 pub async fn main(
@@ -151,6 +167,7 @@ pub async fn execute_with_control(
         }
     };
 
+    let path = arguments.path;
     match main_inner(
         standard.duplicate().await.unwrap(),
         arguments,
@@ -162,6 +179,10 @@ pub async fn execute_with_control(
         Ok(()) | Err(Error::Runtime(0)) => Ok(()),
         Err(Error::Runtime(code)) => guest_exit_status(code),
         Err(Error::Interrupted) => Err(NonZeroUsize::new(1).unwrap()),
+        Err(Error::Integrity(error)) => {
+            writeln!(standard.error(), "wasm: refusing to run {path}: {error}").ok();
+            Err(NonZeroUsize::new(1).unwrap())
+        }
         Err(error) => {
             writeln!(standard.error(), "Error: {:?}", error).unwrap();
             Err(NonZeroUsize::new(1).unwrap())
@@ -204,12 +225,44 @@ async fn read_file(path: &str, context: &'static ExecutableContext) -> Result<Ve
     Ok(buffer)
 }
 
+/// Read the bytes to compile under the integrity policy described in
+/// [`integrity`]: installed package executables are always verified against
+/// their installed manifest; other executables need developer mode.
+async fn read_executable(
+    path: &str,
+    developer_mode: bool,
+    context: &'static ExecutableContext,
+) -> Result<Vec<u8>> {
+    match integrity::classify(path)? {
+        integrity::Origin::Package {
+            identifier,
+            executable,
+        } => {
+            let task = context.task_manager.get_current_task_identifier().await;
+            Ok(integrity::read_package_executable(
+                context.virtual_file_system,
+                task,
+                identifier,
+                executable,
+            )
+            .await?)
+        }
+        integrity::Origin::Unmanaged if developer_mode => {
+            log::warning!("Running unverified WebAssembly executable {path} in developer mode");
+            read_file(path, context).await
+        }
+        integrity::Origin::Unmanaged => Err(integrity::IntegrityError::Unmanaged.into()),
+    }
+}
+
 async fn load_module(
     engine: &Engine,
     path: &str,
+    developer_mode: bool,
     context: &'static ExecutableContext,
 ) -> Result<Module> {
-    let source = read_file(path, context).await?;
+    // Verified once per load: the checked buffer is the one compiled here.
+    let source = read_executable(path, developer_mode, context).await?;
     let module = Module::new(engine, &source)?;
     drop(source);
     Ok(module)
@@ -226,9 +279,15 @@ async fn main_inner(
         path,
         stack_size: _stack_size,
         instruction_limit,
+        developer_mode,
     } = arguments;
 
     let task = context.task_manager.get_current_task_identifier().await;
+
+    // Refuse an executable before provisioning anything on its behalf.
+    let engine = Engine::new(&super::engine::configuration());
+    let module = load_module(&engine, path, developer_mode, context).await?;
+
     // Application directory provisioning is a convenience for the Wasm runner,
     // not a VFS permission override. The filesystem enforces ordinary UID/GID
     // and mode bits. Core does not discover or identify application bundles.
@@ -277,10 +336,6 @@ async fn main_inner(
             )
             .await?;
     }
-
-    let engine = Engine::new(&super::engine::configuration());
-
-    let module = load_module(&engine, path, context).await?;
 
     let (_standard_in, standard_out, standard_error) = standard.split();
     let root_directory =

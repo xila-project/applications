@@ -47,9 +47,16 @@ async fn wasm_runs_only_start_and_rejects_legacy_install_mode() {
         .await
         .unwrap();
 
-    assert_eq!(execute(&standard, vec![path.into()]).await, 0);
     assert_eq!(
-        execute(&standard, vec!["--install".into(), path.into()]).await,
+        execute(&standard, vec!["--developer-mode".into(), path.into()]).await,
+        0
+    );
+    assert_eq!(
+        execute(
+            &standard,
+            vec!["--developer-mode".into(), "--install".into(), path.into()]
+        )
+        .await,
         -1
     );
 }

@@ -152,7 +152,8 @@ async fn run_calculator(options: &[&str]) {
     )
     .await
     .unwrap();
-    let mut arguments: Vec<_> = options.iter().map(|&option| option.into()).collect();
+    let mut arguments: Vec<_> = vec!["--developer-mode".into()];
+    arguments.extend(options.iter().map(|&option| option.into()));
     arguments.push("/applications/executables/calculator.wasm".into());
     let handle = xila::executable::execute(
         context,

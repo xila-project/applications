@@ -307,3 +307,29 @@ lifecycle stops guests during a shutdown. Guests cannot request a shutdown: the
 lifecycle request API is host-only. The legacy process-wide signal broadcast is
 retained for native runners; it is not the per-guest control API. Host calls that
 block synchronously cannot be preempted, and a timeout must retain their resources.
+
+## Executable integrity
+
+An executable inside `/applications/bundles/<package>/executables/` is a
+**managed** package executable. Before compiling it, the runner reads the
+bundle's installed `.xila/manifest.json` (written and sealed by the
+installer after verifying the package) and hashes the executable while
+reading it into the buffer that is compiled, using
+`xila-package-manifest` and `xila-package-verification::ContentVerifier`. It
+refuses the executable, with a `wasm: refusing to run <path>: <reason>`
+message, when the manifest is missing, invalid, describes another package or
+does not declare the file; when the size or SHA-256 differs; or when a bundle
+directory, the manifest or the executable is a link or is writable by a
+non-root user. Paths with empty, `.` or `..` components are refused.
+
+Any other path is an **unmanaged** development executable with no
+authenticated digest. It runs only with the explicit `--developer-mode`
+option (off by default), unverified and with the caller's permissions:
+
+```text
+wasm --developer-mode /temporary/application.wasm
+```
+
+`--developer-mode` never relaxes the checks on managed executables. This is
+load-time validation, once per load; it is not a runtime integrity guarantee
+such as fs-verity.

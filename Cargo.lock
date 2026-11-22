@@ -2774,6 +2774,8 @@ dependencies = [
  "xila-drivers-core",
  "xila-executable",
  "xila-graphics-bindgen",
+ "xila-package-manifest",
+ "xila-package-verification",
  "xila-testing",
 ]
 
