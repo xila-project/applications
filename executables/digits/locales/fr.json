@@ -19,6 +19,8 @@
   },
   "results": {
     "digit": "Chiffre",
-    "scores": "Scores du modèle"
+    "scores": "Scores du modèle",
+    "inference": "Temps d’inférence",
+    "backend": "Backend"
   }
 }

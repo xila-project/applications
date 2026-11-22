@@ -19,6 +19,8 @@
   },
   "results": {
     "digit": "Cifra",
-    "scores": "Punteggi del modello"
+    "scores": "Punteggi del modello",
+    "inference": "Tempo di inferenza",
+    "backend": "Backend"
   }
 }

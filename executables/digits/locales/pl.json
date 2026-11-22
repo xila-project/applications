@@ -19,6 +19,8 @@
   },
   "results": {
     "digit": "Cyfra",
-    "scores": "Wyniki modelu"
+    "scores": "Wyniki modelu",
+    "inference": "Czas wnioskowania",
+    "backend": "Backend"
   }
 }
