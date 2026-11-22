@@ -60,10 +60,17 @@ pub async fn elevate(standard: &Standard<'static>) -> Result<Elevation, String> 
         .await
         .map_err(|e| format!("cannot determine the group: {e}"))?;
     let mut invokers = alloc::vec![user];
-    if let Ok(parent) = tasks.get_parent(task).await
-        && parent != task
-        && let Ok(parent_user) = tasks.get_user(parent).await
-    {
+    // Fail closed: if the parent cannot be identified, a set-user-ID mount of
+    // this executable could hide the real invoking user.
+    let parent = tasks
+        .get_parent(task)
+        .await
+        .map_err(|e| format!("cannot determine the invoking task: {e}"))?;
+    if parent != task {
+        let parent_user = tasks
+            .get_user(parent)
+            .await
+            .map_err(|e| format!("cannot determine the invoking user: {e}"))?;
         invokers.push(parent_user);
     }
     for invoker in invokers {
