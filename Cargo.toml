@@ -74,7 +74,7 @@ synth = { package = "xila-synth", path = "executables/synth" }
 
 # - External crates
 embedded-hal = { version = "1", default-features = false }
-miniserde = { version = "0.1" }
+miniserde = { version = "0.1", default-features = false }
 bindgen = { version = "0.73" }
 cbindgen = { version = "0.29" }
 syn = { version = "3.0" }
