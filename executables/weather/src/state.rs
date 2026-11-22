@@ -3,7 +3,7 @@ use alloc::string::{String, ToString};
 use embedded_i18n::t;
 
 #[cfg(target_arch = "wasm32")]
-use std::println;
+use std::eprintln;
 
 #[derive(Debug, Clone)]
 pub enum AppError {
@@ -32,6 +32,13 @@ pub struct WeatherData {
 #[cfg(target_arch = "wasm32")]
 type FetchFn = fn(&str) -> Result<alloc::vec::Vec<u8>, alloc::string::String>;
 
+/// Diagnostic for a response that could not be parsed. It holds the size only:
+/// a response body is never printed.
+#[cfg(any(target_arch = "wasm32", test))]
+fn parse_failure_message(label: &str, length: usize) -> String {
+    alloc::format!("Could not parse the {label} response ({length} bytes)")
+}
+
 #[allow(dead_code)]
 fn pick_best_location(response: GeocodingResponse) -> Option<GeocodingResult> {
     response
@@ -50,18 +57,6 @@ fn fetch_weather_with(city: &str, https_get: FetchFn) -> Result<WeatherData, App
 
     use crate::api::{build_forecast_url, build_geocoding_url};
 
-    #[cfg(target_arch = "wasm32")]
-    fn log_parse_preview(label: &str, bytes: &[u8]) {
-        let preview_len = bytes.len().min(256);
-        let preview = core::str::from_utf8(&bytes[..preview_len]).unwrap_or("<non-utf8>");
-        println!(
-            "{} response preview ({} bytes): {}",
-            label,
-            bytes.len(),
-            preview
-        );
-    }
-
     let geocoding_url = build_geocoding_url(city);
     let geo_bytes = https_get(&geocoding_url).map_err(|error| {
         if let Some(status) = parse_api_error_status(&error) {
@@ -74,7 +69,7 @@ fn fetch_weather_with(city: &str, https_get: FetchFn) -> Result<WeatherData, App
     let geo_text = core::str::from_utf8(&geo_bytes).map_err(|_| AppError::Parse)?;
     let geo: GeocodingResponse = json::from_str(geo_text).map_err(|_| {
         #[cfg(target_arch = "wasm32")]
-        log_parse_preview("geocoding", &geo_bytes);
+        eprintln!("{}", parse_failure_message("geocoding", geo_bytes.len()));
         AppError::Parse
     })?;
     // Geocoding fields are owned after parsing; release its JSON before the
@@ -106,7 +101,10 @@ fn fetch_weather_with(city: &str, https_get: FetchFn) -> Result<WeatherData, App
     let forecast_text = core::str::from_utf8(&forecast_bytes).map_err(|_| AppError::Parse)?;
     let forecast: ForecastResponse = json::from_str(forecast_text).map_err(|_| {
         #[cfg(target_arch = "wasm32")]
-        log_parse_preview("forecast", &forecast_bytes);
+        eprintln!(
+            "{}",
+            parse_failure_message("forecast", forecast_bytes.len())
+        );
         AppError::Parse
     })?;
 
@@ -136,6 +134,14 @@ fn parse_api_error_status(message: &str) -> Option<u16> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_failure_message_reports_the_size_only() {
+        assert_eq!(
+            parse_failure_message("forecast", 1234),
+            "Could not parse the forecast response (1234 bytes)"
+        );
+    }
 
     #[test]
     fn picks_first_geocoding_result() {

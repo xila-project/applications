@@ -2404,3 +2404,34 @@ async fn sudo_accepts_a_password_of_the_maximum_length() {
     );
     assert_eq!(identify_runs("sudo_maximum").len(), 1);
 }
+
+/// Command failures belong on the command's standard error, not in the log, so
+/// they can be redirected and are seen whatever the console log level is.
+#[xila::task::test(task_path = xila::task)]
+async fn command_failures_are_written_to_standard_error() {
+    let mut shell = shell().await;
+
+    for line in ["ls /missing-directory", "web_request a b"] {
+        assert_ne!(shell.execute_line(line).await.unwrap(), 0, "{line}");
+    }
+
+    assert_eq!(contents(&shell, "/shell-output").await, "");
+    let errors = contents(&shell, "/shell-errors").await;
+    assert_eq!(errors.lines().count(), 2, "{errors}");
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn redirected_standard_error_receives_command_failures() {
+    let mut shell = shell().await;
+
+    assert_ne!(
+        shell
+            .execute_line("web_request --nonexistent 2> /temporary/errors")
+            .await
+            .unwrap(),
+        0
+    );
+
+    assert_eq!(contents(&shell, "/shell-errors").await, "");
+    assert!(!contents(&shell, "/temporary/errors").await.is_empty());
+}

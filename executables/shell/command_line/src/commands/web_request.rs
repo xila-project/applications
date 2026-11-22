@@ -65,7 +65,6 @@ where
             Arg::Long("body") | Arg::Short('b') => {
                 let value = options.value()?;
                 if body.replace(value).is_some() {
-                    xila::log::error!("Body already set");
                     return Err(crate::error::Error::InvalidArgument);
                 }
             }
@@ -73,20 +72,15 @@ where
                 let value = options.value()?;
                 let path = Path::from_str(value);
                 if body_file.replace(path).is_some() {
-                    xila::log::error!("Body file already set");
                     return Err(crate::error::Error::InvalidArgument);
                 }
             }
             Arg::Positional(positional) => {
                 if url.replace(positional).is_some() {
-                    xila::log::error!("URL already set");
                     return Err(crate::error::Error::InvalidArgument);
                 }
             }
-            e => {
-                xila::log::error!("Unexpected argument: {:?}", e);
-                return Err(crate::error::Error::InvalidArgument);
-            }
+            _ => return Err(crate::error::Error::InvalidOption),
         }
     }
 

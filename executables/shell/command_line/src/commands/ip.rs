@@ -2,7 +2,6 @@ use crate::error::{Error, Result};
 use getargs_derive::GetArgs;
 use xila::{
     file_system::{AccessFlags, Path},
-    log,
     network::{GET_IP_ADDRESS, GET_IP_ADDRESS_COUNT, GET_ROUTE, GET_ROUTE_COUNT, GET_STATE},
     virtual_file_system::{Directory, File, VirtualFileSystem},
 };
@@ -140,8 +139,6 @@ async fn show_address<C: CommandContext>(
         if entry.name == "." || entry.name == ".." {
             continue;
         }
-
-        log::information!("Showing address for interface {}", entry.name);
 
         let mut file = open_interface(context, &entry.name).await?;
 
