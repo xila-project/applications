@@ -4,7 +4,6 @@ use alloc::string::ToString;
 use getargs_derive::GetArgs;
 use xila::{
     file_system::{Kind, Path},
-    log,
     virtual_file_system::Directory,
 };
 
@@ -143,10 +142,10 @@ where
         }
     }
 
-    directory.close(virtual_file_system).await.map_err(|e| {
-        log::error!("Failed to close directory {}", path.as_str());
-        Error::FailedToOpenDirectory(e)
-    })?;
+    directory
+        .close(virtual_file_system)
+        .await
+        .map_err(Error::FailedToOpenDirectory)?;
 
     Ok(())
 }
