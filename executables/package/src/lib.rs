@@ -5,6 +5,7 @@ extern crate std;
 
 mod cli;
 mod http;
+mod information;
 mod install;
 mod privilege;
 mod repository;
@@ -226,6 +227,98 @@ async fn install_command(
     write_line(standard, &line).await
 }
 
+/// `package info`: the installed copy offline, or the repositories' entries.
+async fn information_command(
+    standard: &mut Standard<'static>,
+    options: cli::Information<'_>,
+) -> Result<(), String> {
+    let vfs = standard.context.virtual_file_system;
+    let task = standard
+        .context
+        .task_manager
+        .get_current_task_identifier()
+        .await;
+    let (name, version) = options.name_and_version();
+    let manifest = install::installed_manifest(vfs, task, name).await?;
+    let blocks = match manifest {
+        Some(manifest) if !options.queries_repositories() => {
+            let origin = repository::origin(vfs, task, name).await?;
+            alloc::vec![information::installed(&manifest, origin.as_ref())]
+        }
+        installed => {
+            let installed = installed.as_ref().map(|manifest| manifest.version.as_str());
+            let available =
+                repository::available(vfs, task, name, version, options.repository).await?;
+            if available.is_empty() {
+                return Err(format!(
+                    "{}{} not found for this device in the configured repositories",
+                    name,
+                    version.map(|v| format!(" {v}")).unwrap_or_default()
+                ));
+            }
+            available
+                .iter()
+                .map(|found| information::available(&found.entry, &found.repository, installed))
+                .collect()
+        }
+    };
+    for (position, lines) in blocks.iter().enumerate() {
+        if position != 0 {
+            write_line(standard, "").await?;
+        }
+        for line in lines {
+            write_line(standard, line).await?;
+        }
+    }
+    Ok(())
+}
+
+/// `package search`: names in the repositories' signed indexes.
+async fn search_command(
+    standard: &mut Standard<'static>,
+    options: cli::Search<'_>,
+) -> Result<(), String> {
+    let vfs = standard.context.virtual_file_system;
+    let task = standard
+        .context
+        .task_manager
+        .get_current_task_identifier()
+        .await;
+    let mut found = false;
+    for searched in repository::search(vfs, task, options.query, options.repository).await? {
+        let packages = match searched.packages {
+            Ok(packages) => packages,
+            Err(problem) => {
+                let _ = writeln!(
+                    standard.error(),
+                    "package: skipping repository {}: {problem}",
+                    searched.repository
+                );
+                continue;
+            }
+        };
+        for package in packages {
+            found = true;
+            let installed = match repository::origin(vfs, task, &package.name).await? {
+                Some(origin) => format!("\tinstalled {}", origin.version),
+                None => String::new(),
+            };
+            write_line(
+                standard,
+                &format!(
+                    "{}\t{}\t{}{installed}",
+                    package.name, package.version, searched.repository
+                ),
+            )
+            .await?;
+        }
+    }
+    if !found {
+        write_line(standard, "No package found.").await?;
+    }
+    Ok(())
+}
+
 /// Commands that change the installed packages; the task is privileged.
 async fn change(standard: &mut Standard<'static>, command: cli::Command<'_>) -> Result<(), String> {
     let vfs = standard.context.virtual_file_system;
@@ -274,7 +367,10 @@ async fn change(standard: &mut Standard<'static>, command: cli::Command<'_>) -> 
             }
             Ok(())
         }
-        cli::Command::List | cli::Command::Repository(_) => Ok(()),
+        cli::Command::List
+        | cli::Command::Info(_)
+        | cli::Command::Search(_)
+        | cli::Command::Repository(_) => Ok(()),
     }
 }
 
@@ -316,6 +412,8 @@ async fn run(standard: &mut Standard<'static>, arguments: &[String]) -> Result<(
                 write_line(standard, &format!("{name}{origin}")).await?;
             }
         }
+        cli::Command::Info(options) => information_command(standard, options).await?,
+        cli::Command::Search(options) => search_command(standard, options).await?,
         cli::Command::Repository(cli::RepositoryCommand {
             command: cli::RepositoryOperation::List,
         }) => {

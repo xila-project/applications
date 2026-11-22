@@ -653,6 +653,38 @@ pub async fn install_local(
     .await
 }
 
+/// The manifest of the installed package `name`, or `None` when it is not
+/// installed. It was verified at installation, and the sealed bundle keeps
+/// it unchanged, so it is read back without verifying it again.
+pub async fn installed_manifest(
+    vfs: &'static VirtualFileSystem,
+    task: TaskIdentifier,
+    name: &str,
+) -> Result<Option<Manifest>, String> {
+    if name.is_empty() || name.contains('/') || name.starts_with('.') {
+        return Err(format!("invalid package name {name}"));
+    }
+    let path = format!("{}/{MANIFEST_PATH}", LAYOUT.bundle(name));
+    let size = match vfs
+        .get_link_statistics_for_task(task, &Path::from_str(&path))
+        .await
+    {
+        Ok(statistics) => statistics.size,
+        Err(xila::virtual_file_system::IoErrorKind::NotFound) => return Ok(None),
+        Err(e) => return Err(error(&format!("cannot inspect {path}"), e)),
+    };
+    if size > MAX_MANIFEST_BYTES as u64 {
+        return Err(format!("{path} is too large"));
+    }
+    let mut bytes = Vec::with_capacity(size as usize);
+    File::read_from_path(vfs, task, Path::from_str(&path), &mut bytes)
+        .await
+        .map_err(|e| error(&format!("cannot read {path}"), e))?;
+    xila_package_manifest::decode(&bytes)
+        .map(Some)
+        .map_err(|e| format!("invalid manifest of {name}: {e:?}"))
+}
+
 pub async fn list(vfs: &VirtualFileSystem, task: TaskIdentifier) -> Result<Vec<String>, String> {
     let mut directory = Directory::open(vfs, task, Path::from_str(INSTALLED_ROOT))
         .await
