@@ -13,11 +13,11 @@ release_always = true
 # their Rust API is not a public interface, so cargo-semver-checks is pointless
 # (and fails resolving the Wasm host dependency graph). Without it, the next
 # version comes from the conventional commits touching each package:
-# - 0.x: breaking change (`type!:` or `BREAKING CHANGE:`) and `feat` -> minor,
-#   anything else (`fix`, `perf`, `refactor`, ...) -> patch;
+# - 0.x: breaking change (`type!:` or `BREAKING CHANGE:`) -> minor,
+#   anything else (including `feat`) -> patch;
 # - 1.x and later: breaking change -> major, `feat` -> minor, anything else -> patch.
 semver_check = false
-features_always_increment_minor = true
+features_always_increment_minor = false
 
 [[package]]
 name = "xila-calculator"
