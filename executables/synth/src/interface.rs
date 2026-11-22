@@ -1,6 +1,7 @@
 use core::ptr::null_mut;
-use std::{ffi::CString, thread::sleep, time::Duration};
+use std::{ffi::CString, string::ToString, thread::sleep, time::Duration};
 
+use embedded_i18n::t;
 use nanoaudio_synth::Waveform;
 use synth::Keyboard;
 use wasm::*;
@@ -16,7 +17,7 @@ const WHITE_KEYS: [usize; 8] = [0, 2, 4, 5, 7, 9, 11, 12];
 /// Black keys with the white key they sit after.
 const BLACK_KEYS: [(usize, usize); 5] = [(1, 0), (3, 1), (6, 3), (8, 4), (10, 5)];
 const TONES: [Waveform; 3] = [Waveform::Sine, Waveform::Square, Waveform::Triangle];
-const TONE_NAMES: [&str; 3] = ["Sine", "Square", "Triangle"];
+const TONE_NAMES: [&str; 3] = [t!("tones.sine"), t!("tones.square"), t!("tones.triangle")];
 
 /// shadcn button variants, numbered as `lv_theme_shadcn_variant_t`.
 const PRIMARY: u32 = 0;
@@ -144,7 +145,7 @@ impl Interface {
             // note being played.
             let status_row = row(window)?;
             let status = label(status_row, "", FONT_SMALL)?;
-            let retry = button(status_row, "Retry audio", OUTLINE)?;
+            let retry = button(status_row, t!("controls.retry_audio"), OUTLINE)?;
             let playing = label(status_row, "", FONT_SMALL)?;
             object_set_width(playing, 0)?;
             object_set_flex_grow(playing, 1)?;
@@ -158,9 +159,9 @@ impl Interface {
             object_set_padding(controls_card, if compact { 2 } else { 6 })?;
             object_remove_flag(controls_card, ObjectFlag::Scrollable)?;
             let first = row(controls_card)?;
-            let octave_down = button(first, "Oct -", OUTLINE)?;
+            let octave_down = button(first, t!("controls.octave_down"), OUTLINE)?;
             let octave = label(first, "", if compact { FONT_SMALL } else { FONT_LARGE })?;
-            let octave_up = button(first, "Oct +", OUTLINE)?;
+            let octave_up = button(first, t!("controls.octave_up"), OUTLINE)?;
             let tone_dropdown = dropdown_create(first)?;
             let tones = CString::new(TONE_NAMES.join("\n")).map_err(|_| -1)?;
             dropdown_set_options(tone_dropdown, tones.as_ptr())?;
@@ -177,7 +178,11 @@ impl Interface {
             let volume_row = if compact { row(controls_card)? } else { first };
             label(
                 volume_row,
-                if compact { "Vol" } else { "Volume" },
+                if compact {
+                    t!("controls.volume_short")
+                } else {
+                    t!("controls.volume")
+                },
                 FONT_SMALL,
             )?;
             let volume_slider = slider_create(volume_row)?;
@@ -259,9 +264,9 @@ impl Interface {
         text(
             self.status,
             match (ready, self.compact) {
-                (true, _) => "Audio ready",
-                (false, true) => "Silent mode: no audio",
-                (false, false) => "Silent mode: enable host audio, then Retry audio",
+                (true, _) => t!("status.ready"),
+                (false, true) => t!("status.silent_compact"),
+                (false, false) => t!("status.silent"),
             },
         )?;
         unsafe {
@@ -274,16 +279,20 @@ impl Interface {
     }
 
     fn render_settings(&self) -> wasm::Result<()> {
-        text(self.octave, &format!("Octave {}", self.keyboard.octave()))?;
+        text(
+            self.octave,
+            &t!("settings.octave", octave = self.keyboard.octave()).to_string(),
+        )?;
         text(self.volume_label, &format!("{}%", self.volume))?;
         text(
             self.settings,
-            &format!(
-                "Octave {} | {} | Volume {}%",
-                self.keyboard.octave(),
-                TONE_NAMES[self.tone],
-                self.volume
-            ),
+            &t!(
+                "settings.summary",
+                octave = self.keyboard.octave(),
+                tone = TONE_NAMES[self.tone],
+                volume = self.volume
+            )
+            .to_string(),
         )
     }
 
@@ -294,9 +303,12 @@ impl Interface {
             .map(note_name)
             .collect();
         if held.is_empty() {
-            text(self.playing, "Hold a key to play")
+            text(self.playing, t!("playing.hint"))
         } else {
-            text(self.playing, &format!("Playing {}", held.join(" ")))
+            text(
+                self.playing,
+                &t!("playing.notes", notes = held.join(" ")).to_string(),
+            )
         }
     }
 

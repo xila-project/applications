@@ -8,6 +8,10 @@ pub const INPUT_LEN: usize = SIDE * SIDE;
 /// Default runtime loader node path for neural network models.
 pub const LOADER_PATH: &str = "/devices/nn/cpu";
 
+/// Optional read-only text node naming the inference backends the platform was built with, as
+/// comma-separated names such as `cmsis-nn,kernels`. Platforms may not mount it.
+pub const BACKEND_PATH: &str = "/devices/nn/backend";
+
 /// The TensorFlow Lite model the guest loads at runtime through [`LOADER_PATH`].
 pub const MODEL_BYTES: &[u8] = include_bytes!("../models/mnist.tflite");
 
@@ -70,4 +74,12 @@ pub fn top_three(scores: [f32; 10]) -> Option<[(u8, f32); 3]> {
     let mut ranked = core::array::from_fn::<_, 10, _>(|i| (i as u8, scores[i]));
     ranked.sort_unstable_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
     Some([ranked[0], ranked[1], ranked[2]])
+}
+
+/// Validate the text read from [`BACKEND_PATH`]: short, printable ASCII without spaces, so
+/// that arbitrary node content cannot disturb the label. Returns `None` for anything else.
+pub fn backend_label(bytes: &[u8]) -> Option<&str> {
+    let text = core::str::from_utf8(bytes).ok()?.trim_end_matches('\n');
+    (!text.is_empty() && text.len() <= 64 && text.bytes().all(|byte| byte.is_ascii_graphic()))
+        .then_some(text)
 }

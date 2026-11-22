@@ -58,7 +58,10 @@ macro_rules! preview1_errors {
 
         #[test]
         fn guest_errnos_are_in_the_preview1_range() {
-            for error in [$(Error::$name,)+] {
+            let errors = [$(Error::$name,)+];
+            // Every Preview 1 errno has a variant, and nothing else does.
+            assert_eq!(errors.len(), 76);
+            for error in errors {
                 assert!((1..=76).contains(&i32::from(error)), "{error:?}");
             }
         }
@@ -447,18 +450,89 @@ mod tests {
 
     #[test]
     fn preview1_numerics_are_fixed() {
-        // The Preview 1 ABI values are frozen: wasi-libc and guests hard-code them.
-        assert_eq!(i32::from(Error::Again), 6);
-        assert_eq!(i32::from(Error::Badf), 8);
-        assert_eq!(i32::from(Error::Busy), 10);
-        assert_eq!(i32::from(Error::Inval), 28);
-        assert_eq!(i32::from(Error::Io), 29);
-        assert_eq!(i32::from(Error::Loop), 32);
-        assert_eq!(i32::from(Error::Noent), 44);
-        assert_eq!(i32::from(Error::Nomem), 48);
-        assert_eq!(i32::from(Error::Nospc), 51);
-        assert_eq!(i32::from(Error::Notsup), 58);
-        assert_eq!(i32::from(Error::Xdev), 75);
-        assert_eq!(i32::from(Error::Notcapable), 76);
+        // The Preview 1 ABI values are frozen: wasi-libc and guests hard-code
+        // them. This table repeats all 76 of `wasi_snapshot_preview1`'s
+        // `errno` values independently of the enumeration.
+        const PREVIEW1: [(Error, i32); 76] = [
+            (Error::Toobig, 1),
+            (Error::Access, 2),
+            (Error::Addrinuse, 3),
+            (Error::Addrnotavail, 4),
+            (Error::Afnosupport, 5),
+            (Error::Again, 6),
+            (Error::Already, 7),
+            (Error::Badf, 8),
+            (Error::Badmsg, 9),
+            (Error::Busy, 10),
+            (Error::Canceled, 11),
+            (Error::Child, 12),
+            (Error::Connaborted, 13),
+            (Error::Connrefused, 14),
+            (Error::Connreset, 15),
+            (Error::Deadlk, 16),
+            (Error::Destaddrreq, 17),
+            (Error::Dom, 18),
+            (Error::Dquot, 19),
+            (Error::Exist, 20),
+            (Error::Fault, 21),
+            (Error::Fbig, 22),
+            (Error::Hostunreach, 23),
+            (Error::Idrm, 24),
+            (Error::Ilseq, 25),
+            (Error::Inprogress, 26),
+            (Error::Intr, 27),
+            (Error::Inval, 28),
+            (Error::Io, 29),
+            (Error::Isconn, 30),
+            (Error::Isdir, 31),
+            (Error::Loop, 32),
+            (Error::Mfile, 33),
+            (Error::Mlink, 34),
+            (Error::Msgsize, 35),
+            (Error::Multihop, 36),
+            (Error::Nametoolong, 37),
+            (Error::Netdown, 38),
+            (Error::Netreset, 39),
+            (Error::Netunreach, 40),
+            (Error::Nfile, 41),
+            (Error::Nobufs, 42),
+            (Error::Nodev, 43),
+            (Error::Noent, 44),
+            (Error::Noexec, 45),
+            (Error::Nolck, 46),
+            (Error::Nolink, 47),
+            (Error::Nomem, 48),
+            (Error::Nomsg, 49),
+            (Error::Noprotoopt, 50),
+            (Error::Nospc, 51),
+            (Error::Nosys, 52),
+            (Error::Notconn, 53),
+            (Error::Notdir, 54),
+            (Error::Notempty, 55),
+            (Error::Notrecoverable, 56),
+            (Error::Notsock, 57),
+            (Error::Notsup, 58),
+            (Error::Notty, 59),
+            (Error::Nxio, 60),
+            (Error::Overflow, 61),
+            (Error::Ownerdead, 62),
+            (Error::Perm, 63),
+            (Error::Pipe, 64),
+            (Error::Proto, 65),
+            (Error::Protonosupport, 66),
+            (Error::Prototype, 67),
+            (Error::Range, 68),
+            (Error::Rofs, 69),
+            (Error::Spipe, 70),
+            (Error::Srch, 71),
+            (Error::Stale, 72),
+            (Error::Timedout, 73),
+            (Error::Txtbsy, 74),
+            (Error::Xdev, 75),
+            (Error::Notcapable, 76),
+        ];
+        for (error, value) in PREVIEW1 {
+            assert_eq!(i32::from(error), value, "{error:?}");
+        }
     }
 }

@@ -19,6 +19,8 @@
   },
   "results": {
     "digit": "数字",
-    "scores": "モデルのスコア"
+    "scores": "モデルのスコア",
+    "inference": "推論時間",
+    "backend": "バックエンド"
   }
 }

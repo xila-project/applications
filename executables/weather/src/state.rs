@@ -1,5 +1,6 @@
 use crate::model::{ForecastResponse, GeocodingResponse, GeocodingResult};
-use alloc::string::String;
+use alloc::string::{String, ToString};
+use embedded_i18n::t;
 
 #[cfg(target_arch = "wasm32")]
 use std::println;
@@ -14,10 +15,10 @@ pub enum AppError {
 
 pub fn map_status_message(error: &AppError) -> String {
     match error {
-        AppError::NoLocationFound => String::from("No location found"),
-        AppError::Network => String::from("Network error"),
-        AppError::Parse => String::from("Invalid API response"),
-        AppError::ApiError(code) => alloc::format!("API error: {code}"),
+        AppError::NoLocationFound => String::from(t!("status.no_location")),
+        AppError::Network => String::from(t!("status.network_error")),
+        AppError::Parse => String::from(t!("status.invalid_response")),
+        AppError::ApiError(code) => t!("status.api_error", code = code).to_string(),
     }
 }
 
@@ -160,6 +161,15 @@ mod tests {
 
         let selected = pick_best_location(response).unwrap();
         assert_eq!(selected.name, "First");
+    }
+
+    #[test]
+    fn status_messages_come_from_the_catalog() {
+        assert_eq!(map_status_message(&AppError::Network), "Network error");
+        assert_eq!(
+            map_status_message(&AppError::ApiError(503)),
+            "API error: 503"
+        );
     }
 
     #[test]

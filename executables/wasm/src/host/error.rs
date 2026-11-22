@@ -14,6 +14,8 @@ pub enum Error {
     Task(xila::task::Error),
     InvalidPath,
     NotAWasmFile,
+    /// The executable was refused before compilation.
+    Integrity(super::integrity::IntegrityError),
 }
 
 impl From<wasmi::Error> for Error {
@@ -37,6 +39,12 @@ impl From<virtual_file_system::IoErrorKind> for Error {
 impl From<xila::task::Error> for Error {
     fn from(error: xila::task::Error) -> Self {
         Self::Task(error)
+    }
+}
+
+impl From<super::integrity::IntegrityError> for Error {
+    fn from(error: super::integrity::IntegrityError) -> Self {
+        Self::Integrity(error)
     }
 }
 

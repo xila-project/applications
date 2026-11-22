@@ -2250,11 +2250,14 @@ dependencies = [
 name = "xila-debug-application"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
  "portable-atomic",
  "serde_json",
  "xila",
  "xila-debug-protocol",
  "xila-log",
+ "xila-task",
+ "xila-testing",
 ]
 
 [[package]]
@@ -2510,7 +2513,7 @@ dependencies = [
 [[package]]
 name = "xila-package-bundle"
 version = "0.4.0"
-source = "git+https://github.com/xila-project/package_manager?branch=main#23237a41239272c532ee39c8ca24ad691477561f"
+source = "git+https://github.com/xila-project/package_manager?branch=main#bc283ccf8fb94a4032f742ab896bada49f74155c"
 dependencies = [
  "xila-package-manifest",
  "xila-package-verification",
@@ -2519,7 +2522,7 @@ dependencies = [
 [[package]]
 name = "xila-package-manager"
 version = "0.4.0"
-source = "git+https://github.com/xila-project/package_manager?branch=main#23237a41239272c532ee39c8ca24ad691477561f"
+source = "git+https://github.com/xila-project/package_manager?branch=main#bc283ccf8fb94a4032f742ab896bada49f74155c"
 dependencies = [
  "xila-package-manifest",
  "xila-package-verification",
@@ -2528,7 +2531,7 @@ dependencies = [
 [[package]]
 name = "xila-package-manifest"
 version = "0.4.0"
-source = "git+https://github.com/xila-project/package_manager?branch=main#23237a41239272c532ee39c8ca24ad691477561f"
+source = "git+https://github.com/xila-project/package_manager?branch=main#bc283ccf8fb94a4032f742ab896bada49f74155c"
 dependencies = [
  "miniserde",
 ]
@@ -2536,7 +2539,7 @@ dependencies = [
 [[package]]
 name = "xila-package-reader"
 version = "0.4.0"
-source = "git+https://github.com/xila-project/package_manager?branch=main#23237a41239272c532ee39c8ca24ad691477561f"
+source = "git+https://github.com/xila-project/package_manager?branch=main#bc283ccf8fb94a4032f742ab896bada49f74155c"
 dependencies = [
  "tar-no-std",
  "xila-package-bundle",
@@ -2547,7 +2550,7 @@ dependencies = [
 [[package]]
 name = "xila-package-verification"
 version = "0.1.0"
-source = "git+https://github.com/xila-project/package_manager?branch=main#23237a41239272c532ee39c8ca24ad691477561f"
+source = "git+https://github.com/xila-project/package_manager?branch=main#bc283ccf8fb94a4032f742ab896bada49f74155c"
 dependencies = [
  "ed25519-dalek",
  "sha2",
@@ -2611,6 +2614,7 @@ dependencies = [
 name = "xila-synth"
 version = "0.2.0"
 dependencies = [
+ "embedded-i18n",
  "nanoaudio",
  "nanoaudio-synth",
  "xila-audio",
@@ -2776,6 +2780,8 @@ dependencies = [
  "xila-drivers-core",
  "xila-executable",
  "xila-graphics-bindgen",
+ "xila-package-manifest",
+ "xila-package-verification",
  "xila-testing",
 ]
 

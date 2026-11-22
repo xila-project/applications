@@ -548,6 +548,7 @@ async fn fd_readdir_writes_whole_records_and_resumes_from_the_cookie() {
     // cookie of each record is the index of the entry that follows it.
     let (status, bytes) = readdir(&mut guest, 512, 0);
     assert_eq!(status, 0);
+    let whole_bytes = bytes.clone();
     let all = directory_records(&bytes);
     let names: Vec<&str> = all.iter().map(|record| record.2.as_str()).collect();
     assert_eq!(names, [".", "..", "alpha", "beta", "gamma"]);
@@ -555,13 +556,16 @@ async fn fd_readdir_writes_whole_records_and_resumes_from_the_cookie() {
     assert_eq!(cookies, [1, 2, 3, 4, 5]);
     assert_eq!(all[2].3, 4, "a regular file");
 
-    // A small buffer stops after the last whole record that fits and leaves the
-    // rest of the buffer untouched.
+    // A small buffer is filled completely: the last record is written truncated.
     let first_two = 25 + 26;
     let (status, bytes) = readdir(&mut guest, (first_two + 24 + 5 - 1) as i32, 0);
     assert_eq!(status, 0);
-    assert_eq!(directory_records(&bytes), all[..2]);
-    assert_eq!(guest.get(2000 + first_two, 4), [0xee; 4]);
+    assert_eq!(bytes.len(), first_two + 24 + 5 - 1);
+    assert_eq!(directory_records(&bytes[..first_two]), all[..2]);
+    assert_eq!(
+        &bytes[first_two..],
+        &whole_bytes[first_two..first_two + 24 + 4]
+    );
 
     // Resuming from a record's cookie continues with the next entry.
     let (status, bytes) = readdir(&mut guest, 512, 2);
@@ -570,6 +574,7 @@ async fn fd_readdir_writes_whole_records_and_resumes_from_the_cookie() {
     let (status, bytes) = readdir(&mut guest, 24 + 4, 3);
     assert_eq!(status, 0);
     assert_eq!(directory_records(&bytes), all[3..4]);
+    assert_eq!(bytes.len(), 24 + 4);
 
     // At the end the call succeeds with no bytes; past it the cookie is invalid.
     let (status, bytes) = readdir(&mut guest, 512, 5);
@@ -578,15 +583,66 @@ async fn fd_readdir_writes_whole_records_and_resumes_from_the_cookie() {
     let (status, _) = readdir(&mut guest, 512, 6);
     assert_eq!(status, errno(Error::Inval));
 
-    // A buffer too small for the first record writes nothing.
+    // A buffer shorter than the first record is still filled with its prefix.
     let (status, bytes) = readdir(&mut guest, 24, 0);
     assert_eq!(status, 0);
-    assert!(bytes.is_empty());
+    assert_eq!(bytes, whole_bytes[..24]);
+
+    // A record split at every byte offset of its header and name: the buffer is
+    // always filled and holds a prefix of the record; the previous record's
+    // cookie returns it whole.
+    for length in 1..=(24 + 5) {
+        let (status, bytes) = readdir(&mut guest, length, 2);
+        assert_eq!(status, 0);
+        assert_eq!(bytes.len(), length as usize);
+        assert_eq!(bytes, whole_bytes[first_two..first_two + length as usize]);
+    }
+    // A buffer exactly one record long holds that record and nothing more.
+    let (status, bytes) = readdir(&mut guest, 24 + 5, 2);
+    assert_eq!(status, 0);
+    assert_eq!(directory_records(&bytes), all[2..3]);
 
     // The end-of-directory cookie reports no bytes without touching the directory.
     let (status, bytes) = readdir(&mut guest, 512, -1);
     assert_eq!(status, 0);
     assert!(bytes.is_empty());
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn fd_readdir_truncates_a_name_longer_than_the_buffer() {
+    let mut guest = Guest::new().await;
+    assert_eq!(guest.with_path("path_create_directory", ROOT, "long"), 0);
+    let name = "n".repeat(100);
+    File::write_to_path(
+        guest.vfs,
+        guest.task,
+        format!("/sandbox/long/{name}").as_str(),
+        b"",
+    )
+    .await
+    .unwrap();
+    let directory = guest.open_directory("long");
+    let readdir = |guest: &mut Guest, length: i32, cookie: i64| -> Vec<u8> {
+        guest.put(2000, &[0xee; 512]);
+        let status = guest.call(
+            "fd_readdir",
+            &[i(directory), i(2000), i(length), l(cookie), i(1300)],
+        );
+        assert_eq!(status, 0);
+        let written = guest.u32_at(1300) as usize;
+        guest.get(2000, written)
+    };
+
+    // The long entry follows "." and ".."; with a buffer shorter than its name the
+    // call still fills the buffer with the start of the record.
+    let whole = readdir(&mut guest, 512, 2);
+    assert_eq!(whole.len(), 24 + 100);
+    assert_eq!(directory_records(&whole)[0].2, name);
+    let truncated = readdir(&mut guest, 40, 2);
+    assert_eq!(truncated.len(), 40);
+    assert_eq!(truncated, whole[..40]);
+    // Retrying from the same cookie with a larger buffer returns it whole.
+    assert_eq!(readdir(&mut guest, 24 + 100, 2), whole);
 }
 
 #[xila::task::test(task_path = xila::task)]
@@ -1963,6 +2019,78 @@ async fn path_open_follows_chained_links_and_stops_at_loops() {
         guest.read_through(FOLLOW, "chain_47"),
         Err(errno(Error::Loop))
     );
+}
+
+impl Guest {
+    /// `path_readlink` below the preopen into a `capacity` byte buffer; the
+    /// bytes it reported as used, or the errno.
+    fn readlink(&mut self, path: &str, capacity: usize) -> Result<Vec<u8>, i32> {
+        const BUFFER: usize = 16_384;
+        const USED: usize = 20_480;
+        let [pointer, length] = self.text(0, path);
+        self.put(BUFFER, &[0xAA; 64]);
+        self.put(USED, &u32::MAX.to_le_bytes());
+        match self.call(
+            "path_readlink",
+            &[
+                i(ROOT),
+                pointer,
+                length,
+                i(BUFFER as i32),
+                i(capacity as i32),
+                i(USED as i32),
+            ],
+        ) {
+            0 => Ok(self.get(BUFFER, self.u32_at(USED) as usize)),
+            error => {
+                assert_eq!(self.u32_at(USED), u32::MAX, "{path}: no result on error");
+                Err(error)
+            }
+        }
+    }
+
+    /// `path_symlink` below the preopen; the errno.
+    fn try_symlink(&mut self, target: &str, link: &str) -> i32 {
+        let [target_pointer, target_length] = self.text(0, target);
+        let [link_pointer, link_length] = self.text(1, link);
+        self.call(
+            "path_symlink",
+            &[
+                target_pointer,
+                target_length,
+                i(ROOT),
+                link_pointer,
+                link_length,
+            ],
+        )
+    }
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn path_readlink_reads_links_and_rejects_everything_else() {
+    let mut guest = Guest::new().await;
+    assert_eq!(guest.with_path("path_create_directory", ROOT, "sub"), 0);
+    guest.seed("data", b"hello").await;
+    guest.symlink("data", "link");
+    guest.symlink("cycle_b", "cycle_a");
+    guest.symlink("cycle_a", "cycle_b");
+
+    // The target, whole or truncated to the buffer, never NUL-terminated.
+    assert_eq!(guest.readlink("link", 64), Ok(b"data".to_vec()));
+    assert_eq!(guest.readlink("link", 2), Ok(b"da".to_vec()));
+    // A cycle is read like any link: the final link is never followed.
+    assert_eq!(guest.readlink("cycle_a", 64), Ok(b"cycle_b".to_vec()));
+
+    // A file or a directory is not a link.
+    assert_eq!(guest.readlink("data", 64), Err(errno(Error::Inval)));
+    assert_eq!(guest.readlink("sub", 64), Err(errno(Error::Inval)));
+    assert_eq!(guest.readlink("missing", 64), Err(errno(Error::Noent)));
+    // A cycle earlier in the path ends in ELOOP.
+    assert_eq!(guest.readlink("cycle_a/inner", 64), Err(errno(Error::Loop)));
+
+    // An empty target names nothing, like POSIX `symlink("", link)`.
+    assert_eq!(guest.try_symlink("", "empty"), errno(Error::Noent));
+    assert_eq!(guest.readlink("empty", 64), Err(errno(Error::Noent)));
 }
 
 #[xila::task::test(task_path = xila::task)]

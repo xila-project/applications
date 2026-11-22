@@ -72,6 +72,32 @@ pub(crate) fn monotonic_now(
         .map_err(|_| wasmi::Error::new("clock overflow"))
 }
 
+/// Longest sleep between two checks of a clock poll, which bounds timer and
+/// signal polling latency.
+const POLL_SLEEP_LIMIT: Duration = Duration::from_millis(50);
+
+/// How the run loop waits before checking a clock poll again.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PollWait {
+    /// A deadline is ahead: sleep until it, at most [`POLL_SLEEP_LIMIT`].
+    Sleep(Duration),
+    /// A zero relative timeout, the guest busy-wait idiom: a throttled yield,
+    /// so the guest cannot starve the other tasks.
+    Throttled,
+    /// A deadline that has already passed: yield once, then complete it.
+    Yield,
+}
+
+fn poll_wait(delay: Duration, zero_relative_timeout: bool) -> PollWait {
+    if !delay.is_zero() {
+        PollWait::Sleep(delay.min(POLL_SLEEP_LIMIT))
+    } else if zero_relative_timeout {
+        PollWait::Throttled
+    } else {
+        PollWait::Yield
+    }
+}
+
 /// Whether this execution must stop: its own control token, a termination or
 /// interrupt signal sent to its task, or the legacy native-runner broadcast.
 async fn stop_requested(store: &Store<GlobalStore>) -> bool {
@@ -129,17 +155,12 @@ pub async fn run(
                                     Ok(now) => now,
                                     Err(error) => break i32::from(error),
                                 };
-                                let delay = poll.delay(now);
-                                if !delay.is_zero() {
-                                    // Bound timer and signal polling latency.
-                                    xila::task::Manager::sleep(
-                                        delay.min(Duration::from_millis(50)),
-                                    )
-                                    .await;
-                                } else if poll.has_zero_relative_timeout() {
-                                    xila::task::yield_throttled().await;
-                                } else {
-                                    xila::task::yield_now().await;
+                                match poll_wait(poll.delay(now), poll.has_zero_relative_timeout()) {
+                                    PollWait::Sleep(delay) => {
+                                        xila::task::Manager::sleep(delay).await
+                                    }
+                                    PollWait::Throttled => xila::task::yield_throttled().await,
+                                    PollWait::Yield => xila::task::yield_now().await,
                                 }
                                 let now = match clock_now(context, required) {
                                     Ok(now) => now,
@@ -206,6 +227,23 @@ mod clock_tests {
         fn now(&self) -> Duration {
             Duration::from_millis(self.0.load(Ordering::Relaxed))
         }
+    }
+
+    #[test]
+    fn poll_wait_sleeps_for_deadlines_and_throttles_busy_waits() {
+        // A deadline ahead sleeps until it, bounded for signal latency.
+        assert_eq!(
+            poll_wait(Duration::from_millis(5), false),
+            PollWait::Sleep(Duration::from_millis(5))
+        );
+        assert_eq!(
+            poll_wait(Duration::from_secs(10), true),
+            PollWait::Sleep(POLL_SLEEP_LIMIT)
+        );
+        // A zero relative timeout is a busy-wait: throttle it.
+        assert_eq!(poll_wait(Duration::ZERO, true), PollWait::Throttled);
+        // A deadline that has just passed completes after a plain yield.
+        assert_eq!(poll_wait(Duration::ZERO, false), PollWait::Yield);
     }
 
     #[test]

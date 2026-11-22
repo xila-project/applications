@@ -4,12 +4,14 @@ mod executable;
 pub mod execution;
 #[cfg(feature = "graphics")]
 pub mod graphics;
+pub mod integrity;
 mod main;
 mod registrable;
 mod store;
 pub mod translation;
 mod wasi;
 
+pub use engine::{Translation, configuration as engine_configuration};
 pub use executable::*;
 pub use main::execute_with_control;
 pub use store::GlobalStore;

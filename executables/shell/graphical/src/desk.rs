@@ -27,6 +27,7 @@ pub(crate) struct DeskWidgets {
     drawer_tile: *mut lvgl::lv_obj_t,
     dock: *mut lvgl::lv_obj_t,
     main_button: *mut lvgl::lv_obj_t,
+    logo: Option<*mut lvgl::lv_obj_t>,
 }
 
 pub struct Desk {
@@ -39,6 +40,10 @@ pub struct Desk {
     desk_tile: *mut lvgl::lv_obj_t,
     dock: *mut lvgl::lv_obj_t,
     main_button: *mut lvgl::lv_obj_t,
+    /// The background logo, absent when the desk is too small for it. Only
+    /// the tests read it; the desk window owns and deletes the object.
+    #[cfg_attr(not(test), allow(dead_code))]
+    logo: Option<*mut lvgl::lv_obj_t>,
     dock_menu: Option<*mut lvgl::lv_obj_t>,
     dock_menu_target_window: Option<usize>,
     dock_menu_maximize_button: Option<*mut lvgl::lv_obj_t>,
@@ -124,6 +129,16 @@ impl Desk {
         self.window.as_object_mutable()
     }
 
+    #[cfg(test)]
+    pub(crate) fn logo_object(&self) -> Option<*mut lvgl::lv_obj_t> {
+        self.logo
+    }
+
+    #[cfg(test)]
+    pub(crate) fn dock_object(&self) -> *mut lvgl::lv_obj_t {
+        self.dock
+    }
+
     /// Whether the dock, and with it the desk, is hidden.
     ///
     /// LVGL may update the object's flags from another executor thread, so the
@@ -188,6 +203,7 @@ impl Desk {
                 drawer_tile: widgets.drawer_tile,
                 dock: widgets.dock,
                 main_button: widgets.main_button,
+                logo: widgets.logo,
                 dock_menu: None,
                 dock_menu_target_window: None,
                 dock_menu_maximize_button: None,
@@ -206,27 +222,6 @@ impl Desk {
             // Edge-to-edge window content: the shared window class already
             // flattens border and radius, only the container padding remains.
             lvgl::lv_obj_set_style_pad_all(window.as_object_mutable(), 0, lvgl::LV_STATE_DEFAULT);
-        }
-
-        // - Create the logo
-        unsafe {
-            // Outline the logo in the background of the window, in the
-            // palette's input color like the outline controls.
-            let logo = Logo::new_with_style(
-                window.as_object_mutable(),
-                4,
-                Color::BLACK,
-                LogoStyle::Outline,
-            )?;
-            logo.follow_palette_color(theme::PaletteColor::Input);
-            let logo_inner_object = logo.get_inner_object();
-            forget(logo); // Prevent the logo from being dropped
-
-            lvgl::lv_obj_set_align(logo_inner_object, lvgl::lv_align_t_LV_ALIGN_CENTER);
-            lvgl::lv_obj_add_flag(
-                logo_inner_object,
-                lvgl::lv_obj_flag_t_LV_OBJ_FLAG_OVERFLOW_VISIBLE,
-            );
         }
 
         // - Create a tile view
@@ -309,13 +304,84 @@ impl Desk {
         // - Create the main button
         let main_button = unsafe { create_show_applications_button(dock, Self::MAIN_BUTTON_SIZE)? };
 
+        // - Create the logo once the dock is laid out, so it fits above it.
+        let logo = unsafe { Self::create_background_logo(window.as_object_mutable(), dock)? };
+
         Ok(DeskWidgets {
             tile_view,
             desk_tile,
             drawer_tile,
             dock,
             main_button,
+            logo,
         })
+    }
+
+    /// Largest logo scale factor, the 128 px logo of large displays.
+    const LOGO_MAXIMUM_FACTOR: u8 = 4;
+    /// Space kept between the logo and the edges of the free area.
+    const LOGO_MARGIN: i32 = 8;
+
+    /// Scale factor and top offset of a logo centered in the area of
+    /// `width` by `height` pixels above `dock_reserved` pixels of dock, or
+    /// `None` when not even the smallest logo fits.
+    fn background_logo_placement(width: i32, height: i32, dock_reserved: i32) -> Option<(u8, i32)> {
+        let free_height = height - dock_reserved;
+        let available = Point::new(
+            (width - 2 * Self::LOGO_MARGIN).max(0) as i16,
+            (free_height - 2 * Self::LOGO_MARGIN).clamp(0, i16::MAX as i32) as i16,
+        );
+        let factor = Logo::get_factor(available).min(Self::LOGO_MAXIMUM_FACTOR);
+        if factor == 0 {
+            return None;
+        }
+        let size = Logo::BASE_SIZE.get_y() as i32 * factor as i32;
+        Some((factor, (free_height - size) / 2))
+    }
+
+    /// Outline the logo in the background of the desk window, in the
+    /// palette's input color like the outline controls, sized to the space
+    /// above the dock so it never overlaps the dock on compact displays.
+    ///
+    /// # Safety
+    /// The caller must hold the graphics lock, and `window` and `dock` must be
+    /// live, with `dock` inside `window`.
+    unsafe fn create_background_logo(
+        window: *mut lvgl::lv_obj_t,
+        dock: *mut lvgl::lv_obj_t,
+    ) -> Result<Option<*mut lvgl::lv_obj_t>> {
+        unsafe {
+            lvgl::lv_obj_update_layout(window);
+            // The dock grows to the application icons once windows open.
+            let dock_height = lvgl::lv_obj_get_height(dock).max(
+                Self::DOCK_ICON_SIZE.get_y() as i32
+                    + lvgl::lv_obj_get_style_pad_top(dock, lvgl::LV_PART_MAIN)
+                    + lvgl::lv_obj_get_style_pad_bottom(dock, lvgl::LV_PART_MAIN)
+                    + 2 * lvgl::lv_obj_get_style_border_width(dock, lvgl::LV_PART_MAIN),
+            );
+            let Some((factor, top)) = Self::background_logo_placement(
+                lvgl::lv_obj_get_content_width(window),
+                lvgl::lv_obj_get_content_height(window),
+                dock_height + Self::DOCK_BOTTOM_MARGIN,
+            ) else {
+                return Ok(None);
+            };
+
+            let logo = Logo::new_with_style(window, factor, Color::BLACK, LogoStyle::Outline)?;
+            logo.follow_palette_color(theme::PaletteColor::Input);
+            let logo_inner_object = logo.get_inner_object();
+            forget(logo); // Prevent the logo from being dropped
+
+            lvgl::lv_obj_align(logo_inner_object, lvgl::lv_align_t_LV_ALIGN_TOP_MID, 0, top);
+            lvgl::lv_obj_add_flag(
+                logo_inner_object,
+                lvgl::lv_obj_flag_t_LV_OBJ_FLAG_OVERFLOW_VISIBLE,
+            );
+            // Stay behind the tile view, which holds the dock and the drawer.
+            lvgl::lv_obj_move_to_index(logo_inner_object, 0);
+
+            Ok(Some(logo_inner_object))
+        }
     }
 
     unsafe fn create_drawer_shortcut(
@@ -940,6 +1006,39 @@ mod tests {
             .iter()
             .map(|(window_identifier, _, _)| *window_identifier)
             .collect()
+    }
+
+    #[test]
+    fn background_logo_fits_above_the_dock() {
+        use super::Desk;
+
+        for (width, height, dock_reserved) in [
+            (320, 216, 70),
+            (320, 216, 90),
+            (240, 296, 70),
+            (800, 456, 70),
+        ] {
+            let (factor, top) = Desk::background_logo_placement(width, height, dock_reserved)
+                .expect("the logo fits");
+            let size = 32 * factor as i32;
+            assert!(top >= Desk::LOGO_MARGIN, "{width}x{height}: top margin");
+            assert!(
+                top + size <= height - dock_reserved - Desk::LOGO_MARGIN,
+                "{width}x{height}: the logo overlaps the dock"
+            );
+            assert!(
+                size <= width - 2 * Desk::LOGO_MARGIN,
+                "{width}x{height}: width"
+            );
+        }
+        // The 128 px logo is the largest, and it shrinks on compact displays.
+        assert_eq!(Desk::background_logo_placement(800, 456, 70).unwrap().0, 4);
+        assert_eq!(Desk::background_logo_placement(320, 216, 90).unwrap().0, 3);
+        assert_eq!(Desk::background_logo_placement(160, 216, 90).unwrap().0, 3);
+        assert_eq!(Desk::background_logo_placement(90, 216, 90).unwrap().0, 2);
+        // No room at all: no logo rather than an overlap.
+        assert_eq!(Desk::background_logo_placement(320, 100, 70), None);
+        assert_eq!(Desk::background_logo_placement(10, 216, 70), None);
     }
 
     #[test]

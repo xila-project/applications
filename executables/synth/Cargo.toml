@@ -5,6 +5,7 @@ edition = "2024"
 rust-version.workspace = true
 
 [dependencies]
+embedded-i18n = { workspace = true }
 nanoaudio = { workspace = true, default-features = false, features = ["dsp"] }
 nanoaudio-synth = { workspace = true }
 
@@ -29,3 +30,9 @@ path = "src/main.rs"
 
 [lib]
 name = "synth"
+
+[package.metadata.i18n]
+load-path = "locales"
+default-locale = "en"
+fallback = ["en"]
+strict = true

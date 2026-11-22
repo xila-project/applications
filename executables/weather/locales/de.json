@@ -1,0 +1,79 @@
+{
+  "compass": {
+    "east": "O",
+    "north": "N",
+    "north_east": "NO",
+    "north_west": "NW",
+    "south": "S",
+    "south_east": "SO",
+    "south_west": "SW",
+    "west": "W"
+  },
+  "conditions": {
+    "clear_sky": "Klarer Himmel",
+    "drizzle": "Nieselregen",
+    "fog": "Nebel",
+    "freezing_drizzle": "Gefrierender Nieselregen",
+    "freezing_rain": "Gefrierender Regen",
+    "heavy_rain": "Starker Regen",
+    "heavy_snow": "Starker Schneefall",
+    "light_rain": "Leichter Regen",
+    "light_snow": "Leichter Schneefall",
+    "mainly_clear": "Überwiegend klar",
+    "overcast": "Bedeckt",
+    "partly_cloudy": "Teilweise bewölkt",
+    "rain": "Regen",
+    "rain_showers": "Regenschauer",
+    "snow": "Schneefall",
+    "snow_grains": "Schneegriesel",
+    "snow_showers": "Schneeschauer",
+    "thunderstorm": "Gewitter",
+    "thunderstorm_with_hail": "Gewitter, Hagel",
+    "unknown": "Unbekannt"
+  },
+  "daily": {
+    "no_data": "Keine tägliche Vorhersage.",
+    "rain_chance": "Regen {chance}%"
+  },
+  "hourly": {
+    "no_data": "Keine stündliche Vorhersage.",
+    "rain_chart": "Regenwahrscheinlichkeit (%)",
+    "range": "{start} bis {end}  •  {minimum}° bis {maximum}°",
+    "temperature_chart": "Temperatur, nächste 24 Stunden (°C)"
+  },
+  "now": {
+    "feels_like": "Gefühlt {temperature}°C",
+    "gusts": "Böen",
+    "humidity": "Luftfeuchtigkeit",
+    "no_data": "Keine aktuellen Daten",
+    "precipitation": "Niederschlag",
+    "wind": "Wind"
+  },
+  "search": {
+    "empty": "Suchen Sie eine Stadt, um ihr Wetter zu sehen.",
+    "refresh": "Aktualisieren"
+  },
+  "status": {
+    "api_error": "API-Fehler: {code}",
+    "display_error": "Anzeigefehler {error}",
+    "enter_city": "Geben Sie einen Stadtnamen ein",
+    "invalid_response": "Ungültige API-Antwort",
+    "loading": "Wird geladen…",
+    "network_error": "Netzwerkfehler",
+    "no_location": "Kein Ort gefunden"
+  },
+  "tabs": {
+    "daily": "Täglich",
+    "hourly": "Stündlich",
+    "now": "Jetzt"
+  },
+  "weekdays": {
+    "friday": "Fr",
+    "monday": "Mo",
+    "saturday": "Sa",
+    "sunday": "So",
+    "thursday": "Do",
+    "tuesday": "Di",
+    "wednesday": "Mi"
+  }
+}

@@ -87,8 +87,6 @@ const BUFFER_LENGTH: usize = 64;
 /// Every record is a 24-byte header followed by the name.
 const NAME_LENGTH: usize = 40;
 const RECORD_LENGTH: usize = 24 + NAME_LENGTH;
-/// The directory also lists "." and "..", which take 25 and 26 bytes.
-const DOT_RECORDS_LENGTH: usize = 25 + 26;
 const DIRECTORY_LENGTH: usize = ENTRY_COUNT + 2;
 
 /// A guest that opens `/bulk`, requests one buffer of directory records at
@@ -146,7 +144,7 @@ async fn directory_listing_uses_space_bounded_by_the_guest_buffer() {
     let mut peaks = Vec::new();
     for (label, cookie, expected_written) in [
         ("control (no listing)", u64::MAX, 0),
-        ("first buffer (\".\" and \"..\")", 0, DOT_RECORDS_LENGTH),
+        ("first buffer (\".\" and \"..\")", 0, BUFFER_LENGTH),
         (
             "buffer near the end",
             (DIRECTORY_LENGTH - 3) as u64,
@@ -166,7 +164,7 @@ async fn directory_listing_uses_space_bounded_by_the_guest_buffer() {
         let baseline = TRACKING_MEMORY_MANAGER.reset_peak_to_current();
         let result = wasm::execute_with_control(
             standard.duplicate().await.unwrap(),
-            vec![path.to_string()],
+            vec!["--developer-mode".to_string(), path.to_string()],
             Arc::new(wasm::ExecutionControl::new()),
         )
         .await;

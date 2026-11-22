@@ -91,11 +91,31 @@ slice. Wasmi 2 meters input Wasm operators instead of its internal bytecode, so
 the same budget may yield at different intervals than with Wasmi 1. A bulk
 operation can require more fuel than one normal slice; the runtime replenishes
 at least the amount required to resume it.
-Functions are translated eagerly before execution to avoid non-resumable fuel
-exhaustion during lazy callee translation in Wasmi 2.0.0 (tracked by
-[Wasmi PR #2032](https://github.com/wasmi-labs/wasmi/pull/2032)). This also
-translates unused functions, which can increase startup work and compiled-code
-memory.
+
+### Translation
+
+`--translation eager` (the default) translates every function to Wasmi's
+internal code while the module loads; `--translation lazy` translates each
+function at its first call, which lowers the load peak and the resident size
+of guests that never call most of their code, at the cost of a pause at each
+first call. Building with the `lazy_translation` feature makes lazy the
+default, so a target where the peak matters most can opt in. Either way the
+whole module is validated before it is instantiated.
+
+Wasmi charges lazy translation to the running guest's fuel, and in Wasmi 2.0
+running out of fuel while translating a callee is a plain error, not a
+resumable pause ([Wasmi PR #2055](https://github.com/wasmi-labs/wasmi/pull/2055)).
+The engine therefore charges no fuel for translation or validation, so a slice
+can never end inside one. Translating one function does not yield to the
+executor, but it is bounded: a function body is never larger than the module,
+which is read whole into memory, and each function is translated at most once.
+All lazy pauses together never exceed the work eager translation does in one
+go while loading, so a guest cannot hold the executor any longer than eager
+loading already allows.
+
+Wasmi 2 has no streaming module constructor (`Module::new_streaming` was
+removed in Wasmi 1.0), so the source is still read whole and released as soon
+as the module is built.
 
 ## Test Calculator
 
@@ -320,3 +340,29 @@ lifecycle stops guests during a shutdown. Guests cannot request a shutdown: the
 lifecycle request API is host-only. The legacy process-wide signal broadcast is
 retained for native runners; it is not the per-guest control API. Host calls that
 block synchronously cannot be preempted, and a timeout must retain their resources.
+
+## Executable integrity
+
+An executable inside `/applications/bundles/<package>/executables/` is a
+**managed** package executable. Before compiling it, the runner reads the
+bundle's installed `.xila/manifest.json` (written and sealed by the
+installer after verifying the package) and hashes the executable while
+reading it into the buffer that is compiled, using
+`xila-package-manifest` and `xila-package-verification::ContentVerifier`. It
+refuses the executable, with a `wasm: refusing to run <path>: <reason>`
+message, when the manifest is missing, invalid, describes another package or
+does not declare the file; when the size or SHA-256 differs; or when a bundle
+directory, the manifest or the executable is a link or is writable by a
+non-root user. Paths with empty, `.` or `..` components are refused.
+
+Any other path is an **unmanaged** development executable with no
+authenticated digest. It runs only with the explicit `--developer-mode`
+option (off by default), unverified and with the caller's permissions:
+
+```text
+wasm --developer-mode /temporary/application.wasm
+```
+
+`--developer-mode` never relaxes the checks on managed executables. This is
+load-time validation, once per load; it is not a runtime integrity guarantee
+such as fs-verity.
