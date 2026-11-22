@@ -23,11 +23,14 @@ jobs:
   guest:
     name: "Build / WASI guests"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       XILA_MBX: "1"
     steps:
       - name: "Setup | Checkout sources"
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: "Setup | Rust toolchain and build cache"
         uses: xila-project/workspace/.github/actions/setup-rust@c06ecdc0c3742c65bcfd2f5e7faa9cfcb59a5f6b
         with:
@@ -79,6 +82,7 @@ jobs:
   abi:
     name: "Test / ABI (${{ matrix.memory }})"
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -86,6 +90,8 @@ jobs:
     steps:
       - name: "Setup | Checkout sources"
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: "Setup | Rust toolchain for ABI"
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -166,6 +172,7 @@ jobs:
     if: always()
     needs: [quality, guest, host, abi, localization, package]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: "Gate | Verify mandatory checks"
         env:

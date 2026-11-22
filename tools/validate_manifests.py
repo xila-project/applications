@@ -32,7 +32,7 @@ def is_valid_xila_version(value: object) -> bool:
         return False
     major, minor = value.split(".", 1)
     for component in (major, minor):
-        if not component or not component.isascii() or not component.isdigit():
+        if not 1 <= len(component) <= 5 or not component.isascii() or not component.isdigit():
             return False
         if len(component) > 1 and component.startswith("0"):
             return False
@@ -53,9 +53,10 @@ def validate_application(root: Path, application: str, sync: bool = False) -> No
         manifest_file.write_text(json.dumps(metadata, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     if "files" in metadata or "sha256" in metadata:
         raise SystemExit(f"generated file inventory belongs in the built runtime manifest: {application}")
-    if "minimum_xila_abi" in metadata or not set(metadata) <= ALLOWED_MANIFEST_KEYS:
+    if not metadata.keys() <= ALLOWED_MANIFEST_KEYS:
         raise SystemExit(f"unexpected field in developer manifest for {application}")
-    if metadata.get("format_version") != 2 or metadata.get("$schema") != SCHEMA:
+    format_version = metadata.get("format_version")
+    if type(format_version) is not int or format_version != 2 or metadata.get("$schema") != SCHEMA:
         raise SystemExit(f"unexpected developer manifest version/schema for {application}")
     expected = (f"xila.{application.replace('_', '-')}", cargo["package"]["version"], "wasm32-wasip1")
     actual = tuple(metadata.get(key) for key in ("name", "version", "target"))

@@ -78,7 +78,7 @@ class ValidateManifestsTests(unittest.TestCase):
     def test_rejects_legacy_format_or_invalid_xila_version(self):
         invalid_changes = [
             {"format_version": 1},
-            {"minimum_xila_abi": 1},
+            {"format_version": 2.0},
             {"xila_version": 1},
             {"xila_version": "0.1.0"},
             {"xila_version": "01.2"},
@@ -87,6 +87,7 @@ class ValidateManifestsTests(unittest.TestCase):
             {"xila_version": "1.2\n"},
             {"xila_version": "65536.0"},
             {"xila_version": "0.65536"},
+            {"xila_version": "9" * 5000 + ".1"},
             {"xila_version": "1."},
             {"xila_version": ".2"},
             {"xila_version": ""},
