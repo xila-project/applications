@@ -37,6 +37,17 @@ extends = "ci:rust-wasi"
 [tasks."test:workspace"]
 extends = "ci:rust-wasi"
 
+[tasks."ci:abi"]
+description = "Run the locked WebAssembly ABI translation tests, including documentation tests"
+tools."github:nextest-rs/nextest" = "cargo-nextest-{{ vars.nextest_version }}"
+tools.rust = { version = "{{ vars.rust_version }}", profile = "minimal" }
+run = """
+set -eu
+manifest=executables/wasm/tests/translation/Cargo.toml
+cargo nextest run --locked --manifest-path "$manifest" --no-default-features --features "${CI_ABI_MEMORY:?}"
+cargo test --locked --manifest-path "$manifest" --no-default-features --features "${CI_ABI_MEMORY:?}" --doc
+"""
+
 [tasks."docs:guest"]
 extends = "ci:rust-wasi"
 
