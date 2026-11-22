@@ -19,6 +19,13 @@ const RUNNER: &str = "/applications/executables/wasm";
 const GUEST: &str = "/applications/executables/sudo-fixture.wasm";
 const WRAPPER: &str = "/applications/executables/wrapper";
 
+/// The runner's arguments. The fixture is not part of an installed package,
+/// so it runs only in developer mode; this way, the granted identity is the
+/// only reason left for refusing it.
+fn guest_arguments() -> Vec<String> {
+    vec!["--developer-mode".into(), GUEST.into()]
+}
+
 /// Exit status of the runner when the guest ran (it exits with 7).
 const GUEST_RAN: isize = -7;
 /// Exit status of the runner when it refused to start the guest.
@@ -36,7 +43,7 @@ impl ExecutableTrait for Wrapper {
             let status = executable::execute_with(
                 standard.context,
                 RUNNER,
-                vec![GUEST.into()],
+                guest_arguments(),
                 standard.duplicate().await.unwrap(),
                 None,
                 launch,
@@ -110,7 +117,7 @@ fn as_sudo() -> Launch {
 async fn guests_run_without_a_granted_identity() {
     let standard = setup().await;
     assert_eq!(
-        launch(&standard, RUNNER, vec![GUEST.into()], Launch::default()).await,
+        launch(&standard, RUNNER, guest_arguments(), Launch::default()).await,
         GUEST_RAN
     );
 }
@@ -124,7 +131,7 @@ async fn the_sudo_variable_alone_does_not_refuse_a_guest() {
         "administrator",
     )]);
     assert_eq!(
-        launch(&standard, RUNNER, vec![GUEST.into()], environment).await,
+        launch(&standard, RUNNER, guest_arguments(), environment).await,
         GUEST_RAN
     );
 }
@@ -133,7 +140,7 @@ async fn the_sudo_variable_alone_does_not_refuse_a_guest() {
 async fn the_runner_given_to_sudo_refuses_to_start_a_guest() {
     let standard = setup().await;
     assert_eq!(
-        launch(&standard, RUNNER, vec![GUEST.into()], as_sudo()).await,
+        launch(&standard, RUNNER, guest_arguments(), as_sudo()).await,
         GUEST_REFUSED
     );
 }
@@ -162,7 +169,7 @@ async fn a_granted_identity_of_another_user_also_refuses_a_guest() {
     let group = standard.context.task_manager.get_group(task).await.unwrap();
     let same_identity = Launch::default().with_identity(user, group);
     assert_eq!(
-        launch(&standard, RUNNER, vec![GUEST.into()], same_identity).await,
+        launch(&standard, RUNNER, guest_arguments(), same_identity).await,
         GUEST_REFUSED
     );
 }
