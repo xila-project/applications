@@ -244,6 +244,29 @@ impl Drop for Layout {
     }
 }
 
+/// Move every window that is a direct child of `screen` into `body`, keeping
+/// their order, and leave the screen's other children in place.
+///
+/// # Safety
+/// The caller must hold the graphics lock, and both objects must be live.
+unsafe fn adopt_screen_windows(screen: *mut lvgl::lv_obj_t, body: *mut lvgl::lv_obj_t) {
+    let mut index = 0;
+    loop {
+        let child = unsafe { lvgl::lv_obj_get_child(screen, index) };
+        if child.is_null() {
+            break;
+        }
+        // SAFETY: `child` is a live child of `screen`.
+        if unsafe { graphics::Window::from_raw(child) }.is_some() {
+            // Moving the window removes it from the screen's children, so
+            // the next child takes its index.
+            unsafe { lvgl::lv_obj_set_parent(child, body) };
+        } else {
+            index += 1;
+        }
+    }
+}
+
 /// Keyboard event handler.
 ///
 /// # Safety
@@ -505,6 +528,15 @@ impl Layout {
         // the layout, which hands the windows still inside it back to the
         // screen before deleting it.
         unsafe { graphics_manager.set_window_parent(layout.body) }.await?;
+
+        // Windows that a previous shell left on the screen, or that were
+        // created there before the line above, belong in the new body.
+        // `create_window` now targets the body, so no window can be added to
+        // the screen after this pass.
+        graphics::lock!(graphics_manager, {
+            // SAFETY: the graphics lock is held, and both objects are live.
+            unsafe { adopt_screen_windows(layout.window, layout.body) }
+        });
 
         Ok(layout)
     }
