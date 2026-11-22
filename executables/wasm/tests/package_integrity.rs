@@ -13,10 +13,10 @@ use xila::{
     virtual_file_system::{Directory, File, IoErrorKind, VirtualFileSystem},
 };
 
-const IDENTIFIER: &str = "test.integrity";
+const IDENTIFIER: &str = "org.example.integrity";
 const EXECUTABLE: &str = "executables/application.wasm";
-const BUNDLE: &str = "/applications/bundles/test.integrity";
-const PATH: &str = "/applications/bundles/test.integrity/executables/application.wasm";
+const BUNDLE: &str = "/applications/bundles/org.example.integrity";
+const PATH: &str = "/applications/bundles/org.example.integrity/executables/application.wasm";
 
 fn guest() -> Vec<u8> {
     wat::parse_str(
@@ -240,7 +240,7 @@ async fn missing_invalid_or_mismatched_manifests_are_refused() {
     let cases: [(Vec<u8>, IntegrityError); 3] = [
         (b"{".to_vec(), IntegrityError::InvalidManifest),
         (
-            manifest_for("test.other", EXECUTABLE, &binary),
+            manifest_for("org.example.other", EXECUTABLE, &binary),
             IntegrityError::PackageMismatch,
         ),
         (
@@ -293,8 +293,8 @@ async fn unmanaged_executables_require_developer_mode() {
 
     // Aliases of installed paths and interrupted installations never run.
     for refused in [
-        "/applications/bundles/./test.integrity/executables/application.wasm",
-        "/applications//bundles/test.integrity/executables/application.wasm",
+        "/applications/bundles/./org.example.integrity/executables/application.wasm",
+        "/applications//bundles/org.example.integrity/executables/application.wasm",
         "/applications/bundles/.incoming-1/executables/application.wasm",
     ] {
         assert_eq!(
