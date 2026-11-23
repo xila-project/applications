@@ -3,7 +3,7 @@ use getargs_derive::GetArgs;
 use xila::{
     file_system::{AccessFlags, Path},
     network::{GET_IP_ADDRESS, GET_IP_ADDRESS_COUNT, GET_ROUTE, GET_ROUTE_COUNT, GET_STATE},
-    virtual_file_system::{Directory, File, VirtualFileSystem},
+    virtual_file_system::{Directory, File, IoErrorKind, VirtualFileSystem},
 };
 
 use super::{CommandContext, UserCommand};
@@ -52,10 +52,12 @@ async fn show_routes_interface<C: CommandContext>(
     interface: &str,
     file: &mut File<'_>,
 ) -> crate::Result<()> {
-    let count = file
-        .as_synchronous_file_mut()
-        .control(GET_ROUTE_COUNT, &())
-        .map_err(Error::FailedToOpenFile)?;
+    let count = match file.as_synchronous_file_mut().control(GET_ROUTE_COUNT, &()) {
+        Ok(count) => count,
+        // Not an interface, such as the HTTP client devices.
+        Err(IoErrorKind::Unsupported) => return Ok(()),
+        Err(error) => return Err(Error::FailedToOpenFile(error)),
+    };
 
     for index in 0..count {
         let route = file
@@ -142,10 +144,12 @@ async fn show_address<C: CommandContext>(
 
         let mut file = open_interface(context, &entry.name).await?;
 
-        let state = file
-            .control(GET_STATE, &())
-            .await
-            .map_err(Error::FailedToOpenFile)?;
+        let state = match file.control(GET_STATE, &()).await {
+            Ok(state) => state,
+            // Not an interface, such as the HTTP client devices.
+            Err(IoErrorKind::Unsupported) => continue,
+            Err(error) => return Err(Error::FailedToOpenFile(error)),
+        };
         let state = if state { "Enabled" } else { "Disabled" };
 
         let status = file
@@ -172,7 +176,7 @@ async fn show_address<C: CommandContext>(
             .await?;
         context
             .write_out_fmt(format_args!(
-                "   Hardware Address: {:x}:{:x}:{:x}:{:x}:{:x}:{:x}\n",
+                "   Hardware Address: {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}\n",
                 hardware_address[0],
                 hardware_address[1],
                 hardware_address[2],
