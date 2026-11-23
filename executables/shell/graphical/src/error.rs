@@ -12,10 +12,22 @@ use xila::{
 /// Why the desk could not read its shortcut directory: the error of the
 /// creation attempt, when it failed, together with the error of the opening
 /// attempt that made the directory unreadable.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ShortcutDirectoryFailure {
     pub creation: Option<virtual_file_system::IoErrorKind>,
     pub opening: virtual_file_system::IoErrorKind,
+}
+
+// Written by hand so that the logged error names the directory.
+impl core::fmt::Debug for ShortcutDirectoryFailure {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter
+            .debug_struct("ShortcutDirectoryFailure")
+            .field("path", &crate::shortcut::SHORTCUT_PATH.as_str())
+            .field("creation", &self.creation)
+            .field("opening", &self.opening)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
