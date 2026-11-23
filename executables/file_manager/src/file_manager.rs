@@ -57,7 +57,7 @@ impl FileManager {
         let manager = graphics::lock!(graphics_manager, {
             let mut window = graphics_manager.create_window().await?;
 
-            window.set_icon("Fm", palette::get(Hue::Cyan, palette::Tone::MAIN));
+            window.set_icon("Fm", WINDOW_ICON_COLOR);
 
             let mut manager = Self {
                 context,
@@ -854,4 +854,13 @@ mod tests {
             handle.join().unwrap();
         }
     }
+}
+
+const WINDOW_ICON_COLOR: graphics::Color = palette::get(Hue::Cyan, palette::Tone::MAIN);
+
+#[cfg(test)]
+#[test]
+fn window_icon_matches_platform_shortcut() {
+    // Keep this in sync with Platforms' tools/fs_image/shortcuts/file_manager.json.
+    assert_eq!(WINDOW_ICON_COLOR, graphics::Color::new(0, 188, 212));
 }

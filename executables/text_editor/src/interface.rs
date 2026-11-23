@@ -9,6 +9,8 @@ use std::{
 };
 use wasm::*;
 
+include!(concat!(env!("OUT_DIR"), "/shortcut_icon.rs"));
+
 /// Height reserved below the content for the shell's bottom-edge home swipe:
 /// its 24 dp band, 20 px at LVGL's default 130 dpi. Guests cannot read the
 /// display density, so this mirrors `Metrics::band` in
@@ -210,15 +212,7 @@ impl Interface {
     unsafe fn new() -> wasm::Result<Self> {
         unsafe {
             let window = window_create()?;
-            window_set_icon(
-                window,
-                c"Te".as_ptr(),
-                Color {
-                    red: 76,
-                    green: 110,
-                    blue: 245,
-                },
-            )?;
+            window_set_icon(window, ICON_TEXT.as_ptr(), ICON_COLOR)?;
             object_set_flex_flow(window, FlexFlow::Column)?;
             object_set_padding(window, 4)?;
             object_remove_flag(window, ObjectFlag::Scrollable)?;

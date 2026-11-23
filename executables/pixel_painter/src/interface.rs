@@ -9,6 +9,8 @@ use std::{
 };
 use wasm::*;
 
+include!(concat!(env!("OUT_DIR"), "/shortcut_icon.rs"));
+
 struct Interface {
     window: *mut Object,
     canvas: *mut Object,
@@ -134,15 +136,7 @@ impl Interface {
     unsafe fn new() -> wasm::Result<Self> {
         unsafe {
             let window = window_create()?;
-            window_set_icon(
-                window,
-                c"Pa".as_ptr(),
-                Color {
-                    red: 142,
-                    green: 36,
-                    blue: 170,
-                },
-            )?;
+            window_set_icon(window, ICON_TEXT.as_ptr(), ICON_COLOR)?;
             object_update_layout(window)?;
             let compact = object_get_width(window)? < 560 || object_get_height(window)? < 360;
             object_set_flex_flow(window, FlexFlow::Column)?;
