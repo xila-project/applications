@@ -3,6 +3,7 @@ name = "xila-text-editor"
 version = "0.2.0"
 edition = "2024"
 rust-version.workspace = true
+build = "../wasm_guest_build.rs"
 description = "A page-based text editor for Xila WebAssembly."
 
 [dependencies]
