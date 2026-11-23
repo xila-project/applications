@@ -11,6 +11,8 @@ use std::{
 };
 use wasm::*;
 
+include!(concat!(env!("OUT_DIR"), "/shortcut_icon.rs"));
+
 /// shadcn button variants, numbered as `lv_theme_shadcn_variant_t`.
 const PRIMARY: u32 = 0;
 const OUTLINE: u32 = 2;
@@ -235,15 +237,7 @@ impl Interface {
             object_set_flex_flow(window, FlexFlow::Column)?;
             object_set_padding(window, 6)?;
             object_remove_flag(window, ObjectFlag::Scrollable)?;
-            window_set_icon(
-                window,
-                c"Cl".as_ptr(),
-                Color {
-                    red: 59,
-                    green: 130,
-                    blue: 246,
-                },
-            )?;
+            window_set_icon(window, ICON_TEXT.as_ptr(), ICON_COLOR)?;
             let mut ui = Self {
                 window,
                 tabs: null_mut(),

@@ -6,6 +6,8 @@ use nanoaudio_synth::Waveform;
 use synth::Keyboard;
 use wasm::*;
 
+include!(concat!(env!("OUT_DIR"), "/shortcut_icon.rs"));
+
 use crate::device::AudioOutput;
 
 /// Note names by semitone; `keys` and `Keyboard` use the same indices.
@@ -125,15 +127,7 @@ impl Interface {
     pub fn new() -> wasm::Result<Self> {
         unsafe {
             let window = window_create()?;
-            window_set_icon(
-                window,
-                c"Sy".as_ptr(),
-                Color {
-                    red: 234,
-                    green: 88,
-                    blue: 12,
-                },
-            )?;
+            window_set_icon(window, ICON_TEXT.as_ptr(), ICON_COLOR)?;
             object_set_flex_flow(window, FlexFlow::Column)?;
             object_remove_flag(window, ObjectFlag::Scrollable)?;
             object_update_layout(window)?;

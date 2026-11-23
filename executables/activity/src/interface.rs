@@ -52,7 +52,7 @@ impl View {
         let mut window;
         let _lock = graphics.lock().await;
         window = graphics.create_window().await.map_err(|_| crate::code(1))?;
-        window.set_icon("Ac", graphics::Color::BLACK);
+        window.set_icon("Ac", WINDOW_ICON_COLOR);
         let root = window.as_object_mutable();
         unsafe {
             lvgl::lv_obj_update_layout(root);
@@ -415,4 +415,13 @@ unsafe fn text(label: *mut lvgl::lv_obj_t, value: &str) {
             lvgl::lv_label_set_text(label, value.as_ptr());
         }
     }
+}
+
+const WINDOW_ICON_COLOR: graphics::Color = graphics::Color::new(0, 150, 136);
+
+#[cfg(test)]
+#[test]
+fn window_icon_matches_platform_shortcut() {
+    // Keep this in sync with Platforms' tools/fs_image/shortcuts/activity.json.
+    assert_eq!(WINDOW_ICON_COLOR, graphics::Color::new(0, 150, 136));
 }

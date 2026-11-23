@@ -2218,6 +2218,8 @@ dependencies = [
  "critical-section",
  "embedded-i18n",
  "nanoexpr",
+ "serde",
+ "serde_json",
  "xila",
  "xila-drivers-core",
  "xila-task",
@@ -2230,6 +2232,8 @@ name = "xila-clock"
 version = "0.2.0"
 dependencies = [
  "embedded-i18n",
+ "serde",
+ "serde_json",
  "xila-audio",
  "xila-file-system",
  "xila-wasm",
@@ -2287,6 +2291,8 @@ name = "xila-digits"
 version = "0.2.0"
 dependencies = [
  "embedded-i18n",
+ "serde",
+ "serde_json",
  "xila-device",
  "xila-file-system",
  "xila-pixel-painter",
@@ -2568,6 +2574,8 @@ name = "xila-pixel-painter"
 version = "0.2.0"
 dependencies = [
  "embedded-i18n",
+ "serde",
+ "serde_json",
  "xila-wasm",
 ]
 
@@ -2623,6 +2631,8 @@ dependencies = [
  "embedded-i18n",
  "nanoaudio",
  "nanoaudio-synth",
+ "serde",
+ "serde_json",
  "xila-audio",
  "xila-file-system",
  "xila-wasm",
@@ -2717,6 +2727,8 @@ name = "xila-text-editor"
 version = "0.2.0"
 dependencies = [
  "embedded-i18n",
+ "serde",
+ "serde_json",
  "xila-wasm",
 ]
 
@@ -2802,6 +2814,8 @@ dependencies = [
  "critical-section",
  "embedded-i18n",
  "miniserde",
+ "serde",
+ "serde_json",
  "xila",
  "xila-drivers-core",
  "xila-file-system",

@@ -5,6 +5,8 @@ use std::{ffi::CString, string::ToString, thread::sleep};
 use embedded_i18n::t;
 use wasm::*;
 
+include!(concat!(env!("OUT_DIR"), "/shortcut_icon.rs"));
+
 use weather::{
     model::{CurrentWeather, DailyWeather, HourlyWeather},
     state::{WeatherData, fetch_weather, map_status_message},
@@ -115,15 +117,7 @@ impl Interface {
     pub fn new() -> wasm::Result<Self> {
         unsafe {
             let window = window_create()?;
-            window_set_icon(
-                window,
-                c"We".as_ptr(),
-                Color {
-                    red: 14,
-                    green: 165,
-                    blue: 233,
-                },
-            )?;
+            window_set_icon(window, ICON_TEXT.as_ptr(), ICON_COLOR)?;
             object_set_flex_flow(window, FlexFlow::Column)?;
             object_remove_flag(window, ObjectFlag::Scrollable)?;
             object_update_layout(window)?;

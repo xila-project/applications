@@ -32,7 +32,7 @@ impl Settings {
         let _lock = graphics_manager.lock().await;
         window = graphics_manager.create_window().await?;
 
-        window.set_icon("Se", palette::get(Hue::Grey, palette::Tone::MAIN));
+        window.set_icon("Se", WINDOW_ICON_COLOR);
 
         // Flatten window chrome so the tabview fills the window edge-to-edge
         unsafe {
@@ -131,4 +131,13 @@ impl Drop for Settings {
             }
         }
     }
+}
+
+const WINDOW_ICON_COLOR: graphics::Color = palette::get(Hue::Grey, palette::Tone::MAIN);
+
+#[cfg(test)]
+#[test]
+fn window_icon_matches_platform_shortcut() {
+    // Keep this in sync with Platforms' tools/fs_image/shortcuts/settings.json.
+    assert_eq!(WINDOW_ICON_COLOR, graphics::Color::new(158, 158, 158));
 }

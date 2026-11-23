@@ -59,7 +59,7 @@ async fn create_debug_window_with(
 }
 
 fn build_debug_window(window: &mut graphics::OwnedWindow) -> Result<(), NonZeroUsize> {
-    window.set_icon("Db", graphics::Color::BLACK);
+    window.set_icon("Db", WINDOW_ICON_COLOR);
     let label = unsafe { graphics::lvgl::lv_label_create(window.as_object_mutable()) };
     if label.is_null() {
         return Err(code(1));
@@ -661,4 +661,13 @@ mod window_setup_tests {
             baseline_windows
         );
     }
+}
+
+const WINDOW_ICON_COLOR: graphics::Color = graphics::Color::new(235, 87, 87);
+
+#[cfg(test)]
+#[test]
+fn window_icon_matches_platform_shortcut() {
+    // Keep this in sync with Platforms' tools/fs_image/shortcuts/debug.json.
+    assert_eq!(WINDOW_ICON_COLOR, graphics::Color::new(235, 87, 87));
 }

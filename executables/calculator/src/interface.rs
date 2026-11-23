@@ -7,6 +7,8 @@ use embedded_i18n::t;
 use std::{ffi::CString, ptr::null_mut, thread::sleep};
 use wasm::*;
 
+include!(concat!(env!("OUT_DIR"), "/shortcut_icon.rs"));
+
 /// Windows narrower or shorter than this show one pad at a time.
 const WIDE_MINIMUM_WIDTH: i32 = 560;
 const WIDE_MINIMUM_HEIGHT: i32 = 360;
@@ -74,15 +76,7 @@ impl Interface {
     pub fn new() -> wasm::Result<Self> {
         unsafe {
             let window = window_create()?;
-            window_set_icon(
-                window,
-                c"Ca".as_ptr(),
-                Color {
-                    red: 0,
-                    green: 0,
-                    blue: 0,
-                },
-            )?;
+            window_set_icon(window, ICON_TEXT.as_ptr(), ICON_COLOR)?;
             object_set_flex_flow(window, FlexFlow::Column)?;
             object_set_padding(window, 8)?;
             object_remove_flag(window, ObjectFlag::Scrollable)?;

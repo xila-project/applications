@@ -4,6 +4,8 @@ use pixel_painter::drawing::{Drawing, HEIGHT, Viewport, WIDTH};
 use std::{ffi::CString, ptr::null_mut, thread::sleep, time::Duration};
 use wasm::*;
 
+include!(concat!(env!("OUT_DIR"), "/shortcut_icon.rs"));
+
 struct Interface {
     window: *mut Object,
     canvas: *mut Object,
@@ -96,15 +98,7 @@ impl Interface {
     unsafe fn new() -> wasm::Result<Self> {
         unsafe {
             let window = window_create()?;
-            window_set_icon(
-                window,
-                c"09".as_ptr(),
-                Color {
-                    red: 64,
-                    green: 160,
-                    blue: 220,
-                },
-            )?;
+            window_set_icon(window, ICON_TEXT.as_ptr(), ICON_COLOR)?;
             object_set_flex_flow(window, FlexFlow::Column)?;
             object_set_padding(window, 4)?;
             let title = label_create(window)?;
