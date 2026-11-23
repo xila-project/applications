@@ -3,6 +3,7 @@ name = "xila-clock"
 version = "0.2.0"
 edition = "2024"
 rust-version.workspace = true
+build = "../wasm_guest_build.rs"
 description = "A bounded Clock application for Xila's WebAssembly runtime."
 license = "GPL-2.0-only"
 
