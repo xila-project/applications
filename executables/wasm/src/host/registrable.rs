@@ -54,7 +54,7 @@ mod tests {
                 Level::Trace => {
                     TRACE_CALLS.fetch_add(1, Ordering::Relaxed);
                 }
-                Level::Error | Level::Warn | Level::Info => {
+                Level::Error | Level::Warning | Level::Information => {
                     VISIBLE_CALLS.fetch_add(1, Ordering::Relaxed);
                 }
                 Level::Debug => {}
