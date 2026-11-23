@@ -458,15 +458,36 @@ impl Desk {
 
             let virtual_file_system = &self.context.virtual_file_system;
 
-            let _ = virtual_file_system
-                .create_directory(task, &SHORTCUT_PATH)
-                .await;
+            // Only `AlreadyExists` is expected here: any other error is
+            // reported so that an empty drawer can be explained. Missing
+            // parents are not created on purpose, the seed image provides
+            // the shared configuration tree.
+            if let Some(error) = unexpected_directory_creation_error(
+                virtual_file_system
+                    .create_directory(task, &SHORTCUT_PATH)
+                    .await,
+            ) {
+                error!(
+                    "Failed to create shortcut directory {}: {error:?}",
+                    SHORTCUT_PATH.as_str()
+                );
+            }
 
             let mut buffer: Vec<u8> = vec![];
 
-            let shortcuts_directory = Directory::open(virtual_file_system, task, SHORTCUT_PATH)
-                .await
-                .map_err(Error::FailedToReadShortcutDirectory)?;
+            // The caller of this function drops its error, so report the
+            // failure here instead of silently ignoring it.
+            let shortcuts_directory =
+                match Directory::open(virtual_file_system, task, SHORTCUT_PATH).await {
+                    Ok(directory) => directory,
+                    Err(error) => {
+                        error!(
+                            "Failed to open shortcut directory {}: {error:?}",
+                            SHORTCUT_PATH.as_str()
+                        );
+                        return Err(Error::FailedToReadShortcutDirectory(error));
+                    }
+                };
 
             for shortcut_entry in shortcuts_directory {
                 if shortcut_entry.kind != Kind::File {
@@ -995,11 +1016,24 @@ impl Desk {
     }
 }
 
+/// Classify the result of creating a directory the desk expects to exist
+/// already: only `AlreadyExists` is expected, any other error is returned
+/// so the caller can report it.
+fn unexpected_directory_creation_error(
+    result: core::result::Result<(), xila::virtual_file_system::IoErrorKind>,
+) -> Option<xila::virtual_file_system::IoErrorKind> {
+    match result {
+        Ok(()) | Err(xila::virtual_file_system::IoErrorKind::AlreadyExists) => None,
+        Err(error) => Some(error),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::{string::String, vec, vec::Vec};
 
     use xila::graphics::Color;
+    use xila::virtual_file_system::IoErrorKind;
 
     fn visible_window_identifiers(windows: &[(usize, String, Color)]) -> Vec<usize> {
         windows
@@ -1060,6 +1094,23 @@ mod tests {
         ];
 
         assert_eq!(visible_window_identifiers(&windows), vec![42, 77, 3]);
+    }
+
+    #[test]
+    fn only_already_exists_is_expected_when_creating_a_directory() {
+        assert_eq!(super::unexpected_directory_creation_error(Ok(())), None);
+        assert_eq!(
+            super::unexpected_directory_creation_error(Err(IoErrorKind::AlreadyExists)),
+            None
+        );
+        assert_eq!(
+            super::unexpected_directory_creation_error(Err(IoErrorKind::PermissionDenied)),
+            Some(IoErrorKind::PermissionDenied)
+        );
+        assert_eq!(
+            super::unexpected_directory_creation_error(Err(IoErrorKind::NotFound)),
+            Some(IoErrorKind::NotFound)
+        );
     }
 
     #[test]
