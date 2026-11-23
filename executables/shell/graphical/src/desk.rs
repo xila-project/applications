@@ -1,7 +1,7 @@
 use core::{ffi::c_void, mem::forget};
 
 use crate::{
-    error::{Error, Result},
+    error::{Error, Result, ShortcutDirectoryFailure},
     icon::{create_icon, create_show_applications_button},
     shortcut::{SHORTCUT_PATH, Shortcut},
 };
@@ -14,7 +14,7 @@ use alloc::{
 };
 use xila::graphics::{self, Color, EventKind, Logo, LogoStyle, OwnedWindow, Point, lvgl};
 use xila::log::{self, error, warning};
-use xila::virtual_file_system::Directory;
+use xila::virtual_file_system::{Directory, IoErrorKind, ignore_already_exists_error};
 use xila::{executable, graphics::theme};
 use xila::{executable::Standard, graphics::Event};
 use xila::{file_system::Kind, graphics::symbol};
@@ -49,6 +49,12 @@ pub struct Desk {
     dock_menu_maximize_button: Option<*mut lvgl::lv_obj_t>,
     dock_menu_close_button: Option<*mut lvgl::lv_obj_t>,
     shortcuts: BTreeMap<*mut lvgl::lv_obj_t, String>,
+    /// The shortcut directory failure already reported through the desk
+    /// event error handler. The drawer scan reruns on every drawer
+    /// opening, so a given failure is not reported again; the field is
+    /// cleared when the directory opens, so a failure after a recovery is
+    /// reported again.
+    reported_shortcut_directory_failure: Option<ShortcutDirectoryFailure>,
 }
 
 impl Drop for Desk {
@@ -209,6 +215,7 @@ impl Desk {
                 dock_menu_maximize_button: None,
                 dock_menu_close_button: None,
                 shortcuts: BTreeMap::new(),
+                reported_shortcut_directory_failure: None,
             }
         });
 
@@ -458,36 +465,40 @@ impl Desk {
 
             let virtual_file_system = &self.context.virtual_file_system;
 
-            // Only `AlreadyExists` is expected here: any other error is
-            // reported so that an empty drawer can be explained. Missing
-            // parents are not created on purpose, the seed image provides
-            // the shared configuration tree.
-            if let Some(error) = unexpected_directory_creation_error(
-                virtual_file_system
-                    .create_directory(task, &SHORTCUT_PATH)
-                    .await,
-            ) {
-                error!(
-                    "Failed to create shortcut directory {}: {error:?}",
-                    SHORTCUT_PATH.as_str()
-                );
-            }
+            // Missing parents are not created on purpose, the seed image
+            // provides the shared configuration tree. The opening attempt
+            // stays so that the drawer can still load when the directory is
+            // readable even though its creation failed.
+            let creation = virtual_file_system
+                .create_directory(task, &SHORTCUT_PATH)
+                .await;
+            let opening = Directory::open(virtual_file_system, task, SHORTCUT_PATH).await;
 
             let mut buffer: Vec<u8> = vec![];
 
-            // The caller of this function drops its error, so report the
-            // failure here instead of silently ignoring it.
-            let shortcuts_directory =
-                match Directory::open(virtual_file_system, task, SHORTCUT_PATH).await {
-                    Ok(directory) => directory,
-                    Err(error) => {
-                        error!(
-                            "Failed to open shortcut directory {}: {error:?}",
-                            SHORTCUT_PATH.as_str()
-                        );
-                        return Err(Error::FailedToReadShortcutDirectory(error));
+            let shortcuts_directory = match classify_shortcut_directory_scan(creation, opening) {
+                Ok(directory) => {
+                    // The drawer can still load, so a creation failure that
+                    // did not prevent opening is not reported, and a later
+                    // failure is reported again.
+                    self.reported_shortcut_directory_failure = None;
+                    directory
+                }
+                Err(failure) => {
+                    // The scan reruns on every drawer opening: report a given
+                    // failure only once. The caller routes the error through
+                    // the desk event error handler, which reports both causes
+                    // of the failure in one message.
+                    if !is_new_shortcut_directory_failure(
+                        self.reported_shortcut_directory_failure,
+                        failure,
+                    ) {
+                        return Ok(());
                     }
-                };
+                    self.reported_shortcut_directory_failure = Some(failure);
+                    return Err(Error::FailedToReadShortcutDirectory(failure));
+                }
+            };
 
             for shortcut_entry in shortcuts_directory {
                 if shortcut_entry.kind != Kind::File {
@@ -519,36 +530,47 @@ impl Desk {
             // read bundle-local shortcut.json files without parsing a package manifest.
             // A fresh scan on drawer opening makes new apps visible without reboot.
             let bundles_path = xila::file_system::Path::APPLICATION_BUNDLES;
-            if let Ok(bundles) = Directory::open(virtual_file_system, task, bundles_path).await {
-                for bundle in bundles {
-                    // Skip ".", "..", and installer staging such as ".incoming-1".
-                    if bundle.kind != Kind::Directory || bundle.name.starts_with('.') {
-                        continue;
-                    }
-                    let Some(directory) = bundles_path.append(&bundle.name) else {
-                        continue;
-                    };
-                    let Some(shortcut_path) = directory.append("shortcut.json") else {
-                        continue;
-                    };
-                    match Shortcut::read_from_path(self.context, &shortcut_path, &mut buffer).await
-                    {
-                        Ok(shortcut) => {
-                            self.create_drawer_shortcut(
-                                shortcut_path.as_str(),
-                                &shortcut.name,
-                                shortcut.get_icon_color(),
-                                &shortcut.icon_string,
-                                drawer,
-                            )?;
+            match Directory::open(virtual_file_system, task, bundles_path).await {
+                Ok(bundles) => {
+                    for bundle in bundles {
+                        // Skip ".", "..", and installer staging such as ".incoming-1".
+                        if bundle.kind != Kind::Directory || bundle.name.starts_with('.') {
+                            continue;
                         }
-                        Err(error) => {
-                            warning!(
-                                "Skipping bundle shortcut at {}: {error:?}",
-                                shortcut_path.as_str()
-                            );
+                        let Some(directory) = bundles_path.append(&bundle.name) else {
+                            continue;
+                        };
+                        let Some(shortcut_path) = directory.append("shortcut.json") else {
+                            continue;
+                        };
+                        match Shortcut::read_from_path(self.context, &shortcut_path, &mut buffer)
+                            .await
+                        {
+                            Ok(shortcut) => {
+                                self.create_drawer_shortcut(
+                                    shortcut_path.as_str(),
+                                    &shortcut.name,
+                                    shortcut.get_icon_color(),
+                                    &shortcut.icon_string,
+                                    drawer,
+                                )?;
+                            }
+                            Err(error) => {
+                                warning!(
+                                    "Skipping bundle shortcut at {}: {error:?}",
+                                    shortcut_path.as_str()
+                                );
+                            }
                         }
                     }
+                }
+                // A fresh image has no bundle directory yet: nothing to scan.
+                Err(IoErrorKind::NotFound) => {}
+                Err(error) => {
+                    warning!(
+                        "Failed to open the application bundles directory {}: {error:?}",
+                        bundles_path.as_str()
+                    );
                 }
             }
 
@@ -860,7 +882,10 @@ impl Desk {
                 if lvgl::lv_tileview_get_tile_active(self.tile_view) == self.desk_tile {
                     lvgl::lv_obj_clean(self.drawer_tile);
                 } else if lvgl::lv_obj_get_child_count(self.drawer_tile) == 0 {
-                    let _ = self.create_drawer_interface(self.drawer_tile).await;
+                    // Drawer scan failures, including shortcut rendering
+                    // failures, are routed through the desk event error
+                    // handler in `handle_events`.
+                    self.create_drawer_interface(self.drawer_tile).await?;
                 }
             },
             EventKind::Clicked => {
@@ -1016,16 +1041,31 @@ impl Desk {
     }
 }
 
-/// Classify the result of creating a directory the desk expects to exist
-/// already: only `AlreadyExists` is expected, any other error is returned
-/// so the caller can report it.
-fn unexpected_directory_creation_error(
-    result: core::result::Result<(), xila::virtual_file_system::IoErrorKind>,
-) -> Option<xila::virtual_file_system::IoErrorKind> {
-    match result {
-        Ok(()) | Err(xila::virtual_file_system::IoErrorKind::AlreadyExists) => None,
-        Err(error) => Some(error),
+/// Classify one shortcut directory scan from its creation and opening
+/// results. Only `AlreadyExists` on creation is expected; any other
+/// creation error is kept so that, when opening the directory fails too,
+/// both causes are reported together. A creation failure followed by a
+/// successful opening is not a failure at all: the drawer can still load.
+fn classify_shortcut_directory_scan<T>(
+    creation: core::result::Result<(), IoErrorKind>,
+    opening: core::result::Result<T, IoErrorKind>,
+) -> core::result::Result<T, ShortcutDirectoryFailure> {
+    let creation = ignore_already_exists_error(creation).err();
+    match opening {
+        Ok(directory) => Ok(directory),
+        Err(opening) => Err(ShortcutDirectoryFailure { creation, opening }),
     }
+}
+
+/// Whether a shortcut directory failure still needs to be reported given the
+/// last reported one: the drawer scan reruns on every drawer opening, so the
+/// same failure is not repeated, but a change of cause is, and so is a
+/// failure after the directory opened again (`None`).
+fn is_new_shortcut_directory_failure(
+    last_reported: Option<ShortcutDirectoryFailure>,
+    failure: ShortcutDirectoryFailure,
+) -> bool {
+    last_reported != Some(failure)
 }
 
 #[cfg(test)]
@@ -1097,20 +1137,58 @@ mod tests {
     }
 
     #[test]
-    fn only_already_exists_is_expected_when_creating_a_directory() {
-        assert_eq!(super::unexpected_directory_creation_error(Ok(())), None);
+    fn shortcut_directory_scan_reports_at_most_one_failure_with_both_causes() {
+        use super::{ShortcutDirectoryFailure, classify_shortcut_directory_scan};
+
+        // The directory opens: nothing to report, even when the creation
+        // reported `AlreadyExists` or failed while the directory stayed
+        // readable, because the drawer can still load.
+        assert!(classify_shortcut_directory_scan(Ok(()), Ok(())).is_ok());
+        assert!(classify_shortcut_directory_scan(Err(IoErrorKind::AlreadyExists), Ok(())).is_ok());
+        assert!(
+            classify_shortcut_directory_scan(Err(IoErrorKind::PermissionDenied), Ok(())).is_ok()
+        );
+
+        // The directory cannot be opened: one failure carrying both causes.
         assert_eq!(
-            super::unexpected_directory_creation_error(Err(IoErrorKind::AlreadyExists)),
-            None
+            classify_shortcut_directory_scan::<()>(
+                Err(IoErrorKind::PermissionDenied),
+                Err(IoErrorKind::NotFound)
+            )
+            .unwrap_err(),
+            ShortcutDirectoryFailure {
+                creation: Some(IoErrorKind::PermissionDenied),
+                opening: IoErrorKind::NotFound,
+            }
         );
         assert_eq!(
-            super::unexpected_directory_creation_error(Err(IoErrorKind::PermissionDenied)),
-            Some(IoErrorKind::PermissionDenied)
+            classify_shortcut_directory_scan::<()>(Ok(()), Err(IoErrorKind::PermissionDenied))
+                .unwrap_err(),
+            ShortcutDirectoryFailure {
+                creation: None,
+                opening: IoErrorKind::PermissionDenied,
+            }
         );
-        assert_eq!(
-            super::unexpected_directory_creation_error(Err(IoErrorKind::NotFound)),
-            Some(IoErrorKind::NotFound)
-        );
+    }
+
+    #[test]
+    fn a_given_shortcut_directory_failure_is_reported_once() {
+        use super::{ShortcutDirectoryFailure, is_new_shortcut_directory_failure};
+
+        let failure = ShortcutDirectoryFailure {
+            creation: Some(IoErrorKind::PermissionDenied),
+            opening: IoErrorKind::PermissionDenied,
+        };
+        // The first failure, and a failure after a recovery, are reported.
+        assert!(is_new_shortcut_directory_failure(None, failure));
+        // The same failure is not repeated on the next drawer opening.
+        assert!(!is_new_shortcut_directory_failure(Some(failure), failure));
+        // A change of cause is reported again.
+        let other = ShortcutDirectoryFailure {
+            creation: None,
+            opening: IoErrorKind::NotFound,
+        };
+        assert!(is_new_shortcut_directory_failure(Some(failure), other));
     }
 
     #[test]

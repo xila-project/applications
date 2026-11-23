@@ -9,6 +9,15 @@ use xila::{
     authentication, executable, graphics, internationalization::t, task, virtual_file_system,
 };
 
+/// Why the desk could not read its shortcut directory: the error of the
+/// creation attempt, when it failed, together with the error of the opening
+/// attempt that made the directory unreadable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ShortcutDirectoryFailure {
+    pub creation: Option<virtual_file_system::IoErrorKind>,
+    pub opening: virtual_file_system::IoErrorKind,
+}
+
 #[derive(Debug, Clone)]
 #[repr(u8)]
 pub enum Error {
@@ -21,7 +30,7 @@ pub enum Error {
     FailedToSetTaskUser(task::Error),
     FailedToDeserializeShortcut(miniserde::Error),
     FailedToGetCurrentTaskIdentifier(task::Error),
-    FailedToReadShortcutDirectory(virtual_file_system::IoErrorKind),
+    FailedToReadShortcutDirectory(ShortcutDirectoryFailure),
     FailedToGetShortcutFilePath,
     FailedToReadShortcutFile(virtual_file_system::IoErrorKind),
     FailedToOpenStandardFile(executable::Error),
@@ -102,11 +111,14 @@ impl Display for Error {
                     t!("errors.failed_to_get_current_task_identifier", arg0 = error)
                 )
             }
-            Self::FailedToReadShortcutDirectory(error) => {
+            Self::FailedToReadShortcutDirectory(failure) => {
                 write!(
                     formatter,
                     "{}",
-                    t!("errors.failed_to_read_shortcut_directory", arg0 = error)
+                    t!(
+                        "errors.failed_to_read_shortcut_directory",
+                        arg0 = failure.opening
+                    )
                 )
             }
             Self::FailedToGetShortcutFilePath => {
