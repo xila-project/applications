@@ -94,7 +94,9 @@ holds:
 
 - `configuration.json`: the connection, the panels, the hidden panels and the
   cached dashboard;
-- `token`: the Grafana token alone, on one line.
+- `token`: the Grafana token alone, on one line: printable ASCII without
+  spaces, at most 512 bytes. A file that holds anything else is treated as
+  having no token, since the token is sent in a request header.
 
 A hand-written configuration only needs the connection and the panels:
 
@@ -158,7 +160,10 @@ that sends it: feed the commands from a private file.
 ## Security
 
 Use a Viewer-only token: it travels in an `Authorization: Bearer` header on
-every request.
+every request. The token is never written to the screen once saved (the
+settings show "Token set"), to logs or to error messages, and the token file
+sits in the owner-only configuration directory. A URL that starts with
+`http://` sends the token unencrypted: use it only on a network you trust.
 
 HTTPS server certificate verification is not done yet on Espressif boards
 (xila-project/platforms#186): the connection is encrypted, but an active
@@ -169,7 +174,8 @@ token that can be revoked quickly, and give it the Viewer role only.
 ## Memory
 
 Responses are read as a stream through a 4 KiB buffer: a dashboard is never
-held whole, and a chart series keeps at most 60 averaged points. Instant
+held whole, a response longer than 2 MiB is refused, and a chart series keeps
+at most 60 averaged points. Instant
 queries share one request per refresh; range queries are grouped by range,
 and a request is split when its body passes 8 KiB.
 
