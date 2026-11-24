@@ -13,7 +13,6 @@ import unicodedata
 ROOT = Path(__file__).resolve().parent.parent
 APPS = ("calculator", "clock", "weather", "pixel_painter", "text_editor", "synth", "digits", "dashboard")
 SCHEMA = "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
-REPOSITORY_LICENSE = "Apache-2.0"
 SOURCE_PREFIX = "https://github.com/xila-project/applications/tree/main/executables/"
 SHORTCUT_SCHEMA = "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json"
 ALLOWED_MANIFEST_KEYS = {
@@ -49,10 +48,23 @@ def is_control(character: str) -> bool:
     return unicodedata.category(character) == "Cc"
 
 
-def validate_catalog_metadata(application: str, metadata: object) -> None:
+def crate_license(root: Path, cargo: dict, application: str) -> str:
+    """Return the license declared by the crate of an application, resolving workspace inheritance."""
+    license_field = cargo["package"].get("license")
+    if isinstance(license_field, dict):
+        if license_field.get("workspace") is not True:
+            raise SystemExit(f"unsupported license inheritance in the crate of {application}")
+        workspace = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
+        license_field = workspace.get("workspace", {}).get("package", {}).get("license")
+    if not isinstance(license_field, str) or not license_field:
+        raise SystemExit(f"the crate of {application} declares no license")
+    return license_field
+
+
+def validate_catalog_metadata(application: str, metadata: object, crate_license: str) -> None:
     """Require the catalog metadata that the registry entry of a release copies.
 
-    Every published application needs a summary, the licence of this repository
+    Every published application needs a summary, the licence of its crate
     and the source URL of its own directory. The homepage is optional.
     """
     if not isinstance(metadata, dict) or not {"summary", "license", "source"} <= metadata.keys():
@@ -69,8 +81,10 @@ def validate_catalog_metadata(application: str, metadata: object) -> None:
         or any(is_control(character) for character in summary)
     ):
         raise SystemExit(f"invalid catalog summary (one line, 1 to 256 UTF-8 bytes) for {application}")
-    if metadata["license"] != REPOSITORY_LICENSE:
-        raise SystemExit(f"catalog license must be {REPOSITORY_LICENSE} for {application}")
+    if metadata["license"] != crate_license:
+        raise SystemExit(
+            f"catalog license {metadata['license']} does not match the license {crate_license} of the {application} crate"
+        )
     if metadata["source"] != f"{SOURCE_PREFIX}{application}":
         raise SystemExit(f"catalog source must be {SOURCE_PREFIX}{application}")
     homepage = metadata.get("homepage")
@@ -105,7 +119,7 @@ def validate_application(root: Path, application: str, sync: bool = False) -> No
     actual = tuple(metadata.get(key) for key in ("name", "version", "target"))
     if actual != expected:
         raise SystemExit(f"invalid package identity/version/target for {application}")
-    validate_catalog_metadata(application, metadata.get("metadata"))
+    validate_catalog_metadata(application, metadata.get("metadata"), crate_license(root, cargo, application))
     if not is_valid_xila_version(metadata.get("xila_version")):
         raise SystemExit(f"invalid xila_version for {application}")
     if metadata.get("capabilities") != []:
