@@ -1,6 +1,6 @@
 [package]
 name = "xila-weather"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 rust-version.workspace = true
 build = "../wasm_guest_build.rs"
