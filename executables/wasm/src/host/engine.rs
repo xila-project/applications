@@ -21,7 +21,7 @@
 //! | memory64                | `memory_64` builds only | the host ABI has one address width |
 //! | multi-memory            | disabled | the host ABI addresses the single `memory` export |
 //! | SIMD, relaxed SIMD      | disabled | no guest uses it; the engine support is large    |
-//! | custom page sizes       | enabled  | guests can opt into byte-sized linear memory pages |
+//! | custom page sizes       | enabled  | bundled guests use 1-byte pages to shrink initial memory |
 //! | wide arithmetic         | disabled | no toolchain emits it                            |
 //! | threads / atomics       | unsupported by Wasmi                                       |
 //!
