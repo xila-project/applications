@@ -13,8 +13,13 @@ fn main() {
     println!("cargo:rerun-if-changed={}", shortcut.display());
 
     if env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("wasm32") {
-        // Reserve one Wasm page for the stack to reduce initial linear memory on devices.
-        println!("cargo:rustc-link-arg-bins=-zstack-size=65536");
+        // Use 1-byte linear memory pages (custom page sizes proposal) so the initial memory is
+        // exactly what the module needs instead of a multiple of 64 KiB.
+        println!("cargo:rustc-link-arg-bins=--page-size=1");
+        // The stack is placed first, so an overflow traps instead of corrupting data. The deepest
+        // call chain is the calculator's at its parser's nesting limit, between 16 and 20 KiB
+        // (tested in executables/wasm/tests/calculator.rs); the other guests stay under 12 KiB.
+        println!("cargo:rustc-link-arg-bins=-zstack-size=32768");
     }
 
     let contents =

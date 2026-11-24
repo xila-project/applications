@@ -43,10 +43,49 @@ sign extension for this target; the guests of this repository add no
 | memory64 | `memory_64` builds only | The host ABI has one address width; other builds reject memory64 modules at validation |
 | Multi-memory | disabled | The host ABI and pointer translation address the single exported `memory` |
 | SIMD, relaxed SIMD | disabled (not built) | No guest needs it; enabling Wasmi's `simd` feature grows the host by about 420 KiB (+29 %) |
-| Custom page sizes, wide arithmetic | disabled | No toolchain emits them |
+| Custom page sizes | enabled | Bundled guests use 1-byte pages to reduce initial linear memory |
+| Wide arithmetic | disabled | No bundled guest uses it |
 | Threads and atomics | unsupported by Wasmi | |
 
 Disabling Wasmi's memory64 support in `memory_32` builds saves about 2 KiB.
+
+## Guest linear memory
+
+Every guest built by this repository (`mise run build:applications`, the
+`release-wasm` profile, host tests and the release packages all use the same
+build script, `executables/wasm_guest_build.rs`) is linked with 1-byte linear
+memory pages (`--page-size=1`, the custom page sizes proposal) and a 32 KiB
+stack (`-zstack-size=32768`). The initial memory is then exactly the stack
+plus the data the module needs, instead of a multiple of 64 KiB.
+
+The stack is placed first in memory, so an overflow stops the guest with an
+out-of-bounds memory access trap instead of corrupting its data. The deepest
+call chain of the bundled guests is the calculator's: an expression nested to
+the parser's limit of 32 levels needs between 16 and 20 KiB of stack, and a
+host test evaluates one. The other guests used at most 11.3 KiB in the host
+tests (the synthesizer, then 10.3 KiB for the text editor). A guest with a
+deeper call chain can set a larger `-zstack-size`.
+
+Third-party guests opt in the same way. For Rust 1.97.0 targeting
+`wasm32-wasip1`, pass these linker arguments, for example from a build script
+with `cargo:rustc-link-arg-bins`, or with `-C link-arg=...` in the Cargo target
+configuration:
+
+```text
+--page-size=1
+-zstack-size=32768
+```
+
+The proposal allows only 1-byte and 65,536-byte pages. Run Binaryen with
+`--enable-custom-page-sizes` when optimizing these modules, as
+`mise run build:applications` does. WebAssembly's `memory.size` and
+`memory.grow` count in the module's page size, and the bundled WASI libc
+allocator follows the linked page size. Custom allocators and direct callers of
+the memory intrinsics must use the same unit. A runtime that does not implement
+the proposal rejects such a module; link with `--page-size=65536` for it.
+Validators must enable the proposal too, for example
+`wasm-tools validate --features=wasm2,custom-page-sizes` or Wasmparser's
+`WasmFeatures::CUSTOM_PAGE_SIZES`.
 
 ## WASI Preview 1
 
