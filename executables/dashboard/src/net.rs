@@ -9,6 +9,10 @@ use crate::json::Source;
 use std::{format, string::String, vec, vec::Vec};
 
 const HEAD_CAPACITY: usize = 4 * 1024;
+/// Largest response body read; a longer one fails as too large. A dashboard
+/// of a hundred panels is a few hundred kilobytes, so this only stops a
+/// server that never ends its answer.
+pub const MAXIMUM_BODY_LENGTH: usize = 2 * 1024 * 1024;
 const USER_AGENT: &str = "Xila-Dashboard";
 
 /// Reads response bytes; `Ok(0)` is the end of the response.
@@ -86,6 +90,8 @@ pub struct Body<T> {
     buffer: Vec<u8>,
     position: usize,
     length: usize,
+    /// Body bytes taken from the transport so far, the head's leftover included.
+    received: usize,
 }
 
 impl<T: Transport> Source for Body<T> {
@@ -95,6 +101,10 @@ impl<T: Transport> Source for Body<T> {
             self.position = 0;
             if self.length == 0 {
                 return Ok(None);
+            }
+            self.received = self.received.saturating_add(self.length);
+            if self.received > MAXIMUM_BODY_LENGTH {
+                return Err(Error::TooLarge);
             }
         }
         let byte = self.buffer[self.position];
@@ -151,6 +161,7 @@ pub fn read_response<T: Transport>(mut transport: T) -> Result<(u16, Body<T>)> {
             buffer,
             position: body,
             length: filled,
+            received: filled - body,
         },
     ))
 }
@@ -284,6 +295,40 @@ pub mod tests {
             Endpoint::parse("grafana.example.com"),
             Err(Error::Configuration)
         );
+    }
+
+    /// A response whose body never ends.
+    struct Endless {
+        head_sent: bool,
+    }
+
+    impl Transport for Endless {
+        fn read(&mut self, buffer: &mut [u8]) -> Result<usize> {
+            if !self.head_sent {
+                self.head_sent = true;
+                let head = b"HTTP/1.1 200 OK\r\n\r\n";
+                buffer[..head.len()].copy_from_slice(head);
+                return Ok(head.len());
+            }
+            buffer.fill(b' ');
+            Ok(buffer.len())
+        }
+    }
+
+    #[test]
+    fn a_body_that_never_ends_stops_at_the_limit() {
+        let (status, mut body) = read_response(Endless { head_sent: false }).unwrap();
+        assert_eq!(status, 200);
+        let mut count = 0usize;
+        let error = loop {
+            match body.next_byte() {
+                Ok(Some(_)) => count += 1,
+                Ok(None) => panic!("the body ended"),
+                Err(error) => break error,
+            }
+        };
+        assert_eq!(error, Error::TooLarge);
+        assert!(count <= MAXIMUM_BODY_LENGTH);
     }
 
     #[test]
