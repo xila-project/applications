@@ -8,9 +8,10 @@ use crate::configuration::Configuration;
 use crate::error::{Error, Result};
 use std::{
     fs,
-    io::{self, Write},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
     string::String,
+    vec::Vec,
 };
 
 pub const CONFIGURATION_FILE: &str = "configuration.json";
@@ -19,6 +20,14 @@ pub const TOKEN_FILE: &str = "token";
 const MAXIMUM_CONFIGURATION_SIZE: u64 = 128 * 1024;
 /// Largest token accepted.
 pub const MAXIMUM_TOKEN_LENGTH: usize = 512;
+
+/// A token is sent in a header: printable ASCII only, so that no character
+/// can end the header line or start another one.
+fn is_valid_token(token: &str) -> bool {
+    !token.is_empty()
+        && token.len() <= MAXIMUM_TOKEN_LENGTH
+        && token.bytes().all(|byte| byte.is_ascii_graphic())
+}
 
 pub struct Storage {
     directory: PathBuf,
@@ -55,31 +64,49 @@ impl Storage {
         Configuration::parse(&text).map(Some)
     }
 
+    /// Writes the configuration, unless it is larger than [`Storage::load`]
+    /// reads: a file that cannot be read back would stop the application from
+    /// starting.
     pub fn save(&self, configuration: &Configuration) -> Result<()> {
-        self.write(CONFIGURATION_FILE, configuration.to_json().as_bytes())
+        let json = configuration.to_json();
+        if json.len() as u64 > MAXIMUM_CONFIGURATION_SIZE {
+            return Err(Error::TooLarge);
+        }
+        self.write(CONFIGURATION_FILE, json.as_bytes())
     }
 
-    /// The saved token, or `None` when there is none.
+    /// The saved token, or `None` when there is none. A file that holds
+    /// anything but one printable token (several lines, spaces, control
+    /// characters) is [`Error::MissingToken`], so it is never sent.
     pub fn token(&self) -> Result<Option<String>> {
-        match fs::read_to_string(self.directory.join(TOKEN_FILE)) {
-            Ok(text) => {
-                let token = text.trim();
-                if token.len() > MAXIMUM_TOKEN_LENGTH {
-                    return Err(Error::TooLarge);
-                }
-                Ok((!token.is_empty()).then(|| String::from(token)))
-            }
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-            Err(_) => Err(Error::Storage),
+        let file = match fs::File::open(self.directory.join(TOKEN_FILE)) {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(_) => return Err(Error::Storage),
+        };
+        // One byte more than the longest token and its line end, so that a
+        // larger file is noticed without being read whole.
+        let mut bytes = Vec::new();
+        file.take(MAXIMUM_TOKEN_LENGTH as u64 + 2)
+            .read_to_end(&mut bytes)
+            .map_err(|_| Error::Storage)?;
+        let text = String::from_utf8(bytes).map_err(|_| Error::MissingToken)?;
+        let token = text.trim();
+        if token.is_empty() {
+            return Ok(None);
         }
+        if token.len() > MAXIMUM_TOKEN_LENGTH {
+            return Err(Error::TooLarge);
+        }
+        if !is_valid_token(token) {
+            return Err(Error::MissingToken);
+        }
+        Ok(Some(String::from(token)))
     }
 
     pub fn save_token(&self, token: &str) -> Result<()> {
         let token = token.trim();
-        if token.is_empty()
-            || token.len() > MAXIMUM_TOKEN_LENGTH
-            || token.contains(char::is_whitespace)
-        {
+        if !is_valid_token(token) {
             return Err(Error::MissingToken);
         }
         self.write(TOKEN_FILE, token.as_bytes())
@@ -150,8 +177,39 @@ mod tests {
 
         assert_eq!(storage.save_token("  "), Err(Error::MissingToken));
         assert_eq!(storage.save_token("two words"), Err(Error::MissingToken));
+        assert_eq!(storage.save_token("héllo"), Err(Error::MissingToken));
+        assert_eq!(
+            storage.save_token(&"a".repeat(MAXIMUM_TOKEN_LENGTH + 1)),
+            Err(Error::MissingToken)
+        );
+        // A token file written by hand is checked as well: it must not carry
+        // a header line of its own.
+        for bad in ["glsa_a\r\nX-Injected: 1", "two\nlines", "tab\tbed", "\u{1}"] {
+            fs::write(path.join(TOKEN_FILE), bad).unwrap();
+            assert_eq!(storage.token(), Err(Error::MissingToken), "{bad:?}");
+        }
+        fs::write(path.join(TOKEN_FILE), "a".repeat(100_000)).unwrap();
+        assert_eq!(storage.token(), Err(Error::TooLarge));
+        fs::write(path.join(TOKEN_FILE), " \n").unwrap();
+        assert_eq!(storage.token(), Ok(None));
+        storage.save_token("glsa_example").unwrap();
         fs::write(path.join(CONFIGURATION_FILE), "{").unwrap();
         assert_eq!(storage.load(), Err(Error::Configuration));
+
+        // A configuration that could not be read back is not written.
+        let huge = Configuration {
+            url: String::from("https://grafana.example.com"),
+            data_source: String::from("prometheus"),
+            hidden: (0..20_000)
+                .map(|index| std::format!("panel-{index}"))
+                .collect(),
+            ..Configuration::default()
+        };
+        assert_eq!(storage.save(&huge), Err(Error::TooLarge));
+        assert_eq!(
+            fs::read_to_string(path.join(CONFIGURATION_FILE)).unwrap(),
+            "{"
+        );
         fs::remove_dir_all(path).unwrap();
     }
 }
