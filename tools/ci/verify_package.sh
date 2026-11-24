@@ -36,7 +36,7 @@ entry_directory="$(mktemp -d)"
 trap 'rm -rf -- "$entry_directory"' EXIT
 entry="$entry_directory/entry.json"
 # The archive URL is a placeholder: this check compares only the metadata.
-"$executable" registry entry "$archive" "$public_key" xila-project \
+"$executable" registry entry "$archive" "$public_key" xila \
   "https://github.com/xila-project/applications/releases/download/package/$(basename "$archive")" "$entry"
 # The homepage is optional: a missing and a null homepage are equal.
 normalize='.metadata | if . == null then null else {summary, license, source, homepage: (.homepage // null)} end'
