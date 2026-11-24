@@ -144,10 +144,10 @@ fn scaled(value: f64, step: f64, prefixes: &[&'static str]) -> (f64, &'static st
 fn duration(value: f64, decimals: Option<u8>) -> String {
     const STEPS: [(f64, &str); 6] = [
         (60.0, "min"),
-        (3_600.0, "hour"),
-        (86_400.0, "day"),
-        (604_800.0, "week"),
-        (31_536_000.0, "year"),
+        (3_600.0, "h"),
+        (86_400.0, "d"),
+        (604_800.0, "w"),
+        (31_536_000.0, "y"),
         (f64::INFINITY, ""),
     ];
     let magnitude = value.abs();
@@ -284,15 +284,12 @@ mod tests {
         assert_eq!(format_value(0.0, Unit::Seconds, None), "0 s");
         assert_eq!(format_value(42.0, Unit::Seconds, None), "42 s");
         assert_eq!(format_value(90.0, Unit::Seconds, None), "1.5 min");
-        assert_eq!(format_value(7_200.0, Unit::Seconds, None), "2 hour");
+        assert_eq!(format_value(7_200.0, Unit::Seconds, None), "2 h");
         assert_eq!(
             format_value(3.5 * 86_400.0, Unit::Seconds, Some(1)),
-            "3.5 day"
+            "3.5 d"
         );
-        assert_eq!(
-            format_value(2.0 * 31_536_000.0, Unit::Seconds, None),
-            "2 year"
-        );
+        assert_eq!(format_value(2.0 * 31_536_000.0, Unit::Seconds, None), "2 y");
     }
 
     #[test]
