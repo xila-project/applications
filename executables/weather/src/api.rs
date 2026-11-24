@@ -1,3 +1,4 @@
+use crate::view::format_fixed;
 use alloc::{format, string::String};
 
 fn encode_city(value: &str) -> String {
@@ -17,7 +18,9 @@ pub fn build_forecast_url(latitude: f64, longitude: f64) -> String {
     let daily = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset";
 
     format!(
-        "https://api.open-meteo.com/v1/forecast?latitude={latitude:.4}&longitude={longitude:.4}&current={current}&hourly={hourly}&daily={daily}&forecast_days=10&timezone=auto"
+        "https://api.open-meteo.com/v1/forecast?latitude={}&longitude={}&current={current}&hourly={hourly}&daily={daily}&forecast_days=10&timezone=auto",
+        format_fixed(latitude, 4),
+        format_fixed(longitude, 4)
     )
 }
 
@@ -45,5 +48,15 @@ mod tests {
         assert!(url.contains("hourly="));
         assert!(url.contains("daily="));
         assert!(url.contains("timezone=auto"));
+    }
+
+    #[test]
+    fn forecast_url_keeps_signs_and_four_decimals() {
+        let url = build_forecast_url(-33.8688, -70.5);
+        assert!(url.contains("latitude=-33.8688&"));
+        assert!(url.contains("longitude=-70.5000&"));
+        let url = build_forecast_url(-0.00001, 0.0);
+        assert!(url.contains("latitude=0.0000&"));
+        assert!(url.contains("longitude=0.0000&"));
     }
 }
