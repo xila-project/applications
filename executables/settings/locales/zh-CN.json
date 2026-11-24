@@ -27,6 +27,7 @@
       "zinc_auto": "锌灰色（自动）"
     },
     "fields": {
+      "brightness": "亮度",
       "dark_mode": "深色模式",
       "primary_color": "主色",
       "secondary_color": "辅助色"

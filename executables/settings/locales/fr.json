@@ -36,6 +36,7 @@
       "zinc_auto": "Zinc (automatique)"
     },
     "fields": {
+      "brightness": "Luminosité",
       "dark_mode": "Mode sombre",
       "primary_color": "Couleur principale",
       "secondary_color": "Couleur secondaire"

@@ -36,6 +36,7 @@
       "zinc_auto": "ジンク（自動）"
     },
     "fields": {
+      "brightness": "明るさ",
       "dark_mode": "ダークモード",
       "primary_color": "メインカラー",
       "secondary_color": "サブカラー"

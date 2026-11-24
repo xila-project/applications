@@ -36,6 +36,7 @@
       "zinc_auto": "Szary cynkowy (automatycznie)"
     },
     "fields": {
+      "brightness": "Jasność",
       "dark_mode": "Tryb ciemny",
       "primary_color": "Kolor podstawowy",
       "secondary_color": "Kolor dodatkowy"

@@ -1,7 +1,7 @@
 use crate::error::{Error, Result};
 use alloc::ffi::CString;
 use core::{ffi::CStr, ptr::null_mut};
-use xila::graphics::appearance::Appearance;
+use xila::graphics::appearance::{Appearance, MINIMUM_BRIGHTNESS};
 use xila::{
     executable::ExecutableContext,
     graphics::{self, Event, EventKind, lvgl},
@@ -15,7 +15,29 @@ pub struct AppearanceTab {
     dark_mode: *mut lvgl::lv_obj_t,
     primary: *mut lvgl::lv_obj_t,
     secondary: *mut lvgl::lv_obj_t,
+    /// Present only when the screen has brightness control.
+    brightness: *mut lvgl::lv_obj_t,
+    brightness_value: *mut lvgl::lv_obj_t,
+    has_brightness: bool,
+    /// Whether the brightness on screen is the saved one.
+    brightness_saved: bool,
     status: *mut lvgl::lv_obj_t,
+}
+
+/// Lowest slider position, in percent: the slider can dim the screen but
+/// never turn it dark.
+const MINIMUM_BRIGHTNESS_PERCENT: u8 = 10;
+
+const _: () = assert!(percent_to_brightness(MINIMUM_BRIGHTNESS_PERCENT) >= MINIMUM_BRIGHTNESS);
+
+/// Converts a slider position, in percent, to a screen brightness level.
+const fn percent_to_brightness(percent: u8) -> u8 {
+    ((percent as u16 * 255 + 50) / 100) as u8
+}
+
+/// Converts a screen brightness level to the nearest slider position.
+const fn brightness_to_percent(level: u8) -> u8 {
+    ((level as u16 * 100 + 127) / 255) as u8
 }
 
 impl AppearanceTab {
@@ -25,6 +47,9 @@ impl AppearanceTab {
         if let Err(error) = &loaded {
             xila::log::warning!("Could not read appearance preferences: {}", error);
         }
+        // Brightness only talks to the screen device, so this works while
+        // Settings holds the LVGL lock.
+        let has_brightness = graphics::ffi_manager().get_brightness().await.is_ok();
         Self {
             context,
             load_failed: loaded.is_err(),
@@ -32,6 +57,10 @@ impl AppearanceTab {
             dark_mode: null_mut(),
             primary: null_mut(),
             secondary: null_mut(),
+            brightness: null_mut(),
+            brightness_value: null_mut(),
+            has_brightness,
+            brightness_saved: true,
             status: null_mut(),
         }
     }
@@ -67,6 +96,24 @@ impl AppearanceTab {
             self.secondary = check(lvgl::lv_dropdown_create(row))?;
             lvgl::lv_dropdown_set_options(self.secondary, options.as_ptr());
             lvgl::lv_obj_set_width(self.secondary, width);
+            if self.has_brightness {
+                let row = super::setting_row(tab, t!(c"appearance.fields.brightness"))?;
+                self.brightness = check(lvgl::lv_slider_create(row))?;
+                lvgl::lv_slider_set_range(
+                    self.brightness,
+                    i32::from(MINIMUM_BRIGHTNESS_PERCENT),
+                    100,
+                );
+                // Leave room for the value label within the dropdowns' width.
+                lvgl::lv_obj_set_width(self.brightness, width - 56);
+                self.brightness_value = create_label(row, c"")?;
+                lvgl::lv_obj_set_width(self.brightness_value, 48);
+                lvgl::lv_obj_set_style_text_align(
+                    self.brightness_value,
+                    lvgl::lv_text_align_t_LV_TEXT_ALIGN_RIGHT,
+                    0,
+                );
+            }
             self.sync_controls();
             self.status = create_label(tab, c"")?;
             lvgl::lv_obj_set_width(self.status, lvgl::lv_pct(100));
@@ -86,6 +133,13 @@ impl AppearanceTab {
 
     /// Settings dispatches events while holding the LVGL lock.
     pub async fn handle_event(&mut self, event: &Event) -> bool {
+        if !self.brightness.is_null() && event.is_target(self.brightness) {
+            if matches!(event.code, EventKind::ValueChanged | EventKind::Released) {
+                self.change_brightness().await;
+                return true;
+            }
+            return false;
+        }
         if event.code != EventKind::ValueChanged
             || ![self.dark_mode, self.primary, self.secondary]
                 .into_iter()
@@ -98,6 +152,7 @@ impl AppearanceTab {
                 is_dark: lvgl::lv_obj_has_state(self.dark_mode, lvgl::LV_STATE_CHECKED),
                 primary: lvgl::lv_dropdown_get_selected(self.primary) as u8,
                 secondary: lvgl::lv_dropdown_get_selected(self.secondary) as u8,
+                ..self.appearance
             }
         };
         if let Err(error) = appearance.apply(graphics::ffi_manager()).await {
@@ -109,12 +164,53 @@ impl AppearanceTab {
             return true;
         }
         self.appearance = appearance;
+        self.save().await;
+        true
+    }
+
+    /// Applies the slider's brightness at once, while it moves, and saves it
+    /// when it settles: after a drag, or after each keypad step.
+    async fn change_brightness(&mut self) {
+        let (level, settled) = unsafe {
+            let percent = lvgl::lv_slider_get_value(self.brightness)
+                .clamp(i32::from(MINIMUM_BRIGHTNESS_PERCENT), 100) as u8;
+            self.show_brightness(percent);
+            (
+                percent_to_brightness(percent),
+                !lvgl::lv_obj_has_state(self.brightness, lvgl::LV_STATE_PRESSED),
+            )
+        };
+        if level != self.appearance.brightness {
+            let appearance = Appearance {
+                brightness: level,
+                ..self.appearance
+            };
+            if let Err(error) = appearance.apply_brightness(graphics::ffi_manager()).await {
+                xila::log::warning!("Could not apply brightness: {}", error);
+                unsafe {
+                    self.sync_controls();
+                    self.set_status(t!(c"errors.could_not_apply_appearance"), true);
+                }
+                return;
+            }
+            self.appearance = appearance;
+            self.brightness_saved = false;
+        }
+        if settled && !self.brightness_saved {
+            self.brightness_saved = true;
+            self.save().await;
+        }
+    }
+
+    /// Saves the current appearance and reports the outcome.
+    async fn save(&self) {
         let task = self
             .context
             .task_manager
             .get_current_task_identifier()
             .await;
-        match appearance
+        match self
+            .appearance
             .save(self.context.virtual_file_system, task)
             .await
         {
@@ -128,7 +224,15 @@ impl AppearanceTab {
                 }
             }
         }
-        true
+    }
+
+    unsafe fn show_brightness(&self, percent: u8) {
+        unsafe {
+            let text = alloc::format!("{percent} %");
+            if let Ok(text) = CString::new(text) {
+                lvgl::lv_label_set_text(self.brightness_value, text.as_ptr());
+            }
+        }
     }
 
     unsafe fn sync_controls(&self) {
@@ -140,6 +244,12 @@ impl AppearanceTab {
             );
             lvgl::lv_dropdown_set_selected(self.primary, u32::from(self.appearance.primary));
             lvgl::lv_dropdown_set_selected(self.secondary, u32::from(self.appearance.secondary));
+            if !self.brightness.is_null() {
+                let percent = brightness_to_percent(self.appearance.brightness)
+                    .max(MINIMUM_BRIGHTNESS_PERCENT);
+                lvgl::lv_slider_set_value(self.brightness, i32::from(percent), false);
+                self.show_brightness(percent);
+            }
         }
     }
 
@@ -170,6 +280,7 @@ unsafe fn create_label(parent: *mut lvgl::lv_obj_t, text: &CStr) -> Result<*mut 
 #[cfg(all(test, target_os = "linux"))]
 pub(crate) mod tests {
     use super::*;
+    use crate::appearance::tests::screen_brightness;
     use xila::graphics::Color;
     use xila::graphics::appearance::Appearance;
 
@@ -186,6 +297,7 @@ pub(crate) mod tests {
                 is_dark: false,
                 primary: 2,
                 secondary: 5,
+                ..Appearance::default()
             }
             .colors();
             assert_eq!(Color::from(saved.primary), expected.0);
@@ -245,6 +357,7 @@ pub(crate) mod tests {
                 is_dark: true,
                 primary: 1,
                 secondary: 3,
+                ..Appearance::default()
             };
             let colors = expected.colors();
             assert_eq!(Color::from(palette.primary), colors.0);
@@ -266,8 +379,63 @@ pub(crate) mod tests {
                 expected
             );
 
+            // The slider applies brightness while it is dragged, and saves
+            // it once released.
+            let load = || async {
+                Appearance::load(context.virtual_file_system, task)
+                    .await
+                    .unwrap()
+            };
+            assert!(!tab.brightness.is_null());
+            assert_eq!(lvgl::lv_slider_get_value(tab.brightness), 100);
+            assert_eq!(screen_brightness(), xila::graphics::BRIGHTNESS_FULL);
+            lvgl::lv_obj_add_state(tab.brightness, lvgl::LV_STATE_PRESSED);
+            lvgl::lv_slider_set_value(tab.brightness, 40, false);
+            assert!(
+                tab.handle_event(&Event::new(EventKind::ValueChanged, tab.brightness, None))
+                    .await
+            );
+            assert_eq!(screen_brightness(), percent_to_brightness(40));
+            assert_eq!(load().await.brightness, xila::graphics::BRIGHTNESS_FULL);
+            lvgl::lv_obj_remove_state(tab.brightness, lvgl::LV_STATE_PRESSED);
+            assert!(
+                tab.handle_event(&Event::new(EventKind::Released, tab.brightness, None))
+                    .await
+            );
+            assert_eq!(load().await.brightness, percent_to_brightness(40));
+            // Keypad steps save at once; the slider stops at the minimum.
+            lvgl::lv_slider_set_value(tab.brightness, 0, false);
+            assert_eq!(
+                lvgl::lv_slider_get_value(tab.brightness),
+                i32::from(MINIMUM_BRIGHTNESS_PERCENT)
+            );
+            assert!(
+                tab.handle_event(&Event::new(EventKind::ValueChanged, tab.brightness, None))
+                    .await
+            );
+            let minimum = percent_to_brightness(MINIMUM_BRIGHTNESS_PERCENT);
+            assert_eq!(screen_brightness(), minimum);
+            assert_eq!(load().await.brightness, minimum);
+            // Other controls keep the saved brightness.
+            lvgl::lv_dropdown_set_selected(tab.primary, 1);
+            assert!(
+                tab.handle_event(&Event::new(EventKind::ValueChanged, tab.primary, None))
+                    .await
+            );
+            assert_eq!(
+                load().await,
+                Appearance {
+                    brightness: minimum,
+                    ..expected
+                }
+            );
+
             let mut reopened = AppearanceTab::new(context).await;
             reopened.create_ui(tabview).await.unwrap();
+            assert_eq!(
+                lvgl::lv_slider_get_value(reopened.brightness),
+                i32::from(MINIMUM_BRIGHTNESS_PERCENT)
+            );
             assert_eq!(lvgl::lv_dropdown_get_selected(reopened.primary), 1);
             assert_eq!(lvgl::lv_dropdown_get_selected(reopened.secondary), 3);
             assert!(lvgl::lv_obj_has_state(

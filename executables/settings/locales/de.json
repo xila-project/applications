@@ -36,6 +36,7 @@
       "zinc_auto": "Zinkgrau (automatisch)"
     },
     "fields": {
+      "brightness": "Helligkeit",
       "dark_mode": "Dunkler Modus",
       "primary_color": "Primärfarbe",
       "secondary_color": "Sekundärfarbe"
