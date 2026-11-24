@@ -16,9 +16,9 @@ fn main() {
         // Use 1-byte linear memory pages (custom page sizes proposal) so the initial memory is
         // exactly what the module needs instead of a multiple of 64 KiB.
         println!("cargo:rustc-link-arg-bins=--page-size=1");
-        // The stack is placed first, so an overflow traps instead of corrupting data. Measured peak
-        // stack depth over the host tests is at most 11.3 KiB (synth) for these guests; 32 KiB keeps
-        // at least a 2.9x margin while saving 32 KiB of initial linear memory per guest.
+        // The stack is placed first, so an overflow traps instead of corrupting data. The deepest
+        // call chain is the calculator's at its parser's nesting limit, between 16 and 20 KiB
+        // (tested in executables/wasm/tests/calculator.rs); the other guests stay under 12 KiB.
         println!("cargo:rustc-link-arg-bins=-zstack-size=32768");
     }
 

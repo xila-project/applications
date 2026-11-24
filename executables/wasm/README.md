@@ -58,11 +58,13 @@ memory pages (`--page-size=1`, the custom page sizes proposal) and a 32 KiB
 stack (`-zstack-size=32768`). The initial memory is then exactly the stack
 plus the data the module needs, instead of a multiple of 64 KiB.
 
-The stack is placed first in memory, so an overflow traps instead of
-corrupting data. 32 KiB is at least 2.9 times the deepest stack use measured
-over the host tests (11.3 KiB for the synthesizer, 10.3 KiB for the text
-editor, under 8 KiB for the others). A guest with a deeper call chain can set a
-larger `-zstack-size`.
+The stack is placed first in memory, so an overflow stops the guest with an
+out-of-bounds memory access trap instead of corrupting its data. The deepest
+call chain of the bundled guests is the calculator's: an expression nested to
+the parser's limit of 32 levels needs between 16 and 20 KiB of stack, and a
+host test evaluates one. The other guests used at most 11.3 KiB in the host
+tests (the synthesizer, then 10.3 KiB for the text editor). A guest with a
+deeper call chain can set a larger `-zstack-size`.
 
 Third-party guests opt in the same way. For Rust 1.97.0 targeting
 `wasm32-wasip1`, pass these linker arguments, for example from a build script
@@ -81,6 +83,9 @@ The proposal allows only 1-byte and 65,536-byte pages. Run Binaryen with
 allocator follows the linked page size. Custom allocators and direct callers of
 the memory intrinsics must use the same unit. A runtime that does not implement
 the proposal rejects such a module; link with `--page-size=65536` for it.
+Validators must enable the proposal too, for example
+`wasm-tools validate --features=wasm2,custom-page-sizes` or Wasmparser's
+`WasmFeatures::CUSTOM_PAGE_SIZES`.
 
 ## WASI Preview 1
 
