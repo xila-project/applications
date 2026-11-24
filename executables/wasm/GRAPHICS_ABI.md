@@ -49,9 +49,11 @@ The existing adapter passes validated NUL-terminated guest strings directly to L
 | Canvas, Image, Imagebutton, Animimg | IndexedCanvas Xila helper only; LVGL families not adapted | host-owned image/frame resources and explicit quotas/lifetimes |
 | shadcn primitives | Badge label, Card surface, Button variants, input error state via `lvgl_theme_shadcn` | additional themed composition helpers and palette selection through guest ABI |
 
-On touch-only platforms, the system keyboard opens when the user taps a text
-area. Use the text area directly for ordinary text entry so it works with both
-the system keyboard and physical keyboards.
+On platforms with a touch display, the system keyboard opens when the user taps
+any text area, including text areas created by guests. Use the text area
+directly for ordinary text entry, and do not create a Keyboard widget for it:
+a second keyboard would appear next to the system one. The system keyboard
+works alongside physical keyboards.
 
 This matrix distinguishes enabled LVGL code from practical guest usability. Constructor-only support does not satisfy the #483 acceptance criteria.
 
