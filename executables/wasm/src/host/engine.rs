@@ -96,6 +96,10 @@ pub fn configuration(translation: Translation) -> Config {
     // already run, so the guest cannot be restarted either. Translation is
     // bounded by the module size and happens once per function, so charge
     // nothing for it and the slice can never end inside a translation.
+    //
+    // Since Wasmi 2.0.1, entering a function also costs one fuel per eight
+    // locals (zero-initialization). That is not configurable and is small
+    // against the instruction budget of a slice, so slices keep their length.
     configuration.fuel_cost(CustomFuelCosts {
         bytes_copied_per_fuel: BYTES_COPIED_PER_FUEL,
         fuel_per_bytes_translated: 0,
