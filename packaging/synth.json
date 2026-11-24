@@ -11,5 +11,10 @@
     "icon": "",
     "show_in_launcher": true
   },
+  "metadata": {
+    "summary": "Plays notes on an eight-voice synthesizer.",
+    "license": "Apache-2.0",
+    "source": "https://github.com/xila-project/applications/tree/main/executables/synth"
+  },
   "$schema": "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
 }

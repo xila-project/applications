@@ -12,6 +12,8 @@ import tomllib
 ROOT = Path(__file__).resolve().parent.parent
 APPS = ("calculator", "clock", "weather", "pixel_painter", "text_editor", "synth", "digits", "dashboard")
 SCHEMA = "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
+REPOSITORY_LICENSE = "Apache-2.0"
+SOURCE_PREFIX = "https://github.com/xila-project/applications/tree/main/executables/"
 SHORTCUT_SCHEMA = "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json"
 ALLOWED_MANIFEST_KEYS = {
     "$schema",
@@ -41,6 +43,38 @@ def is_valid_xila_version(value: object) -> bool:
     return True
 
 
+def validate_catalog_metadata(application: str, metadata: object) -> None:
+    """Require the catalog metadata that the registry entry of a release copies.
+
+    Every published application needs a summary, the licence of this repository
+    and the source URL of its own directory. The homepage is optional.
+    """
+    if not isinstance(metadata, dict) or not {"summary", "license", "source"} <= metadata.keys():
+        raise SystemExit(f"missing catalog metadata (summary, license, source) for {application}")
+    if not metadata.keys() <= {"summary", "license", "source", "homepage"}:
+        raise SystemExit(f"unexpected catalog metadata field for {application}")
+    summary = metadata["summary"]
+    if (
+        not isinstance(summary, str)
+        or not summary.strip()
+        or len(summary) > 256
+        or any(ord(character) < 32 or ord(character) == 127 for character in summary)
+    ):
+        raise SystemExit(f"invalid catalog summary (one line, 1 to 256 characters) for {application}")
+    if metadata["license"] != REPOSITORY_LICENSE:
+        raise SystemExit(f"catalog license must be {REPOSITORY_LICENSE} for {application}")
+    if metadata["source"] != f"{SOURCE_PREFIX}{application}":
+        raise SystemExit(f"catalog source must be {SOURCE_PREFIX}{application}")
+    homepage = metadata.get("homepage")
+    if homepage is not None and (
+        not isinstance(homepage, str)
+        or len(homepage) > 256
+        or not homepage.startswith("https://")
+        or any(character.isspace() for character in homepage)
+    ):
+        raise SystemExit(f"invalid catalog homepage for {application}")
+
+
 def validate_application(root: Path, application: str, sync: bool = False) -> None:
     """Validate one application's packaging manifest and graphical Shell shortcut."""
     cargo = tomllib.loads((root / "executables" / application / "Cargo.toml").read_text(encoding="utf-8"))
@@ -62,6 +96,7 @@ def validate_application(root: Path, application: str, sync: bool = False) -> No
     actual = tuple(metadata.get(key) for key in ("name", "version", "target"))
     if actual != expected:
         raise SystemExit(f"invalid package identity/version/target for {application}")
+    validate_catalog_metadata(application, metadata.get("metadata"))
     if not is_valid_xila_version(metadata.get("xila_version")):
         raise SystemExit(f"invalid xila_version for {application}")
     if metadata.get("capabilities") != []:

@@ -52,6 +52,11 @@ def write_fixture(root: Path, application: str = "clock", version: str = "0.2.0"
                     "icon": "",
                     "show_in_launcher": True,
                 },
+                "metadata": {
+                    "summary": "Shows the time.",
+                    "license": validate_manifests.REPOSITORY_LICENSE,
+                    "source": f"{validate_manifests.SOURCE_PREFIX}{application}",
+                },
                 "$schema": validate_manifests.SCHEMA,
             }
         ),
@@ -114,6 +119,50 @@ class ValidateManifestsTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 validate_manifests.validate_application(root, "clock")
 
+    def test_requires_catalog_metadata(self):
+        source = f"{validate_manifests.SOURCE_PREFIX}clock"
+        complete = {"summary": "Shows the time.", "license": "Apache-2.0", "source": source}
+        invalid_metadata = [
+            None,
+            {},
+            {key: value for key, value in complete.items() if key != "source"},
+            {**complete, "summary": " "},
+            {**complete, "summary": "Two\nlines."},
+            {**complete, "license": "MIT"},
+            {**complete, "source": "https://github.com/xila-project/applications"},
+            {**complete, "homepage": "http://xila.dev"},
+            {**complete, "icon": "clock"},
+        ]
+        for value in invalid_metadata:
+            with self.subTest(metadata=value):
+                with tempfile.TemporaryDirectory() as temporary_directory:
+                    root = Path(temporary_directory)
+                    manifest_path, _ = write_fixture(root)
+                    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                    manifest["metadata"] = value
+                    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+                    with self.assertRaises(SystemExit):
+                        validate_manifests.validate_application(root, "clock")
+
+    def test_rejects_absent_catalog_metadata(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            manifest_path, _ = write_fixture(root)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            del manifest["metadata"]
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                validate_manifests.validate_application(root, "clock")
+
+    def test_accepts_optional_homepage(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            manifest_path, _ = write_fixture(root)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["metadata"]["homepage"] = "https://xila.dev"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            validate_manifests.validate_application(root, "clock")
+
     def test_sync_updates_package_version_only(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
@@ -127,6 +176,7 @@ class ValidateManifestsTests(unittest.TestCase):
             self.assertEqual(updated["version"], "0.2.0")
             self.assertEqual(updated["format_version"], 2)
             self.assertEqual(updated["xila_version"], "0.1")
+            self.assertEqual(updated["metadata"]["license"], validate_manifests.REPOSITORY_LICENSE)
 
 
 if __name__ == "__main__":

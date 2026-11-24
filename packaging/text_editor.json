@@ -11,5 +11,10 @@
     "icon": "",
     "show_in_launcher": true
   },
+  "metadata": {
+    "summary": "Opens, edits and saves UTF-8 text files one page at a time.",
+    "license": "Apache-2.0",
+    "source": "https://github.com/xila-project/applications/tree/main/executables/text_editor"
+  },
   "$schema": "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
 }
