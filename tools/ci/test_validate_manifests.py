@@ -223,6 +223,22 @@ class ValidateManifestsTests(unittest.TestCase):
                 validate_manifests.validate_application(root, "clock")
             self.assertIn("clock", str(raised.exception))
 
+    def test_rejects_inherited_license_without_workspace_license(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            write_fixture(root, crate_license="license.workspace = true")
+            (root / "Cargo.toml").write_text("[workspace.package]\n", encoding="utf-8")
+            with self.assertRaises(SystemExit) as raised:
+                validate_manifests.validate_application(root, "clock")
+            self.assertIn("root Cargo.toml", str(raised.exception))
+
+    def test_rejects_disabled_license_inheritance(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            write_fixture(root, crate_license="license = { workspace = false }")
+            with self.assertRaises(SystemExit):
+                validate_manifests.validate_application(root, "clock")
+
 
 if __name__ == "__main__":
     unittest.main()

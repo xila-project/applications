@@ -56,12 +56,16 @@ def crate_license(root: Path, cargo: dict, application: str) -> str:
             raise SystemExit(f"unsupported license inheritance in the crate of {application}")
         workspace = tomllib.loads((root / "Cargo.toml").read_text(encoding="utf-8"))
         license_field = workspace.get("workspace", {}).get("package", {}).get("license")
+        if not isinstance(license_field, str) or not license_field:
+            raise SystemExit(
+                f"the crate of {application} inherits the license, but [workspace.package] of the root Cargo.toml declares none"
+            )
     if not isinstance(license_field, str) or not license_field:
         raise SystemExit(f"the crate of {application} declares no license")
     return license_field
 
 
-def validate_catalog_metadata(application: str, metadata: object, crate_license: str) -> None:
+def validate_catalog_metadata(application: str, metadata: object, expected_license: str) -> None:
     """Require the catalog metadata that the registry entry of a release copies.
 
     Every published application needs a summary, the licence of its crate
@@ -81,9 +85,9 @@ def validate_catalog_metadata(application: str, metadata: object, crate_license:
         or any(is_control(character) for character in summary)
     ):
         raise SystemExit(f"invalid catalog summary (one line, 1 to 256 UTF-8 bytes) for {application}")
-    if metadata["license"] != crate_license:
+    if metadata["license"] != expected_license:
         raise SystemExit(
-            f"catalog license {metadata['license']} does not match the license {crate_license} of the {application} crate"
+            f"catalog license {metadata['license']} does not match the license {expected_license} of the {application} crate"
         )
     if metadata["source"] != f"{SOURCE_PREFIX}{application}":
         raise SystemExit(f"catalog source must be {SOURCE_PREFIX}{application}")
