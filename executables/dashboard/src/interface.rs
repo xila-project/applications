@@ -38,6 +38,20 @@ const CHART_MARGIN: i32 = 60;
 const POINT_NONE: i32 = i32::MAX;
 const ERROR_COLOR: u32 = 0xEF4444;
 const MUTED_COLOR: u32 = 0x71717A;
+/// A tap within this time of the end of a refresh does not start another
+/// one: taps made while the guest waited on the network are queued, and would
+/// otherwise repeat the refresh back to back.
+const TAP_REFRESH_INTERVAL: Duration = Duration::from_secs(3);
+
+/// What a request needs of the configuration, without the cached panels.
+fn connection(configuration: &Configuration) -> Configuration {
+    Configuration {
+        url: configuration.url.clone(),
+        data_source: configuration.data_source.clone(),
+        dashboard: configuration.dashboard.clone(),
+        ..Configuration::default()
+    }
+}
 
 /// A label pair for one series of a value panel with several series.
 struct Row {
@@ -77,6 +91,8 @@ pub struct Interface {
     tiles: Vec<Tile>,
     panels: Vec<Panel>,
     last_refresh: Option<Instant>,
+    /// End of the last refresh attempt, successful or not.
+    refresh_ended: Option<Instant>,
     next_refresh: Option<Instant>,
     /// Error of the last refresh, or of reading the configuration.
     error: Option<Error>,
@@ -132,6 +148,7 @@ impl Interface {
                 tiles: Vec::new(),
                 panels: Vec::new(),
                 last_refresh: None,
+                refresh_ended: None,
                 next_refresh: None,
                 error: None,
                 reload_error: None,
@@ -207,7 +224,7 @@ impl Interface {
             self.reload_error = Some(Error::MissingToken);
             return Ok(());
         };
-        let configuration_snapshot = configuration.clone();
+        let configuration_snapshot = connection(configuration);
         self.show_busy(t!("header.importing"))?;
         let result = grafana::import(&mut Devices, &configuration_snapshot, &token);
         let configuration = self.configuration.as_mut().expect("checked above");
@@ -345,7 +362,7 @@ impl Interface {
             self.error = Some(Error::MissingToken);
             return Ok(());
         };
-        let configuration = configuration.clone();
+        let configuration = connection(configuration);
         self.show_busy(t!("header.loading"))?;
         let panels: Vec<&Panel> = self.panels.iter().collect();
         match grafana::query(&mut Devices, &configuration, &token, &panels) {
@@ -361,7 +378,9 @@ impl Interface {
             Err(error) => self.error = Some(error),
         }
         // The period counts from the end of the refresh.
-        self.next_refresh = Some(Instant::now() + Duration::from_secs(u64::from(period)));
+        let ended = Instant::now();
+        self.refresh_ended = Some(ended);
+        self.next_refresh = Some(ended + Duration::from_secs(u64::from(period)));
         self.shown_status.clear();
         Ok(())
     }
@@ -609,6 +628,11 @@ impl Interface {
             self.reload_dashboard()?;
             self.rebuild()?;
             self.refresh()
+        } else if self
+            .refresh_ended
+            .is_some_and(|ended| ended.elapsed() < TAP_REFRESH_INTERVAL)
+        {
+            Ok(())
         } else {
             // A tap anywhere else refreshes the values.
             self.refresh()
