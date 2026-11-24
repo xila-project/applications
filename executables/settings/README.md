@@ -4,6 +4,13 @@ The Appearance tab changes the shared Shadcn theme for all open windows in the
 current session. Changes apply immediately and are saved to
 `<home>/.appearance`, in the current user's home.
 
+On screens with brightness control, the Appearance tab also has a
+**Brightness** slider, from 10 % to 100 %. The level applies while the slider
+moves and is saved with the appearance when it is released (or after each
+keypad step), so it is restored at start-up and login with the theme. The
+slider never goes below 10 %, so the screen cannot go dark by accident; screens
+without brightness control, such as the native and browser examples, hide it.
+
 The default is **Zinc dark**, with automatic primary and secondary colors from
 the shared theme's zinc palette. Selecting light mode also switches automatic
 colors to zinc light. Blue, green, orange, rose and violet presets keep their

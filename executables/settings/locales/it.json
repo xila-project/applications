@@ -36,6 +36,7 @@
       "zinc_auto": "Grigio zinco (automatico)"
     },
     "fields": {
+      "brightness": "Luminosità",
       "dark_mode": "Modalità scura",
       "primary_color": "Colore primario",
       "secondary_color": "Colore secondario"

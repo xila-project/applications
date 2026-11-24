@@ -1,5 +1,5 @@
 #[cfg(all(test, target_os = "linux"))]
-mod tests {
+pub(crate) mod tests {
     use xila::graphics::appearance::Appearance;
     use xila::graphics::appearance::restore_appearance;
     use xila::{file_system::Permissions, virtual_file_system::File};
@@ -31,6 +31,7 @@ mod tests {
             is_dark: false,
             primary: 3,
             secondary: 5,
+            ..Appearance::default()
         };
         appearance.save(vfs, task).await.unwrap();
         assert_eq!(
@@ -128,6 +129,14 @@ mod tests {
         crate::tabs::network::wifi::tests::exercise_ui(context, graphics).await;
     }
 
+    /// Backlight level of the test screen, which has brightness control.
+    pub(crate) static SCREEN_BRIGHTNESS: critical_section::Mutex<core::cell::Cell<u8>> =
+        critical_section::Mutex::new(core::cell::Cell::new(xila::graphics::BRIGHTNESS_FULL));
+
+    pub(crate) fn screen_brightness() -> u8 {
+        critical_section::with(|section| SCREEN_BRIGHTNESS.borrow(section).get())
+    }
+
     struct HeadlessScreen;
     impl xila::file_system::MountOperations for HeadlessScreen {}
     impl xila::file_system::DirectCharacterDevice for HeadlessScreen {}
@@ -152,16 +161,32 @@ mod tests {
             &self,
             _cx: &mut core::task::Context<'_>,
             command: xila::file_system::ControlCommandIdentifier,
-            _: &xila::shared::AnyByLayout,
+            input: &xila::shared::AnyByLayout,
             output: &mut xila::shared::AnyByLayout,
         ) -> core::task::Poll<xila::file_system::Result<()>> {
             xila::file_system::ready(|| {
-                use xila::{file_system::ControlCommand, graphics::GET_RESOLUTION};
-                if command == GET_RESOLUTION::IDENTIFIER {
-                    *GET_RESOLUTION::cast_output(output)? = xila::graphics::Point::new(800, 600);
-                    Ok(())
-                } else {
-                    Err(xila::file_system::IoErrorKind::Unsupported)
+                use xila::{
+                    file_system::ControlCommand,
+                    graphics::{GET_BRIGHTNESS, GET_RESOLUTION, SET_BRIGHTNESS},
+                };
+                match command {
+                    GET_RESOLUTION::IDENTIFIER => {
+                        *GET_RESOLUTION::cast_output(output)? =
+                            xila::graphics::Point::new(800, 600);
+                        Ok(())
+                    }
+                    GET_BRIGHTNESS::IDENTIFIER => {
+                        *GET_BRIGHTNESS::cast_output(output)? = screen_brightness();
+                        Ok(())
+                    }
+                    SET_BRIGHTNESS::IDENTIFIER => {
+                        let level = *SET_BRIGHTNESS::cast_input(input)?;
+                        critical_section::with(|section| {
+                            SCREEN_BRIGHTNESS.borrow(section).set(level)
+                        });
+                        Ok(())
+                    }
+                    _ => Err(xila::file_system::IoErrorKind::Unsupported),
                 }
             })
         }
