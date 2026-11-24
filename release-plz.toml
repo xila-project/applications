@@ -67,3 +67,10 @@ release = true
 git_release_enable = true
 git_tag_name = "xila.digits-v{{ version }}"
 git_release_name = "xila.digits v{{ version }}"
+
+[[package]]
+name = "xila-dashboard"
+release = true
+git_release_enable = true
+git_tag_name = "xila.dashboard-v{{ version }}"
+git_release_name = "xila.dashboard v{{ version }}"

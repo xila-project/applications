@@ -1,0 +1,101 @@
+{
+  "age": {
+    "hours": "{count} h",
+    "minutes": "{count} min",
+    "seconds": "{count} s"
+  },
+  "editor": {
+    "critical": "Próg krytyczny (puste: brak)",
+    "decimals": "Miejsca po przecinku (puste: automatycznie)",
+    "done": "Gotowe",
+    "edit": "Edytuj panel",
+    "expression": "Wyrażenie PromQL",
+    "kind": "Wyświetlanie",
+    "new": "Nowy panel",
+    "range": "Zakres wykresu",
+    "title": "Tytuł",
+    "unit": "Jednostka",
+    "warning": "Próg ostrzeżenia (puste: brak)"
+  },
+  "errors": {
+    "configuration": "Ustawienia są niekompletne",
+    "http": "Błąd Grafany {status}",
+    "invalid_response": "Nieoczekiwana odpowiedź Grafany",
+    "missing_token": "Brak tokenu Grafany: dodaj go w ustawieniach",
+    "network": "Brak połączenia sieciowego",
+    "not_found": "Nie znaleziono w Grafanie (404)",
+    "query": "Błąd zapytania: {message}",
+    "storage": "Nie można odczytać ani zapisać ustawień",
+    "timeout": "Grafana nie odpowiedziała na czas",
+    "too_large": "Odpowiedź jest za duża",
+    "unauthorized": "Grafana odrzuciła token (401 lub 403)"
+  },
+  "header": {
+    "importing": "Wczytywanie pulpitu...",
+    "loading": "Wczytywanie...",
+    "title": "Pulpit",
+    "updated": "Zaktualizowano {age} temu"
+  },
+  "invalid": {
+    "dashboard": "Uid pulpitu zawiera tylko litery, cyfry, -, _ i .",
+    "data_source": "Wpisz uid źródła danych",
+    "decimals": "Liczba miejsc po przecinku musi być liczbą całkowitą od 0 do 6",
+    "expression": "Wpisz wyrażenie PromQL",
+    "refresh": "Okres musi być liczbą całkowitą co najmniej 10 sekund",
+    "threshold": "Progi muszą być liczbami",
+    "title": "Wpisz tytuł o długości najwyżej 64 znaków",
+    "token": "Wpisz token bez spacji",
+    "too_many_panels": "Jest za dużo paneli",
+    "url": "Adres URL musi zaczynać się od https:// lub http://"
+  },
+  "kinds": {
+    "chart": "Wykres",
+    "value": "Wartość"
+  },
+  "main": {
+    "no_panels": "Brak paneli: dodaj je w ustawieniach.",
+    "not_configured": "Otwórz ustawienia, aby połączyć się z Grafaną.",
+    "not_reloaded": "Nie wczytano ponownie pulpitu, pokazano ostatnią kopię: {error}"
+  },
+  "settings": {
+    "add": "Dodaj panel",
+    "cancel": "Anuluj",
+    "connected": "Połączono: {title} = {value}",
+    "connection": "Połączenie",
+    "convert": "Zamień na ręczne",
+    "dashboard": "Uid pulpitu (puste dla paneli ręcznych)",
+    "data_source": "Uid źródła danych",
+    "delete": "Usuń",
+    "edit": "Edytuj",
+    "hide": "Ukryj",
+    "imported": "Paneli z {title}: {count}, pominięto: {skipped}",
+    "importing": "Wczytywanie pulpitu...",
+    "not_imported": "Pulpit zostanie wczytany po zapisaniu lub ponownym wczytaniu.",
+    "panels": "Panele",
+    "refresh": "Okres odświeżania (sekundy)",
+    "reload": "Wczytaj pulpit ponownie",
+    "replace": "Zastąp",
+    "save": "Zapisz",
+    "show": "Pokaż",
+    "test": "Sprawdź połączenie",
+    "testing": "Sprawdzanie...",
+    "title": "Ustawienia",
+    "token": "Token",
+    "token_set": "Token zapisany",
+    "url": "Adres URL Grafany"
+  },
+  "tile": {
+    "more": "+{count} więcej",
+    "no_data": "Brak danych",
+    "range": "od {minimum} do {maximum}"
+  },
+  "units": {
+    "bytes": "Bajty",
+    "bytes_per_second": "Bajty na sekundę",
+    "celsius": "Stopnie Celsjusza",
+    "fraction": "Procent (0 do 1)",
+    "none": "Brak",
+    "percent": "Procent (0 do 100)",
+    "seconds": "Sekundy"
+  }
+}

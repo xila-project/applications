@@ -158,7 +158,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [calculator, clock, weather, pixel_painter, text_editor, synth, digits]
+        app: [calculator, clock, weather, pixel_painter, text_editor, synth, digits, dashboard]
     env:
       SIGN_WITH_SECRET: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:

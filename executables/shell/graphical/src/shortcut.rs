@@ -171,6 +171,11 @@ mod shortcut_tests {
                 "synth",
                 include_str!("../../../synth/shortcut.json"),
             ),
+            (
+                "xila.dashboard",
+                "dashboard",
+                include_str!("../../../dashboard/shortcut.json"),
+            ),
         ] {
             let mut shortcut = Shortcut::from_str(source).unwrap();
             let path = alloc::format!("/applications/bundles/{identifier}");

@@ -1,0 +1,101 @@
+{
+  "age": {
+    "hours": "{count} 時間",
+    "minutes": "{count} 分",
+    "seconds": "{count} 秒"
+  },
+  "editor": {
+    "critical": "危険のしきい値（空欄でなし）",
+    "decimals": "小数点以下の桁数（空欄で自動）",
+    "done": "完了",
+    "edit": "パネルを編集",
+    "expression": "PromQL 式",
+    "kind": "表示",
+    "new": "新しいパネル",
+    "range": "グラフの期間",
+    "title": "タイトル",
+    "unit": "単位",
+    "warning": "警告のしきい値（空欄でなし）"
+  },
+  "errors": {
+    "configuration": "設定が不完全です",
+    "http": "Grafana エラー {status}",
+    "invalid_response": "Grafana から予期しない応答がありました",
+    "missing_token": "Grafana トークンがありません。設定で追加してください",
+    "network": "ネットワークに接続されていません",
+    "not_found": "Grafana に見つかりません (404)",
+    "query": "クエリエラー: {message}",
+    "storage": "設定を読み込めないか保存できません",
+    "timeout": "Grafana が時間内に応答しませんでした",
+    "too_large": "応答が大きすぎます",
+    "unauthorized": "Grafana がトークンを拒否しました (401 または 403)"
+  },
+  "header": {
+    "importing": "ダッシュボードを読み込み中...",
+    "loading": "読み込み中...",
+    "title": "ダッシュボード",
+    "updated": "{age} 前に更新"
+  },
+  "invalid": {
+    "dashboard": "ダッシュボードの uid には英字、数字、-、_、. のみ使えます",
+    "data_source": "データソースの uid を入力してください",
+    "decimals": "小数点以下の桁数は 0 から 6 の整数にしてください",
+    "expression": "PromQL 式を入力してください",
+    "refresh": "更新間隔は 10 秒以上の整数にしてください",
+    "threshold": "しきい値は数値にしてください",
+    "title": "64 文字以内のタイトルを入力してください",
+    "token": "空白なしでトークンを入力してください",
+    "too_many_panels": "パネルが多すぎます",
+    "url": "URL は https:// または http:// で始めてください"
+  },
+  "kinds": {
+    "chart": "グラフ",
+    "value": "値"
+  },
+  "main": {
+    "no_panels": "表示するパネルがありません。設定で追加してください。",
+    "not_configured": "Grafana に接続するには設定を開いてください。",
+    "not_reloaded": "ダッシュボードを再読み込みできず、前回のコピーを表示しています: {error}"
+  },
+  "settings": {
+    "add": "パネルを追加",
+    "cancel": "キャンセル",
+    "connected": "接続しました: {title} = {value}",
+    "connection": "接続",
+    "convert": "手動に変換",
+    "dashboard": "ダッシュボードの uid（手動パネルなら空欄）",
+    "data_source": "データソースの uid",
+    "delete": "削除",
+    "edit": "編集",
+    "hide": "隠す",
+    "imported": "{title} のパネル {count} 個、{skipped} 個をスキップ",
+    "importing": "ダッシュボードを読み込み中...",
+    "not_imported": "ダッシュボードは保存時または再読み込み時に読み込まれます。",
+    "panels": "パネル",
+    "refresh": "更新間隔（秒）",
+    "reload": "ダッシュボードを再読み込み",
+    "replace": "置き換え",
+    "save": "保存",
+    "show": "表示",
+    "test": "接続をテスト",
+    "testing": "テスト中...",
+    "title": "設定",
+    "token": "トークン",
+    "token_set": "トークン設定済み",
+    "url": "Grafana の URL"
+  },
+  "tile": {
+    "more": "ほか {count} 件",
+    "no_data": "データなし",
+    "range": "{minimum} から {maximum}"
+  },
+  "units": {
+    "bytes": "バイト",
+    "bytes_per_second": "バイト毎秒",
+    "celsius": "摂氏",
+    "fraction": "パーセント（0 から 1）",
+    "none": "なし",
+    "percent": "パーセント（0 から 100）",
+    "seconds": "秒"
+  }
+}

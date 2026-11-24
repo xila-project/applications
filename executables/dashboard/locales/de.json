@@ -1,0 +1,101 @@
+{
+  "age": {
+    "hours": "{count} h",
+    "minutes": "{count} min",
+    "seconds": "{count} s"
+  },
+  "editor": {
+    "critical": "Kritischer Schwellenwert (leer für keinen)",
+    "decimals": "Nachkommastellen (leer für automatisch)",
+    "done": "Fertig",
+    "edit": "Panel bearbeiten",
+    "expression": "PromQL-Ausdruck",
+    "kind": "Darstellung",
+    "new": "Neues Panel",
+    "range": "Diagrammzeitraum",
+    "title": "Titel",
+    "unit": "Einheit",
+    "warning": "Warnschwelle (leer für keine)"
+  },
+  "errors": {
+    "configuration": "Die Einstellungen sind unvollständig",
+    "http": "Grafana-Fehler {status}",
+    "invalid_response": "Unerwartete Antwort von Grafana",
+    "missing_token": "Kein Grafana-Token: in den Einstellungen hinzufügen",
+    "network": "Keine Netzwerkverbindung",
+    "not_found": "Auf Grafana nicht gefunden (404)",
+    "query": "Abfragefehler: {message}",
+    "storage": "Die Einstellungen konnten nicht gelesen oder gespeichert werden",
+    "timeout": "Grafana hat nicht rechtzeitig geantwortet",
+    "too_large": "Die Antwort ist zu groß",
+    "unauthorized": "Grafana hat das Token abgelehnt (401 oder 403)"
+  },
+  "header": {
+    "importing": "Dashboard wird geladen...",
+    "loading": "Wird geladen...",
+    "title": "Dashboard",
+    "updated": "Vor {age} aktualisiert"
+  },
+  "invalid": {
+    "dashboard": "Eine Dashboard-UID enthält nur Buchstaben, Ziffern, -, _ und .",
+    "data_source": "Datenquellen-UID eingeben",
+    "decimals": "Nachkommastellen müssen eine ganze Zahl von 0 bis 6 sein",
+    "expression": "PromQL-Ausdruck eingeben",
+    "refresh": "Der Zeitraum muss eine ganze Zahl von mindestens 10 Sekunden sein",
+    "threshold": "Schwellenwerte müssen Zahlen sein",
+    "title": "Titel mit höchstens 64 Zeichen eingeben",
+    "token": "Token ohne Leerzeichen eingeben",
+    "too_many_panels": "Es gibt zu viele Panels",
+    "url": "Die URL muss mit https:// oder http:// beginnen"
+  },
+  "kinds": {
+    "chart": "Diagramm",
+    "value": "Wert"
+  },
+  "main": {
+    "no_panels": "Keine Panels: in den Einstellungen hinzufügen.",
+    "not_configured": "Einstellungen öffnen, um Grafana zu verbinden.",
+    "not_reloaded": "Dashboard nicht neu geladen, letzte Kopie wird gezeigt: {error}"
+  },
+  "settings": {
+    "add": "Panel hinzufügen",
+    "cancel": "Abbrechen",
+    "connected": "Verbunden: {title} = {value}",
+    "connection": "Verbindung",
+    "convert": "In manuell umwandeln",
+    "dashboard": "Dashboard-UID (leer für manuelle Panels)",
+    "data_source": "Datenquellen-UID",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "hide": "Verbergen",
+    "imported": "{count} Panels aus {title}, {skipped} übersprungen",
+    "importing": "Dashboard wird geladen...",
+    "not_imported": "Das Dashboard wird beim Speichern oder Neuladen geladen.",
+    "panels": "Panels",
+    "refresh": "Aktualisierungszeitraum (Sekunden)",
+    "reload": "Dashboard neu laden",
+    "replace": "Ersetzen",
+    "save": "Speichern",
+    "show": "Zeigen",
+    "test": "Verbindung testen",
+    "testing": "Wird getestet...",
+    "title": "Einstellungen",
+    "token": "Token",
+    "token_set": "Token gespeichert",
+    "url": "Grafana-URL"
+  },
+  "tile": {
+    "more": "+{count} weitere",
+    "no_data": "Keine Daten",
+    "range": "{minimum} bis {maximum}"
+  },
+  "units": {
+    "bytes": "Bytes",
+    "bytes_per_second": "Bytes pro Sekunde",
+    "celsius": "Grad Celsius",
+    "fraction": "Prozent (0 bis 1)",
+    "none": "Keine",
+    "percent": "Prozent (0 bis 100)",
+    "seconds": "Sekunden"
+  }
+}

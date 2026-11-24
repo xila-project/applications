@@ -1,0 +1,101 @@
+{
+  "age": {
+    "hours": "{count} h",
+    "minutes": "{count} min",
+    "seconds": "{count} s"
+  },
+  "editor": {
+    "critical": "Critical threshold (empty for none)",
+    "decimals": "Decimals (empty for automatic)",
+    "done": "Done",
+    "edit": "Edit panel",
+    "expression": "PromQL expression",
+    "kind": "Display",
+    "new": "New panel",
+    "range": "Chart range",
+    "title": "Title",
+    "unit": "Unit",
+    "warning": "Warning threshold (empty for none)"
+  },
+  "errors": {
+    "configuration": "The settings are incomplete",
+    "http": "Grafana error {status}",
+    "invalid_response": "Unexpected answer from Grafana",
+    "missing_token": "No Grafana token: add one in the settings",
+    "network": "No network connection",
+    "not_found": "Not found on Grafana (404)",
+    "query": "Query error: {message}",
+    "storage": "The settings could not be read or saved",
+    "timeout": "Grafana did not answer in time",
+    "too_large": "The answer is too large",
+    "unauthorized": "Grafana refused the token (401 or 403)"
+  },
+  "header": {
+    "importing": "Loading the dashboard...",
+    "loading": "Loading...",
+    "title": "Dashboard",
+    "updated": "Updated {age} ago"
+  },
+  "invalid": {
+    "dashboard": "A dashboard uid holds only letters, digits, -, _ and .",
+    "data_source": "Enter the data source uid",
+    "decimals": "Decimals must be a whole number from 0 to 6",
+    "expression": "Enter a PromQL expression",
+    "refresh": "The refresh period must be a whole number of at least 10 seconds",
+    "threshold": "Thresholds must be numbers",
+    "title": "Enter a title of at most 64 characters",
+    "token": "Enter the token, without spaces",
+    "too_many_panels": "There are too many panels",
+    "url": "The URL must start with https:// or http://"
+  },
+  "kinds": {
+    "chart": "Chart",
+    "value": "Value"
+  },
+  "main": {
+    "no_panels": "No panels to show: add some in the settings.",
+    "not_configured": "Open the settings to connect to Grafana.",
+    "not_reloaded": "Dashboard not reloaded, showing the last copy: {error}"
+  },
+  "settings": {
+    "add": "Add panel",
+    "cancel": "Cancel",
+    "connected": "Connected: {title} = {value}",
+    "connection": "Connection",
+    "convert": "Convert to manual",
+    "dashboard": "Dashboard uid (empty for manual panels)",
+    "data_source": "Data source uid",
+    "delete": "Delete",
+    "edit": "Edit",
+    "hide": "Hide",
+    "imported": "{count} panels from {title}, {skipped} skipped",
+    "importing": "Loading the dashboard...",
+    "not_imported": "The dashboard is loaded when you save or reload.",
+    "panels": "Panels",
+    "refresh": "Refresh period (seconds)",
+    "reload": "Reload dashboard",
+    "replace": "Replace",
+    "save": "Save",
+    "show": "Show",
+    "test": "Test connection",
+    "testing": "Testing...",
+    "title": "Settings",
+    "token": "Token",
+    "token_set": "Token set",
+    "url": "Grafana URL"
+  },
+  "tile": {
+    "more": "+{count} more",
+    "no_data": "No data",
+    "range": "{minimum} to {maximum}"
+  },
+  "units": {
+    "bytes": "Bytes",
+    "bytes_per_second": "Bytes per second",
+    "celsius": "Degrees Celsius",
+    "fraction": "Percent (0 to 1)",
+    "none": "None",
+    "percent": "Percent (0 to 100)",
+    "seconds": "Seconds"
+  }
+}

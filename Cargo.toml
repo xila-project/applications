@@ -73,6 +73,7 @@ calculator = { package = "xila-calculator", path = "executables/calculator" }
 weather = { package = "xila-weather", path = "executables/weather" }
 clock = { package = "xila-clock", path = "executables/clock" }
 synth = { package = "xila-synth", path = "executables/synth" }
+dashboard = { package = "xila-dashboard", path = "executables/dashboard" }
 
 # - External crates
 embedded-hal = { version = "1", default-features = false }
@@ -121,6 +122,7 @@ members = [
   "executables/terminal",
   "executables/text_editor",
   "executables/weather",
+  "executables/dashboard",
   "executables/shell/command_line",
   "executables/shell/graphical",
 ]

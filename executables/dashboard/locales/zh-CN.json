@@ -1,0 +1,101 @@
+{
+  "age": {
+    "hours": "{count} 小时",
+    "minutes": "{count} 分钟",
+    "seconds": "{count} 秒"
+  },
+  "editor": {
+    "critical": "严重阈值（留空表示无）",
+    "decimals": "小数位数（留空表示自动）",
+    "done": "完成",
+    "edit": "编辑面板",
+    "expression": "PromQL 表达式",
+    "kind": "显示方式",
+    "new": "新建面板",
+    "range": "图表时间范围",
+    "title": "标题",
+    "unit": "单位",
+    "warning": "警告阈值（留空表示无）"
+  },
+  "errors": {
+    "configuration": "设置不完整",
+    "http": "Grafana 错误 {status}",
+    "invalid_response": "Grafana 返回了意外的响应",
+    "missing_token": "没有 Grafana 令牌：请在设置中添加",
+    "network": "没有网络连接",
+    "not_found": "在 Grafana 上未找到 (404)",
+    "query": "查询错误：{message}",
+    "storage": "无法读取或保存设置",
+    "timeout": "Grafana 未及时响应",
+    "too_large": "响应过大",
+    "unauthorized": "Grafana 拒绝了令牌 (401 或 403)"
+  },
+  "header": {
+    "importing": "正在加载仪表板...",
+    "loading": "正在加载...",
+    "title": "仪表板",
+    "updated": "{age}前更新"
+  },
+  "invalid": {
+    "dashboard": "仪表板 uid 只能包含字母、数字、-、_ 和 .",
+    "data_source": "请输入数据源 uid",
+    "decimals": "小数位数必须是 0 到 6 的整数",
+    "expression": "请输入 PromQL 表达式",
+    "refresh": "刷新周期必须是至少 10 秒的整数",
+    "threshold": "阈值必须是数字",
+    "title": "请输入不超过 64 个字符的标题",
+    "token": "请输入不含空格的令牌",
+    "too_many_panels": "面板太多",
+    "url": "URL 必须以 https:// 或 http:// 开头"
+  },
+  "kinds": {
+    "chart": "图表",
+    "value": "数值"
+  },
+  "main": {
+    "no_panels": "没有可显示的面板：请在设置中添加。",
+    "not_configured": "打开设置以连接 Grafana。",
+    "not_reloaded": "仪表板未重新加载，显示上次的副本：{error}"
+  },
+  "settings": {
+    "add": "添加面板",
+    "cancel": "取消",
+    "connected": "已连接：{title} = {value}",
+    "connection": "连接",
+    "convert": "转换为手动",
+    "dashboard": "仪表板 uid（手动面板留空）",
+    "data_source": "数据源 uid",
+    "delete": "删除",
+    "edit": "编辑",
+    "hide": "隐藏",
+    "imported": "来自 {title} 的 {count} 个面板，跳过 {skipped} 个",
+    "importing": "正在加载仪表板...",
+    "not_imported": "保存或重新加载时会加载仪表板。",
+    "panels": "面板",
+    "refresh": "刷新周期（秒）",
+    "reload": "重新加载仪表板",
+    "replace": "替换",
+    "save": "保存",
+    "show": "显示",
+    "test": "测试连接",
+    "testing": "正在测试...",
+    "title": "设置",
+    "token": "令牌",
+    "token_set": "已设置令牌",
+    "url": "Grafana URL"
+  },
+  "tile": {
+    "more": "另外 {count} 个",
+    "no_data": "无数据",
+    "range": "{minimum} 至 {maximum}"
+  },
+  "units": {
+    "bytes": "字节",
+    "bytes_per_second": "字节每秒",
+    "celsius": "摄氏度",
+    "fraction": "百分比（0 到 1）",
+    "none": "无",
+    "percent": "百分比（0 到 100）",
+    "seconds": "秒"
+  }
+}

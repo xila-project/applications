@@ -1,0 +1,101 @@
+{
+  "age": {
+    "hours": "{count} h",
+    "minutes": "{count} min",
+    "seconds": "{count} s"
+  },
+  "editor": {
+    "critical": "Seuil critique (vide pour aucun)",
+    "decimals": "Décimales (vide pour automatique)",
+    "done": "Terminé",
+    "edit": "Modifier le panneau",
+    "expression": "Expression PromQL",
+    "kind": "Affichage",
+    "new": "Nouveau panneau",
+    "range": "Période du graphique",
+    "title": "Titre",
+    "unit": "Unité",
+    "warning": "Seuil d’alerte (vide pour aucun)"
+  },
+  "errors": {
+    "configuration": "Les réglages sont incomplets",
+    "http": "Erreur Grafana {status}",
+    "invalid_response": "Réponse inattendue de Grafana",
+    "missing_token": "Aucun jeton Grafana : ajoutez-en un dans les réglages",
+    "network": "Pas de connexion réseau",
+    "not_found": "Introuvable sur Grafana (404)",
+    "query": "Erreur de requête : {message}",
+    "storage": "Impossible de lire ou d’enregistrer les réglages",
+    "timeout": "Grafana n’a pas répondu à temps",
+    "too_large": "La réponse est trop volumineuse",
+    "unauthorized": "Grafana a refusé le jeton (401 ou 403)"
+  },
+  "header": {
+    "importing": "Chargement du tableau de bord…",
+    "loading": "Chargement…",
+    "title": "Tableau de bord",
+    "updated": "Mis à jour il y a {age}"
+  },
+  "invalid": {
+    "dashboard": "Un uid de tableau de bord ne contient que des lettres, des chiffres, -, _ et .",
+    "data_source": "Saisissez l’uid de la source de données",
+    "decimals": "Les décimales doivent être un entier de 0 à 6",
+    "expression": "Saisissez une expression PromQL",
+    "refresh": "La période doit être un nombre entier d’au moins 10 secondes",
+    "threshold": "Les seuils doivent être des nombres",
+    "title": "Saisissez un titre de 64 caractères au plus",
+    "token": "Saisissez le jeton, sans espaces",
+    "too_many_panels": "Il y a trop de panneaux",
+    "url": "L’URL doit commencer par https:// ou http://"
+  },
+  "kinds": {
+    "chart": "Graphique",
+    "value": "Valeur"
+  },
+  "main": {
+    "no_panels": "Aucun panneau à afficher : ajoutez-en dans les réglages.",
+    "not_configured": "Ouvrez les réglages pour vous connecter à Grafana.",
+    "not_reloaded": "Tableau de bord non rechargé, dernière copie affichée : {error}"
+  },
+  "settings": {
+    "add": "Ajouter un panneau",
+    "cancel": "Annuler",
+    "connected": "Connecté : {title} = {value}",
+    "connection": "Connexion",
+    "convert": "Passer en manuel",
+    "dashboard": "Uid du tableau de bord (vide pour des panneaux manuels)",
+    "data_source": "Uid de la source de données",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "hide": "Masquer",
+    "imported": "{count} panneaux de {title}, {skipped} ignorés",
+    "importing": "Chargement du tableau de bord…",
+    "not_imported": "Le tableau de bord est chargé à l’enregistrement ou au rechargement.",
+    "panels": "Panneaux",
+    "refresh": "Période d’actualisation (secondes)",
+    "reload": "Recharger le tableau de bord",
+    "replace": "Remplacer",
+    "save": "Enregistrer",
+    "show": "Afficher",
+    "test": "Tester la connexion",
+    "testing": "Test en cours…",
+    "title": "Réglages",
+    "token": "Jeton",
+    "token_set": "Jeton enregistré",
+    "url": "URL de Grafana"
+  },
+  "tile": {
+    "more": "+{count} autres",
+    "no_data": "Aucune donnée",
+    "range": "de {minimum} à {maximum}"
+  },
+  "units": {
+    "bytes": "Octets",
+    "bytes_per_second": "Octets par seconde",
+    "celsius": "Degrés Celsius",
+    "fraction": "Pourcentage (0 à 1)",
+    "none": "Aucune",
+    "percent": "Pourcentage (0 à 100)",
+    "seconds": "Secondes"
+  }
+}
