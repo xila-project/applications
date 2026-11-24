@@ -36,9 +36,9 @@ use xila::task;
 #[derive(GetArgs)]
 #[command(name = "graphical_shell", about = "Run the graphical shell.", version)]
 struct GraphicalShellArguments {
-    /// Show the on-screen keyboard.
+    /// Deprecated. The platform now controls the on-screen keyboard.
     #[arg(short = 'k', long = "show-keyboard")]
-    show_keyboard: bool,
+    _show_keyboard: bool,
 }
 
 pub async fn main(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), NonZeroUsize> {
@@ -48,25 +48,24 @@ pub async fn main(standard: Standard<'static>, arguments: Vec<String>) -> Result
 async fn main_with<F>(
     mut standard: Standard<'static>,
     arguments: Vec<String>,
-    create_shell: impl FnOnce(Standard<'static>, bool) -> F,
+    create_shell: impl FnOnce(Standard<'static>) -> F,
 ) -> Result<(), NonZeroUsize>
 where
     F: core::future::Future<Output = error::Result<Shell>>,
 {
-    let GraphicalShellArguments { show_keyboard } =
-        match GraphicalShellArguments::from_args(arguments.iter().map(String::as_str)) {
-            Ok(arguments) => arguments,
-            Err(error) if error.is_help() || error.is_version() => {
-                writeln!(standard.out(), "{error}").ok();
-                return Ok(());
-            }
-            Err(error) => {
-                writeln!(standard.error(), "{error}").ok();
-                return Err(NonZeroUsize::new(1).unwrap());
-            }
-        };
+    match GraphicalShellArguments::from_args(arguments.iter().map(String::as_str)) {
+        Ok(_) => {}
+        Err(error) if error.is_help() || error.is_version() => {
+            writeln!(standard.out(), "{error}").ok();
+            return Ok(());
+        }
+        Err(error) => {
+            writeln!(standard.error(), "{error}").ok();
+            return Err(NonZeroUsize::new(1).unwrap());
+        }
+    }
 
-    create_shell(standard, show_keyboard).await?.main().await
+    create_shell(standard).await?.main().await
 }
 
 // Fields drop in order: `_home` first (its pill lives on `lv_layer_top()`, and
@@ -93,8 +92,8 @@ impl ExecutableTrait for ShellExecutable {
 }
 
 impl Shell {
-    pub async fn new(standard: Standard<'static>, show_keyboard: bool) -> error::Result<Self> {
-        let layout = Layout::new(standard.context, show_keyboard);
+    pub async fn new(standard: Standard<'static>) -> error::Result<Self> {
+        let layout = Layout::new(standard.context);
         let login = Login::new(standard.context);
         Self::new_with(standard, layout, login).await
     }
@@ -188,25 +187,13 @@ impl Shell {
 
 #[cfg(test)]
 mod tests {
-    use getargs::Options;
-
     use super::GraphicalShellArguments;
 
     #[test]
-    fn parses_show_keyboard_flag_without_panic() {
-        let args = ["--show-keyboard"];
-        let mut options = Options::new(args.into_iter());
-
-        let parsed = GraphicalShellArguments::parse(&mut options);
-
-        assert!(parsed.is_ok());
-        assert!(parsed.unwrap().show_keyboard);
-    }
-
-    #[test]
-    fn keyboard_is_hidden_by_default() {
-        let parsed = GraphicalShellArguments::from_args([].into_iter()).unwrap();
-        assert!(!parsed.show_keyboard);
+    fn accepts_legacy_keyboard_arguments() {
+        for argument in ["--show-keyboard", "-k"] {
+            assert!(GraphicalShellArguments::from_args([argument].into_iter()).is_ok());
+        }
     }
 
     #[test]
@@ -341,7 +328,6 @@ mod tests {
             static LOGIN_DELETE: &str = "login";
             static HEADER_DELETE: &str = "header";
             static BODY_DELETE: &str = "body";
-            static KEYBOARD_DELETE: &str = "keyboard";
             static APP_DELETE: &str = "app";
 
             let standard = testing::initialize(false, false).await;
@@ -360,7 +346,7 @@ mod tests {
                 .unwrap();
 
             let context = standard.context;
-            let mut shell = Shell::new(standard, true).await.unwrap();
+            let mut shell = Shell::new(standard).await.unwrap();
             let mut desk = Box::new(
                 Desk::new(context, shell.layout.get_windows_parent())
                     .await
@@ -372,7 +358,6 @@ mod tests {
             let login_window = shell.login.as_mut().unwrap().window_object();
             let header = shell.layout.header_object();
             let body = shell.layout.body_object();
-            let keyboard = shell.layout.keyboard_object();
             shell.desk = Some(desk);
             shell._home = Some(home);
 
@@ -383,11 +368,10 @@ mod tests {
             let app_textarea = manager
                 .lock_function_sync(|| unsafe {
                     assert_eq!(lvgl::lv_obj_get_parent(app_window_object), body);
-                    // Layout registers 3 screen callbacks (Focused, Defocused, Cancel)
-                    // and Desk registers 1 (All).
+                    // Desk registers one screen callback.
                     assert_eq!(
                         lvgl::lv_obj_get_event_count(screen),
-                        baseline_screen_events + 4
+                        baseline_screen_events + 1
                     );
 
                     let textarea = lvgl::lv_textarea_create(app_window_object);
@@ -420,11 +404,6 @@ mod tests {
                     );
                     attach_probe(body, lvgl::lv_event_code_t_LV_EVENT_DELETE, &BODY_DELETE);
                     attach_probe(
-                        keyboard,
-                        lvgl::lv_event_code_t_LV_EVENT_DELETE,
-                        &KEYBOARD_DELETE,
-                    );
-                    attach_probe(
                         app_window_object,
                         lvgl::lv_event_code_t_LV_EVENT_DELETE,
                         &APP_DELETE,
@@ -440,7 +419,7 @@ mod tests {
 
             assert_eq!(
                 EVENT_LOG.lock().unwrap().as_slice(),
-                &["home", "desk", "login", "header", "body", "keyboard"],
+                &["home", "desk", "login", "header", "body"],
                 "Shell must drop home, its own windows, and layout children in order without freeing the screen or open app windows or dispatching Desk's screen callback"
             );
 
@@ -451,7 +430,7 @@ mod tests {
                     assert_eq!(lvgl::lv_obj_get_event_count(screen), baseline_screen_events);
 
                     // Events bubbling to the screen must not reach freed
-                    // Layout keyboard or Desk handlers.
+                    // Desk handlers.
                     for code in [
                         EventKind::Focused.into_lvgl_code(),
                         EventKind::Defocused.into_lvgl_code(),
@@ -514,7 +493,7 @@ mod tests {
             let manager = headless_graphics_manager().await;
             let screen = manager.get_current_screen().unwrap();
 
-            let first_layout = Layout::new(context, false).await.unwrap();
+            let first_layout = Layout::new(context).await.unwrap();
             let mut first_window =
                 graphics::lock!(manager, { manager.create_window().await.unwrap() });
             let mut second_window =
@@ -534,7 +513,7 @@ mod tests {
                 })
                 .unwrap();
 
-            let second_layout = Layout::new(context, false).await.unwrap();
+            let second_layout = Layout::new(context).await.unwrap();
             let body = second_layout.body_object();
             manager
                 .lock_function_sync(|| unsafe {
@@ -632,7 +611,7 @@ mod tests {
             let standard = testing::initialize(false, false).await;
             let manager = headless_graphics_manager().await;
             let context = standard.context;
-            let mut shell = Shell::new(standard, true).await.unwrap();
+            let mut shell = Shell::new(standard).await.unwrap();
             let mut desk = Box::new(
                 Desk::new(context, shell.layout.get_windows_parent())
                     .await
@@ -920,7 +899,7 @@ mod tests {
         ) -> (Shell, *mut lvgl::lv_obj_t) {
             let standard = testing::initialize(false, false).await;
             let context = standard.context;
-            let mut shell = Shell::new(standard, true).await.unwrap();
+            let mut shell = Shell::new(standard).await.unwrap();
             let mut desk = Box::new(
                 Desk::new(context, shell.layout.get_windows_parent())
                     .await
@@ -1224,7 +1203,7 @@ mod tests {
             EVENT_LOG.lock().unwrap().clear();
 
             let error = run_with_timeout("Shell::new_with", Duration::from_secs(5), move || {
-                let layout = Layout::new(standard.context, true);
+                let layout = Layout::new(standard.context);
                 let login = Login::new_with(standard.context, manager, |window| {
                     unsafe {
                         let child = lvgl::lv_obj_create(window.as_object_mutable());
@@ -1275,7 +1254,6 @@ mod tests {
                 LayoutWidget::Network,
                 LayoutWidget::Battery,
                 LayoutWidget::Body,
-                LayoutWidget::Keyboard,
             ] {
                 EVENT_LOG.lock().unwrap().clear();
 
@@ -1284,7 +1262,6 @@ mod tests {
                         xila::task::block_on(Layout::new_with(
                             context,
                             manager,
-                            true,
                             |widget, parent| {
                                 if widget == fail_at {
                                     return null_mut();
@@ -1324,7 +1301,6 @@ mod tests {
                     | LayoutWidget::Network
                     | LayoutWidget::Battery
                     | LayoutWidget::Body => &[HEADER_DELETE],
-                    LayoutWidget::Keyboard => &[BODY_DELETE, HEADER_DELETE],
                 };
                 assert_eq!(
                     EVENT_LOG.lock().unwrap().as_slice(),
@@ -1371,17 +1347,12 @@ mod tests {
                 "Layout::new_with custom style",
                 Duration::from_secs(5),
                 move || {
-                    xila::task::block_on(Layout::new_with(
-                        context,
-                        manager,
-                        true,
-                        |widget, parent| {
-                            if widget == LayoutWidget::Keyboard {
-                                return null_mut();
-                            }
-                            unsafe { widget.create(parent) }
-                        },
-                    ))
+                    xila::task::block_on(Layout::new_with(context, manager, |widget, parent| {
+                        if widget == LayoutWidget::Body {
+                            return null_mut();
+                        }
+                        unsafe { widget.create(parent) }
+                    }))
                     .err()
                 },
             );
@@ -1419,15 +1390,14 @@ mod tests {
                 xila::task::block_on(main_with(
                     standard,
                     alloc::vec![alloc::string::String::from("--show-keyboard")],
-                    |standard, show_keyboard| {
+                    |standard| {
                         let context = standard.context;
-                        let layout =
-                            Layout::new_with(context, manager, show_keyboard, |widget, parent| {
-                                if widget == LayoutWidget::Keyboard {
-                                    return null_mut();
-                                }
-                                unsafe { widget.create(parent) }
-                            });
+                        let layout = Layout::new_with(context, manager, |widget, parent| {
+                            if widget == LayoutWidget::Body {
+                                return null_mut();
+                            }
+                            unsafe { widget.create(parent) }
+                        });
                         let login = Login::new(context);
                         Shell::new_with(standard, layout, login)
                     },

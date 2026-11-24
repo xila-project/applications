@@ -1,10 +1,9 @@
 use crate::error::{Error, Result};
 use alloc::string::String;
 use core::ffi::CStr;
-use core::ptr::null_mut;
 use core::time::Duration;
 use xila::file_system::{AccessFlags, Path};
-use xila::graphics::{self, EventKind, lvgl, symbol, theme};
+use xila::graphics::{self, lvgl, symbol, theme};
 use xila::log;
 use xila::network::InterfaceKind;
 use xila::virtual_file_system::{Directory, File};
@@ -23,8 +22,6 @@ fn write_clock_text(output: &mut String, current_time: Option<i64>) {
         output.push_str("--:--");
     }
 }
-
-const KEYBOARD_SIZE_RATIO: f64 = 3.0 / 1.0;
 
 #[derive(Clone, Copy)]
 struct SavedLocalStyle {
@@ -95,7 +92,6 @@ pub(crate) enum LayoutWidget {
     Network,
     Battery,
     Body,
-    Keyboard,
 }
 
 impl LayoutWidget {
@@ -106,7 +102,6 @@ impl LayoutWidget {
             match self {
                 Self::Header | Self::Tray | Self::Body => lvgl::lv_obj_create(parent),
                 Self::Clock | Self::Network | Self::Battery => lvgl::lv_label_create(parent),
-                Self::Keyboard => lvgl::lv_keyboard_create(parent),
             }
         }
     }
@@ -115,14 +110,12 @@ impl LayoutWidget {
 /// Owns partially constructed layout widgets and the screen's saved styles
 /// while [`Layout::build_layout`] holds the graphics lock. Dropping it without
 /// calling [`Self::disarm`] deletes every widget created so far and restores
-/// the screen's size, flex flow, and callbacks.
+/// the screen's size and flex flow.
 struct PartialLayout {
     window: *mut lvgl::lv_obj_t,
     saved_screen_style: ScreenStyleSnapshot,
     header: Option<*mut lvgl::lv_obj_t>,
     body: Option<*mut lvgl::lv_obj_t>,
-    keyboard: Option<*mut lvgl::lv_obj_t>,
-    screen_callbacks_attached: bool,
     committed: bool,
 }
 
@@ -136,8 +129,6 @@ impl PartialLayout {
             saved_screen_style: unsafe { ScreenStyleSnapshot::capture(window) },
             header: None,
             body: None,
-            keyboard: None,
-            screen_callbacks_attached: false,
             committed: false,
         }
     }
@@ -154,25 +145,10 @@ impl Drop for PartialLayout {
             return;
         }
         // SAFETY: `PartialLayout` is only created and dropped while the
-        // graphics lock is held. Deleting `header`, `body`, and `keyboard`
+        // graphics lock is held. Deleting `header` and `body`
         // also deletes their descendants (`clock`, `tray`, `network`,
         // `battery`).
         unsafe {
-            if let Some(keyboard) = self.keyboard {
-                if self.screen_callbacks_attached {
-                    lvgl::lv_obj_remove_event_cb_with_user_data(
-                        self.window,
-                        Some(screen_event_handler),
-                        keyboard.cast(),
-                    );
-                    lvgl::lv_obj_remove_event_cb_with_user_data(
-                        self.window,
-                        Some(keyboard_event_handler),
-                        keyboard.cast(),
-                    );
-                }
-                lvgl::lv_obj_delete(keyboard);
-            }
             if let Some(body) = self.body {
                 lvgl::lv_obj_delete(body);
             }
@@ -190,7 +166,6 @@ pub struct Layout {
     saved_screen_style: ScreenStyleSnapshot,
     header: *mut lvgl::lv_obj_t,
     body: *mut lvgl::lv_obj_t,
-    keyboard: *mut lvgl::lv_obj_t,
     clock: *mut lvgl::lv_obj_t,
     clock_string: String,
     _battery: *mut lvgl::lv_obj_t,
@@ -211,22 +186,9 @@ impl Drop for Layout {
         // `Layout::drop`, so it stays alive while it holds windows.
         let _ = xila::task::block_on(unsafe { graphics_manager.set_window_parent(screen) });
         let _ = graphics_manager.lock_function_sync(|| {
-            // SAFETY: the graphics lock is held. Detach `Layout`'s callbacks
-            // from the screen before deleting `keyboard`, move every remaining
-            // window out of `body` onto `screen` so each window's
-            // `OwnedWindow` remains its sole deleter, delete only the widgets
-            // `Layout::new` created, and restore the screen's saved styles.
+            // SAFETY: the graphics lock is held. Move remaining windows to
+            // the screen so their owners remain responsible for deletion.
             unsafe {
-                lvgl::lv_obj_remove_event_cb_with_user_data(
-                    screen,
-                    Some(screen_event_handler),
-                    self.keyboard.cast(),
-                );
-                lvgl::lv_obj_remove_event_cb_with_user_data(
-                    screen,
-                    Some(keyboard_event_handler),
-                    self.keyboard.cast(),
-                );
                 loop {
                     let window = lvgl::lv_obj_get_child(self.body, 0);
                     if window.is_null() {
@@ -236,7 +198,6 @@ impl Drop for Layout {
                 }
                 lvgl::lv_obj_delete(self.header);
                 lvgl::lv_obj_delete(self.body);
-                lvgl::lv_obj_delete(self.keyboard);
                 self.saved_screen_style.restore(screen);
             }
             Ok(())
@@ -263,82 +224,6 @@ unsafe fn adopt_screen_windows(screen: *mut lvgl::lv_obj_t, body: *mut lvgl::lv_
             unsafe { lvgl::lv_obj_set_parent(child, body) };
         } else {
             index += 1;
-        }
-    }
-}
-
-/// Keyboard event handler.
-///
-/// # Safety
-///
-/// This function is unsafe because it dereferences raw pointers.
-pub unsafe extern "C" fn keyboard_event_handler(event: *mut lvgl::lv_event_t) {
-    unsafe {
-        let code = lvgl::lv_event_get_code(event);
-        let code = EventKind::from_lvgl_code(code);
-        let keyboard = lvgl::lv_event_get_user_data(event) as *mut lvgl::lv_obj_t;
-
-        if keyboard.is_null() {
-            return;
-        }
-
-        match code {
-            EventKind::Ready => {
-                let focused_input = lvgl::lv_keyboard_get_textarea(keyboard);
-
-                if focused_input.is_null() {
-                    return;
-                }
-
-                lvgl::lv_obj_send_event(
-                    focused_input,
-                    EventKind::Ready.into_lvgl_code(),
-                    null_mut(),
-                );
-
-                lvgl::lv_keyboard_set_textarea(keyboard, null_mut());
-                lvgl::lv_obj_add_flag(keyboard, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
-            }
-            EventKind::Cancel => {
-                lvgl::lv_keyboard_set_textarea(keyboard, null_mut());
-                lvgl::lv_obj_add_flag(keyboard, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
-            }
-
-            _ => {}
-        }
-    }
-}
-
-/// Screen event handler.
-///
-/// # Safety
-///
-/// This function is unsafe because it dereferences raw pointers.
-pub unsafe extern "C" fn screen_event_handler(event: *mut lvgl::lv_event_t) {
-    unsafe {
-        let code = lvgl::lv_event_get_code(event);
-        let code = EventKind::from_lvgl_code(code);
-        let target = lvgl::lv_event_get_target_obj(event);
-        let keyboard = lvgl::lv_event_get_user_data(event) as *mut lvgl::lv_obj_t;
-
-        if target.is_null() || keyboard.is_null() {
-            return;
-        }
-
-        match code {
-            EventKind::Focused if lvgl::lv_obj_has_class(target, &lvgl::lv_textarea_class) => {
-                lvgl::lv_keyboard_set_textarea(keyboard, target);
-                lvgl::lv_obj_remove_flag(keyboard, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
-                lvgl::lv_obj_move_foreground(keyboard);
-
-                let width = lvgl::lv_obj_get_width(keyboard);
-                lvgl::lv_obj_set_height(keyboard, (width as f64 / KEYBOARD_SIZE_RATIO) as i32);
-            }
-            EventKind::Defocused if lvgl::lv_obj_has_class(target, &lvgl::lv_textarea_class) => {
-                lvgl::lv_keyboard_set_textarea(keyboard, null_mut());
-                lvgl::lv_obj_add_flag(keyboard, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
-            }
-            _ => {}
         }
     }
 }
@@ -485,43 +370,29 @@ impl Layout {
         self.body
     }
 
-    #[cfg(test)]
-    pub(crate) fn keyboard_object(&self) -> *mut lvgl::lv_obj_t {
-        self.keyboard
-    }
-
     pub fn get_windows_parent(&self) -> *mut lvgl::lv_obj_t {
         self.window
     }
 
-    pub async fn new(
-        context: &'static xila::executable::ExecutableContext,
-        show_keyboard: bool,
-    ) -> Result<Self> {
+    pub async fn new(context: &'static xila::executable::ExecutableContext) -> Result<Self> {
         let graphics_manager = graphics::ffi_manager();
-        Self::new_with(
-            context,
-            graphics_manager,
-            show_keyboard,
-            |widget, parent| {
-                // SAFETY: `build_layout` invokes this callback only while holding
-                // the graphics lock with a valid LVGL parent.
-                unsafe { widget.create(parent) }
-            },
-        )
+        Self::new_with(context, graphics_manager, |widget, parent| {
+            // SAFETY: `build_layout` invokes this callback only while holding
+            // the graphics lock with a valid LVGL parent.
+            unsafe { widget.create(parent) }
+        })
         .await
     }
 
     pub(crate) async fn new_with(
         context: &'static xila::executable::ExecutableContext,
         graphics_manager: &'static graphics::Manager,
-        show_keyboard: bool,
         create_widget: impl FnMut(LayoutWidget, *mut lvgl::lv_obj_t) -> *mut lvgl::lv_obj_t,
     ) -> Result<Self> {
         let layout = graphics::lock!(graphics_manager, {
             // SAFETY: the graphics lock is held for the entire call, so
             // `PartialLayout::drop` runs before the lock is released on error.
-            unsafe { Self::build_layout(context, show_keyboard, create_widget)? }
+            unsafe { Self::build_layout(context, create_widget)? }
         });
 
         // SAFETY: the body is not inside a window, and it lives as long as
@@ -545,7 +416,6 @@ impl Layout {
     /// The caller must hold the graphics lock for the duration of this call.
     unsafe fn build_layout(
         context: &'static xila::executable::ExecutableContext,
-        show_keyboard: bool,
         mut create_widget: impl FnMut(LayoutWidget, *mut lvgl::lv_obj_t) -> *mut lvgl::lv_obj_t,
     ) -> Result<Self> {
         // - Create a window
@@ -639,44 +509,6 @@ impl Layout {
             lvgl::lv_obj_set_style_radius(body, 0, lvgl::LV_STATE_DEFAULT);
         }
 
-        // - Create a keyboard
-        let keyboard = create_widget(LayoutWidget::Keyboard, window);
-        if keyboard.is_null() {
-            return Err(Error::FailedToCreateObject);
-        }
-        partial.keyboard = Some(keyboard);
-        unsafe {
-            lvgl::lv_obj_add_flag(keyboard, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
-
-            if show_keyboard {
-                partial.screen_callbacks_attached = true;
-                lvgl::lv_obj_add_event_cb(
-                    window,
-                    Some(screen_event_handler),
-                    EventKind::Focused.into_lvgl_code(),
-                    keyboard as *mut _,
-                );
-                lvgl::lv_obj_add_event_cb(
-                    window,
-                    Some(screen_event_handler),
-                    EventKind::Defocused.into_lvgl_code(),
-                    keyboard as *mut _,
-                );
-                lvgl::lv_obj_add_event_cb(
-                    keyboard,
-                    Some(keyboard_event_handler),
-                    EventKind::Ready.into_lvgl_code(),
-                    keyboard as *mut _,
-                );
-                lvgl::lv_obj_add_event_cb(
-                    window,
-                    Some(keyboard_event_handler),
-                    EventKind::Cancel.into_lvgl_code(),
-                    keyboard as *mut _,
-                );
-            }
-        }
-
         let saved_screen_style = partial.disarm();
 
         Ok(Self {
@@ -685,7 +517,6 @@ impl Layout {
             saved_screen_style,
             header,
             body,
-            keyboard,
             clock,
             clock_string: String::with_capacity(6),
             _battery: battery,
