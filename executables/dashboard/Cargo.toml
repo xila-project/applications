@@ -3,9 +3,9 @@ name = "xila-dashboard"
 version = "0.1.0"
 edition = "2024"
 rust-version.workspace = true
+license.workspace = true
 build = "../wasm_guest_build.rs"
 description = "Shows Grafana panel values and charts on a Xila device."
-license = "Apache-2.0"
 
 [build-dependencies]
 serde = { version = "1", features = ["derive"] }

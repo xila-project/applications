@@ -3,6 +3,7 @@ name = "xila-digits"
 version = "0.2.1"
 edition = "2024"
 rust-version.workspace = true
+license.workspace = true
 build = "../wasm_guest_build.rs"
 description = "Handwritten digit recognition through the Xila NN device."
 

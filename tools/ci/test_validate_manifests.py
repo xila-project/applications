@@ -11,13 +11,20 @@ sys.path.insert(0, str(ROOT / "tools"))
 import validate_manifests  # noqa: E402
 
 
-def write_fixture(root: Path, application: str = "clock", version: str = "0.2.0") -> tuple[Path, Path]:
-    """Write a minimal valid Cargo.toml, packaging manifest, and shortcut under root."""
+def write_fixture(
+    root: Path,
+    application: str = "clock",
+    version: str = "0.2.0",
+    crate_license: str = 'license = "Apache-2.0"',
+) -> tuple[Path, Path]:
+    """Write a minimal valid root and crate Cargo.toml, packaging manifest, and shortcut under root."""
     package_name = f"xila-{application.replace('_', '-')}"
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "Cargo.toml").write_text('[workspace.package]\nlicense = "Apache-2.0"\n', encoding="utf-8")
     crate_directory = root / "executables" / application
     crate_directory.mkdir(parents=True, exist_ok=True)
     (crate_directory / "Cargo.toml").write_text(
-        f'[package]\nname = "{package_name}"\nversion = "{version}"\n',
+        f'[package]\nname = "{package_name}"\nversion = "{version}"\n{crate_license}\n',
         encoding="utf-8",
     )
     (crate_directory / "shortcut.json").write_text(
@@ -54,7 +61,7 @@ def write_fixture(root: Path, application: str = "clock", version: str = "0.2.0"
                 },
                 "metadata": {
                     "summary": "Shows the time.",
-                    "license": validate_manifests.REPOSITORY_LICENSE,
+                    "license": "Apache-2.0",
                     "source": f"{validate_manifests.SOURCE_PREFIX}{application}",
                 },
                 "$schema": validate_manifests.SCHEMA,
@@ -170,7 +177,9 @@ class ValidateManifestsTests(unittest.TestCase):
             root = Path(temporary_directory)
             manifest_path, _ = write_fixture(root, version="0.1.0")
             cargo_path = root / "executables" / "clock" / "Cargo.toml"
-            cargo_path.write_text('[package]\nname = "xila-clock"\nversion = "0.2.0"\n', encoding="utf-8")
+            cargo_path.write_text(
+                '[package]\nname = "xila-clock"\nversion = "0.2.0"\nlicense = "Apache-2.0"\n', encoding="utf-8"
+            )
             with self.assertRaises(SystemExit):
                 validate_manifests.validate_application(root, "clock", sync=False)
             validate_manifests.validate_application(root, "clock", sync=True)
@@ -178,7 +187,57 @@ class ValidateManifestsTests(unittest.TestCase):
             self.assertEqual(updated["version"], "0.2.0")
             self.assertEqual(updated["format_version"], 2)
             self.assertEqual(updated["xila_version"], "0.1")
-            self.assertEqual(updated["metadata"]["license"], validate_manifests.REPOSITORY_LICENSE)
+            self.assertEqual(updated["metadata"]["license"], "Apache-2.0")
+
+    def test_accepts_catalog_license_matching_the_crate_license(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            write_fixture(root)
+            validate_manifests.validate_application(root, "clock")
+
+    def test_accepts_workspace_inherited_crate_license(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            write_fixture(root, crate_license="license.workspace = true")
+            validate_manifests.validate_application(root, "clock")
+
+    def test_rejects_catalog_license_mismatching_the_crate_license(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            manifest_path, _ = write_fixture(root)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["metadata"]["license"] = "MIT"
+            manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+            with self.assertRaises(SystemExit) as raised:
+                validate_manifests.validate_application(root, "clock")
+            message = str(raised.exception)
+            self.assertIn("clock", message)
+            self.assertIn("MIT", message)
+            self.assertIn("Apache-2.0", message)
+
+    def test_rejects_crate_without_license(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            write_fixture(root, crate_license="")
+            with self.assertRaises(SystemExit) as raised:
+                validate_manifests.validate_application(root, "clock")
+            self.assertIn("clock", str(raised.exception))
+
+    def test_rejects_inherited_license_without_workspace_license(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            write_fixture(root, crate_license="license.workspace = true")
+            (root / "Cargo.toml").write_text("[workspace.package]\n", encoding="utf-8")
+            with self.assertRaises(SystemExit) as raised:
+                validate_manifests.validate_application(root, "clock")
+            self.assertIn("root Cargo.toml", str(raised.exception))
+
+    def test_rejects_disabled_license_inheritance(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            write_fixture(root, crate_license="license = { workspace = false }")
+            with self.assertRaises(SystemExit):
+                validate_manifests.validate_application(root, "clock")
 
 
 if __name__ == "__main__":
