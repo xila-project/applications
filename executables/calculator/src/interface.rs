@@ -359,8 +359,8 @@ impl Interface {
                     .as_nanos()
                     .hash(&mut hasher);
                 let hash = hasher.finish();
-                let random_value = (hash as f64) / (u64::MAX as f64);
-                self.push_str(&format!("{:.10}", random_value));
+                let fraction = ((u128::from(hash) * 10_000_000_000) >> 64) as u64;
+                self.push_str(&format!("0.{fraction:010}"));
             }
 
             // Constants

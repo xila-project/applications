@@ -202,20 +202,25 @@ impl Interface {
                 top: scores,
                 inference,
             }) => {
+                let top_percent = (scores[0].1 * 100.0).round() as u32;
+                let second_percent = (scores[1].1 * 100.0).round() as u32;
+                let third_percent = (scores[2].1 * 100.0).round() as u32;
+                let tenths = (inference.as_micros() + 50) / 100;
                 let mut text = format!(
-                    "{}: {} ({:.0}%)\n{}: {} {:.0}%   {} {:.0}%   {} {:.0}%\n{}: {:.1} ms",
+                    "{}: {} ({}%)\n{}: {} {}%   {} {}%   {} {}%\n{}: {}.{} ms",
                     t!("results.digit"),
                     scores[0].0,
-                    scores[0].1 * 100.0,
+                    top_percent,
                     t!("results.scores"),
                     scores[0].0,
-                    scores[0].1 * 100.0,
+                    top_percent,
                     scores[1].0,
-                    scores[1].1 * 100.0,
+                    second_percent,
                     scores[2].0,
-                    scores[2].1 * 100.0,
+                    third_percent,
                     t!("results.inference"),
-                    inference.as_secs_f64() * 1000.0
+                    tenths / 10,
+                    tenths % 10
                 );
                 if let Some(backend) = classifier.backend() {
                     text.push_str(&format!("   {}: {backend}", t!("results.backend")));

@@ -1,8 +1,10 @@
 [profile.release-wasm]
 inherits = "release"
-opt-level = 's'
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
 strip = true
-lto = true
 
 [profile.profiling]
 inherits = "release"

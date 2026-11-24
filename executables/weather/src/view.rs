@@ -101,6 +101,30 @@ pub fn chart_series(values: &[f64]) -> (Vec<i32>, i32, i32) {
     (points, low, high)
 }
 
+/// Format a finite floating-point number with `decimals` fractional digits
+/// without pulling `core::fmt::float` into WebAssembly guest binaries.
+pub fn format_fixed(value: f64, decimals: u8) -> String {
+    if !value.is_finite() {
+        return String::from("0");
+    }
+    let divisor = 10_u64.pow(u32::from(decimals));
+    let scaled = (value * (divisor as f64)).round();
+    if !scaled.is_finite() || scaled < (i64::MIN as f64) || scaled > (i64::MAX as f64) {
+        return String::from("0");
+    }
+    let rounded = scaled as i64;
+    let sign = if rounded < 0 { "-" } else { "" };
+    let magnitude = rounded.unsigned_abs();
+    let whole = magnitude / divisor;
+    if decimals == 0 {
+        format!("{sign}{whole}")
+    } else {
+        let fraction = magnitude % divisor;
+        let width = usize::from(decimals);
+        format!("{sign}{whole}.{fraction:0width$}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,5 +172,14 @@ mod tests {
         let (points, low, high) = chart_series(&[]);
         assert!(points.is_empty());
         assert_eq!((low, high), (-10, 10));
+    }
+
+    #[test]
+    fn format_fixed_rounds_and_handles_signs() {
+        assert_eq!(format_fixed(48.8566, 4), "48.8566");
+        assert_eq!(format_fixed(-2.35, 1), "-2.4");
+        assert_eq!(format_fixed(-0.04, 1), "0.0");
+        assert_eq!(format_fixed(18.6, 0), "19");
+        assert_eq!(format_fixed(f64::NAN, 1), "0");
     }
 }

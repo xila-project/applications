@@ -5,14 +5,36 @@ taplo_version = "0.10.0"
 nextest_version = "0.9.148"
 actionlint_version = "1.7.7"
 shellcheck_version = "0.11.0"
+binaryen_version = "133"
 
 [tasks."check:guest"]
 description = "Check all WASI guest applications"
 run = "cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits"
 
 [tasks."build:applications"]
-description = "Build the seven WASI application artifacts"
-run = "cargo build --locked --target wasm32-wasip1 --profile release-wasm -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits"
+description = "Build and size-optimize the seven WASI application artifacts"
+tools."aqua:WebAssembly/binaryen" = "{{ vars.binaryen_version }}"
+run = """
+set -eu
+cargo build --locked --target wasm32-wasip1 --profile release-wasm -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits
+for application in calculator clock weather pixel_painter text_editor synth digits; do
+  module="target/wasm32-wasip1/release-wasm/$application.wasm"
+  wasm-opt -Oz \
+    --strip-debug \
+    --strip-dwarf \
+    --strip-producers \
+    --enable-mutable-globals \
+    --enable-sign-ext \
+    --enable-nontrapping-float-to-int \
+    --enable-multivalue \
+    --enable-bulk-memory \
+    --enable-reference-types \
+    --enable-tail-call \
+    --enable-extended-const \
+    "$module" -o "$module.optimized"
+  mv "$module.optimized" "$module"
+done
+"""
 
 [tasks."test:workspace"]
 description = "Test application crates on the host"
