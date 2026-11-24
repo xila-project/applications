@@ -63,8 +63,15 @@ pub unsafe fn paragraph(parent: *mut Object, text: &str, font: u32) -> wasm::Res
     }
 }
 
+/// `text` as a C string. Text from Grafana (titles, series names, errors) can
+/// hold a NUL character, which a C string cannot: it is dropped, instead of
+/// failing the whole screen.
+fn c_string(text: &str) -> wasm::Result<CString> {
+    CString::new(text.replace('\0', "")).map_err(|_| -1)
+}
+
 pub unsafe fn set_text(label: *mut Object, text: &str) -> wasm::Result<()> {
-    let text = CString::new(text).map_err(|_| -1)?;
+    let text = c_string(text)?;
     unsafe { label_set_text(label, text.as_ptr()) }
 }
 
@@ -111,7 +118,7 @@ pub unsafe fn field(parent: *mut Object, value: &str, maximum: u32) -> wasm::Res
 }
 
 pub unsafe fn set_field(area: *mut Object, value: &str) -> wasm::Result<()> {
-    let value = CString::new(value).map_err(|_| -1)?;
+    let value = c_string(value)?;
     unsafe { textarea_set_text(area, value.as_ptr()) }
 }
 
