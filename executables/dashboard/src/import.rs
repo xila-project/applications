@@ -25,6 +25,11 @@ use std::{format, string::String, vec::Vec};
 /// Fixed window used for Grafana's interval macros.
 const INTERVAL: &str = "5m";
 const MAXIMUM_VARIABLE_LENGTH: usize = 256;
+/// Most variables and, for one variable, selected values kept. A variable
+/// beyond these limits is not substituted, so its panels show a query error
+/// instead of values for a part of the selection.
+const MAXIMUM_VARIABLES: usize = 64;
+const MAXIMUM_VARIABLE_VALUES: usize = 16;
 
 /// A panel as read, before its type is known.
 #[derive(Default)]
@@ -213,6 +218,7 @@ fn parse_variable<S: Source>(json: &mut Reader<S>) -> Result<Option<Variable>> {
     let mut name = None;
     let mut values: Option<Vec<String>> = None;
     let mut all_value = None;
+    let mut too_many = false;
     json.object(|json, key| {
         match key {
             "name" => name = json.optional_string(64)?,
@@ -228,8 +234,15 @@ fn parse_variable<S: Source>(json: &mut Reader<S>) -> Result<Option<Variable>> {
                     JsonKind::Array => {
                         let mut list = Vec::new();
                         json.array(|json| {
-                            if let Some(value) = json.optional_string(MAXIMUM_VARIABLE_LENGTH)? {
-                                list.push(value);
+                            // A value too long to keep makes the whole
+                            // variable unusable, like too many values.
+                            match json.optional_string(MAXIMUM_VARIABLE_LENGTH) {
+                                Ok(Some(value)) if list.len() < MAXIMUM_VARIABLE_VALUES => {
+                                    list.push(value);
+                                }
+                                Ok(Some(_)) | Err(Error::TooLarge) => too_many = true,
+                                Ok(None) => (),
+                                Err(error) => return Err(error),
                             }
                             Ok(())
                         })?;
@@ -246,6 +259,9 @@ fn parse_variable<S: Source>(json: &mut Reader<S>) -> Result<Option<Variable>> {
     let (Some(name), Some(values)) = (name, values) else {
         return Ok(None);
     };
+    if too_many {
+        return Ok(None);
+    }
     let all = || {
         all_value
             .clone()
@@ -261,6 +277,9 @@ fn parse_variable<S: Source>(json: &mut Reader<S>) -> Result<Option<Variable>> {
     } else {
         values.join("|")
     };
+    if value.len() > MAXIMUM_VARIABLE_LENGTH {
+        return Ok(None);
+    }
     Ok(Some(Variable { name, value }))
 }
 
@@ -371,7 +390,9 @@ pub fn parse_dashboard<S: Source>(json: &mut Reader<S>, uid: &str) -> Result<Imp
                         return json.skip();
                     }
                     json.array(|json| {
-                        if let Some(variable) = parse_variable(json)? {
+                        if let Some(variable) = parse_variable(json)?
+                            && variables.len() < MAXIMUM_VARIABLES
+                        {
                             variables.push(variable);
                         }
                         Ok(())
@@ -400,21 +421,25 @@ pub fn parse_dashboard<S: Source>(json: &mut Reader<S>, uid: &str) -> Result<Imp
     let range = range
         .unwrap_or(DEFAULT_RANGE_SECONDS)
         .clamp(60, MAXIMUM_RANGE_SECONDS);
-    let panels = collected
-        .panels
-        .into_iter()
-        .map(|(mut panel, kind)| {
-            panel.expression = substitute(&panel.expression, &variables);
-            if kind == Kind::Chart {
-                panel.range_seconds = Some(range);
-            }
-            panel
-        })
-        .collect();
+    let mut skipped = collected.skipped;
+    let mut panels = Vec::with_capacity(collected.panels.len());
+    for (mut panel, kind) in collected.panels {
+        panel.expression = substitute(&panel.expression, &variables);
+        // Substituted values can make an expression longer than the limit
+        // the settings enforce: such a panel is skipped.
+        if panel.expression.len() > MAXIMUM_EXPRESSION_LENGTH {
+            skipped += 1;
+            continue;
+        }
+        if kind == Kind::Chart {
+            panel.range_seconds = Some(range);
+        }
+        panels.push(panel);
+    }
     Ok(Imported {
         uid: String::from(uid),
         title,
-        skipped: collected.skipped,
+        skipped,
         panels,
     })
 }
@@ -541,6 +566,39 @@ mod tests {
             imported.panels[5].expression,
             "max(node_hwmon_temp_celsius{host=~\".*\"})"
         );
+    }
+
+    #[test]
+    fn bounds_variables_and_substituted_expressions() {
+        let dashboard = |variable: &str, expression: &str| {
+            std::format!(
+                r#"{{"dashboard": {{"title": "T", "templating": {{"list": [{variable}]}},
+                "panels": [{{"type": "stat", "id": 1, "title": "P", "targets": [{{"expr": "{expression}"}}]}}]}}}}"#
+            )
+        };
+        let import = |text: String| {
+            parse_dashboard(&mut Reader::new(SliceSource::new(text.as_bytes())), "x").unwrap()
+        };
+        // Too many selected values: the variable is left alone.
+        let values: Vec<String> = (0..40).map(|index| std::format!("\"v{index}\"")).collect();
+        let many = std::format!(
+            r#"{{"name": "v", "current": {{"value": [{}]}}}}"#,
+            values.join(",")
+        );
+        assert_eq!(
+            import(dashboard(&many, r#"up{h=~\"$v\"}"#)).panels[0].expression,
+            r#"up{h=~"$v"}"#
+        );
+        // A value of 200 bytes repeated 20 times passes the expression limit.
+        let long = "x".repeat(200);
+        let variable = std::format!(r#"{{"name": "v", "current": {{"value": "{long}"}}}}"#);
+        let expression = "$v ".repeat(20);
+        let imported = import(dashboard(&variable, &expression));
+        assert!(imported.panels.is_empty());
+        assert_eq!(imported.skipped, 1);
+        // The same expression with a short value stays.
+        let short = r#"{"name": "v", "current": {"value": "a"}}"#;
+        assert_eq!(import(dashboard(short, &expression)).panels.len(), 1);
     }
 
     #[test]
