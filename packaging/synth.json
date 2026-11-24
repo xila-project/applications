@@ -1,7 +1,7 @@
 {
   "format_version": 2,
   "name": "xila.synth",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "target": "wasm32-wasip1",
   "xila_version": "0.1",
   "capabilities": [],
