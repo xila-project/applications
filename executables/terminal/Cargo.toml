@@ -3,6 +3,7 @@ name = "xila-terminal"
 version = "0.1.0"
 edition = "2024"
 rust-version.workspace = true
+license.workspace = true
 
 [dependencies]
 embedded-i18n = { workspace = true }
