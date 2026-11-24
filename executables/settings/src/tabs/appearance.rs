@@ -134,7 +134,12 @@ impl AppearanceTab {
     /// Settings dispatches events while holding the LVGL lock.
     pub async fn handle_event(&mut self, event: &Event) -> bool {
         if !self.brightness.is_null() && event.is_target(self.brightness) {
-            if matches!(event.code, EventKind::ValueChanged | EventKind::Released) {
+            // A press that is lost, for example to a scroll of the tab, ends
+            // like a release: the level on screen must not stay unsaved.
+            if matches!(
+                event.code,
+                EventKind::ValueChanged | EventKind::Released | EventKind::PressLost
+            ) {
                 self.change_brightness().await;
                 return true;
             }
@@ -403,6 +408,20 @@ pub(crate) mod tests {
                     .await
             );
             assert_eq!(load().await.brightness, percent_to_brightness(40));
+            // A press lost to a scroll saves like a release.
+            lvgl::lv_obj_add_state(tab.brightness, lvgl::LV_STATE_PRESSED);
+            lvgl::lv_slider_set_value(tab.brightness, 60, false);
+            assert!(
+                tab.handle_event(&Event::new(EventKind::ValueChanged, tab.brightness, None))
+                    .await
+            );
+            assert_eq!(load().await.brightness, percent_to_brightness(40));
+            lvgl::lv_obj_remove_state(tab.brightness, lvgl::LV_STATE_PRESSED);
+            assert!(
+                tab.handle_event(&Event::new(EventKind::PressLost, tab.brightness, None))
+                    .await
+            );
+            assert_eq!(load().await.brightness, percent_to_brightness(60));
             // Keypad steps save at once; the slider stops at the minimum.
             lvgl::lv_slider_set_value(tab.brightness, 0, false);
             assert_eq!(
