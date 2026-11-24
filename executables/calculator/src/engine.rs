@@ -45,6 +45,14 @@ pub fn evaluate_expression(input: &str, radian_mode: bool) -> Result<CalculatorN
         .map_err(localize_error)
 }
 
+/// A decimal expression for a uniformly distributed value in `[0, 1)` with ten fractional
+/// digits, made from the top bits of `hash` by integer scaling so that no floating-point
+/// formatting code is linked into the guest. The result is truncated, so it never reaches 1.
+pub fn random_fraction(hash: u64) -> String {
+    let fraction = ((u128::from(hash) * 10_000_000_000) >> 64) as u64;
+    format!("0.{fraction:010}")
+}
+
 fn localize_error(error: nanoexpr::Error) -> String {
     let message = match error.kind {
         ErrorKind::UnexpectedCharacter => t!("errors.unexpected_character"),
@@ -131,5 +139,31 @@ mod tests {
             evaluate_expression("sqrt(-1)", true).unwrap_err(),
             format!("{} (0..8)", t!("errors.value_outside_function_domain"))
         );
+    }
+
+    #[test]
+    fn random_fractions_stay_in_the_unit_interval() {
+        assert_eq!(random_fraction(0), "0.0000000000");
+        assert_eq!(random_fraction(u64::MAX), "0.9999999999");
+        assert_eq!(random_fraction(1 << 63), "0.5000000000");
+        assert_eq!(random_fraction(u64::MAX / 10), "0.0999999999");
+        assert_eq!(random_fraction(1 << 40), "0.0000000596");
+        for hash in [0, 1, u64::MAX - 1, u64::MAX, 0xdead_beef_cafe_f00d] {
+            let text = random_fraction(hash);
+            assert_eq!(text.len(), 12);
+            assert!(evaluate_expression(&text, true).is_ok());
+        }
+    }
+
+    #[test]
+    fn displays_fractions_signs_and_large_or_small_values_without_floating_point() {
+        let display = |input: &str| evaluate_expression(input, true).unwrap().to_string();
+        assert_eq!(display("1/3"), "1/3");
+        assert_eq!(display("-1/3"), "-1/3");
+        assert_eq!(display("1e20"), "1e20");
+        assert_eq!(display("-1e-7"), "-1/10000000");
+        assert_eq!(display("0/5"), "0");
+        assert_eq!(display("-0"), "0");
+        assert_eq!(display("sqrt(2) * -1"), "-1.4142135623731");
     }
 }

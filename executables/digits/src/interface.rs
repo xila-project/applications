@@ -202,10 +202,10 @@ impl Interface {
                 top: scores,
                 inference,
             }) => {
-                let top_percent = (scores[0].1 * 100.0).round() as u32;
-                let second_percent = (scores[1].1 * 100.0).round() as u32;
-                let third_percent = (scores[2].1 * 100.0).round() as u32;
-                let tenths = (inference.as_micros() + 50) / 100;
+                let top_percent = digits::percentage(scores[0].1);
+                let second_percent = digits::percentage(scores[1].1);
+                let third_percent = digits::percentage(scores[2].1);
+                let tenths = digits::tenths_of_milliseconds(inference);
                 let mut text = format!(
                     "{}: {} ({}%)\n{}: {} {}%   {} {}%   {} {}%\n{}: {}.{} ms",
                     t!("results.digit"),

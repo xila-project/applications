@@ -1,4 +1,4 @@
-use crate::engine::evaluate_expression;
+use crate::engine::{evaluate_expression, random_fraction};
 use crate::keypad::{
     ButtonIdentifier, CLEAR_LABEL, COMPACT_BASIC, COMPACT_SCIENTIFIC, Key, Layout, WIDE_BASIC,
     WIDE_SCIENTIFIC, cells, columns, variant,
@@ -359,8 +359,7 @@ impl Interface {
                     .as_nanos()
                     .hash(&mut hasher);
                 let hash = hasher.finish();
-                let fraction = ((u128::from(hash) * 10_000_000_000) >> 64) as u64;
-                self.push_str(&format!("0.{fraction:010}"));
+                self.push_str(&random_fraction(hash));
             }
 
             // Constants

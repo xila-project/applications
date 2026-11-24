@@ -49,4 +49,14 @@ mod tests {
         assert!(url.contains("daily="));
         assert!(url.contains("timezone=auto"));
     }
+
+    #[test]
+    fn forecast_url_keeps_signs_and_four_decimals() {
+        let url = build_forecast_url(-33.8688, -70.5);
+        assert!(url.contains("latitude=-33.8688&"));
+        assert!(url.contains("longitude=-70.5000&"));
+        let url = build_forecast_url(-0.00001, 0.0);
+        assert!(url.contains("latitude=0.0000&"));
+        assert!(url.contains("longitude=0.0000&"));
+    }
 }
