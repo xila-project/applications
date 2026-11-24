@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import sys
 import tomllib
+import unicodedata
 
 ROOT = Path(__file__).resolve().parent.parent
 APPS = ("calculator", "clock", "weather", "pixel_painter", "text_editor", "synth", "digits", "dashboard")
@@ -43,6 +44,11 @@ def is_valid_xila_version(value: object) -> bool:
     return True
 
 
+def is_control(character: str) -> bool:
+    """Return whether `character` is a Unicode control character, like Rust `char::is_control`."""
+    return unicodedata.category(character) == "Cc"
+
+
 def validate_catalog_metadata(application: str, metadata: object) -> None:
     """Require the catalog metadata that the registry entry of a release copies.
 
@@ -54,13 +60,15 @@ def validate_catalog_metadata(application: str, metadata: object) -> None:
     if not metadata.keys() <= {"summary", "license", "source", "homepage"}:
         raise SystemExit(f"unexpected catalog metadata field for {application}")
     summary = metadata["summary"]
+    # Apply the rules of xila-package (Metadata::validate): at most 256 UTF-8
+    # bytes and no Unicode control character (general category Cc).
     if (
         not isinstance(summary, str)
         or not summary.strip()
-        or len(summary) > 256
-        or any(ord(character) < 32 or ord(character) == 127 for character in summary)
+        or len(summary.encode("utf-8")) > 256
+        or any(is_control(character) for character in summary)
     ):
-        raise SystemExit(f"invalid catalog summary (one line, 1 to 256 characters) for {application}")
+        raise SystemExit(f"invalid catalog summary (one line, 1 to 256 UTF-8 bytes) for {application}")
     if metadata["license"] != REPOSITORY_LICENSE:
         raise SystemExit(f"catalog license must be {REPOSITORY_LICENSE} for {application}")
     if metadata["source"] != f"{SOURCE_PREFIX}{application}":
@@ -68,9 +76,10 @@ def validate_catalog_metadata(application: str, metadata: object) -> None:
     homepage = metadata.get("homepage")
     if homepage is not None and (
         not isinstance(homepage, str)
-        or len(homepage) > 256
+        or len(homepage.encode("utf-8")) > 256
         or not homepage.startswith("https://")
-        or any(character.isspace() for character in homepage)
+        or homepage == "https://"
+        or any(character.isspace() or is_control(character) for character in homepage)
     ):
         raise SystemExit(f"invalid catalog homepage for {application}")
 

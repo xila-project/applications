@@ -128,6 +128,8 @@ class ValidateManifestsTests(unittest.TestCase):
             {key: value for key, value in complete.items() if key != "source"},
             {**complete, "summary": " "},
             {**complete, "summary": "Two\nlines."},
+            {**complete, "summary": "Next\u0085line."},
+            {**complete, "summary": "é" * 129},
             {**complete, "license": "MIT"},
             {**complete, "source": "https://github.com/xila-project/applications"},
             {**complete, "homepage": "http://xila.dev"},
