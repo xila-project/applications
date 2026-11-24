@@ -412,7 +412,12 @@ unsafe fn text(label: *mut lvgl::lv_obj_t, value: &str) {
     // Catalog text and numeric substitutions contain no interior NULs.
     if let Ok(value) = CString::new(value) {
         unsafe {
-            lvgl::lv_label_set_text(label, value.as_ptr());
+            // LVGL redraws a label whenever its text is set, changed or not, and
+            // most of these stay the same from one sample to the next.
+            let current = lvgl::lv_label_get_text(label);
+            if current.is_null() || core::ffi::CStr::from_ptr(current) != value.as_c_str() {
+                lvgl::lv_label_set_text(label, value.as_ptr());
+            }
         }
     }
 }
