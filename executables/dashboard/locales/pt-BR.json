@@ -1,0 +1,101 @@
+{
+  "age": {
+    "hours": "{count} h",
+    "minutes": "{count} min",
+    "seconds": "{count} s"
+  },
+  "editor": {
+    "critical": "Limite crítico (vazio para nenhum)",
+    "decimals": "Casas decimais (vazio para automático)",
+    "done": "Concluído",
+    "edit": "Editar painel",
+    "expression": "Expressão PromQL",
+    "kind": "Exibição",
+    "new": "Novo painel",
+    "range": "Período do gráfico",
+    "title": "Título",
+    "unit": "Unidade",
+    "warning": "Limite de alerta (vazio para nenhum)"
+  },
+  "errors": {
+    "configuration": "As configurações estão incompletas",
+    "http": "Erro do Grafana {status}",
+    "invalid_response": "Resposta inesperada do Grafana",
+    "missing_token": "Nenhum token do Grafana: adicione um nas configurações",
+    "network": "Sem conexão de rede",
+    "not_found": "Não encontrado no Grafana (404)",
+    "query": "Erro de consulta: {message}",
+    "storage": "Não foi possível ler ou salvar as configurações",
+    "timeout": "O Grafana não respondeu a tempo",
+    "too_large": "A resposta é grande demais",
+    "unauthorized": "O Grafana recusou o token (401 ou 403)"
+  },
+  "header": {
+    "importing": "Carregando o painel de controle...",
+    "loading": "Carregando...",
+    "title": "Painel de controle",
+    "updated": "Atualizado há {age}"
+  },
+  "invalid": {
+    "dashboard": "Um uid de painel de controle contém apenas letras, dígitos, -, _ e .",
+    "data_source": "Digite o uid da fonte de dados",
+    "decimals": "As casas decimais devem ser um número inteiro de 0 a 6",
+    "expression": "Digite uma expressão PromQL",
+    "refresh": "O período deve ser um número inteiro de pelo menos 10 segundos",
+    "threshold": "Os limites devem ser números",
+    "title": "Digite um título de no máximo 64 caracteres",
+    "token": "Digite o token, sem espaços",
+    "too_many_panels": "Há painéis demais",
+    "url": "A URL deve começar com https:// ou http://"
+  },
+  "kinds": {
+    "chart": "Gráfico",
+    "value": "Valor"
+  },
+  "main": {
+    "no_panels": "Nenhum painel para mostrar: adicione alguns nas configurações.",
+    "not_configured": "Abra as configurações para se conectar ao Grafana.",
+    "not_reloaded": "Painel de controle não recarregado, mostrando a última cópia: {error}"
+  },
+  "settings": {
+    "add": "Adicionar painel",
+    "cancel": "Cancelar",
+    "connected": "Conectado: {title} = {value}",
+    "connection": "Conexão",
+    "convert": "Converter em manual",
+    "dashboard": "Uid do painel de controle (vazio para painéis manuais)",
+    "data_source": "Uid da fonte de dados",
+    "delete": "Excluir",
+    "edit": "Editar",
+    "hide": "Ocultar",
+    "imported": "{count} painéis de {title}, {skipped} ignorados",
+    "importing": "Carregando o painel de controle...",
+    "not_imported": "O painel de controle é carregado ao salvar ou recarregar.",
+    "panels": "Painéis",
+    "refresh": "Período de atualização (segundos)",
+    "reload": "Recarregar o painel de controle",
+    "replace": "Substituir",
+    "save": "Salvar",
+    "show": "Mostrar",
+    "test": "Testar conexão",
+    "testing": "Testando...",
+    "title": "Configurações",
+    "token": "Token",
+    "token_set": "Token salvo",
+    "url": "URL do Grafana"
+  },
+  "tile": {
+    "more": "+{count} outros",
+    "no_data": "Sem dados",
+    "range": "{minimum} a {maximum}"
+  },
+  "units": {
+    "bytes": "Bytes",
+    "bytes_per_second": "Bytes por segundo",
+    "celsius": "Graus Celsius",
+    "fraction": "Porcentagem (0 a 1)",
+    "none": "Nenhuma",
+    "percent": "Porcentagem (0 a 100)",
+    "seconds": "Segundos"
+  }
+}

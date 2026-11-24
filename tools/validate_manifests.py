@@ -10,7 +10,7 @@ import sys
 import tomllib
 
 ROOT = Path(__file__).resolve().parent.parent
-APPS = ("calculator", "clock", "weather", "pixel_painter", "text_editor", "synth", "digits")
+APPS = ("calculator", "clock", "weather", "pixel_painter", "text_editor", "synth", "digits", "dashboard")
 SCHEMA = "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
 SHORTCUT_SCHEMA = "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json"
 ALLOWED_MANIFEST_KEYS = {
@@ -119,7 +119,7 @@ def main(arguments: list[str] | None = None) -> None:
         raise SystemExit("usage: validate_manifests.py [--sync]")
     validate_all(ROOT, sync=sync)
     print(
-        "All seven version 2 package manifests and application-owned graphical Shell shortcuts "
+        f"All {len(APPS)} version 2 package manifests and application-owned graphical Shell shortcuts "
         "match Cargo identities, versions, Xila version declarations and entrypoints."
     )
 

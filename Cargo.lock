@@ -2257,6 +2257,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "xila-dashboard"
+version = "0.1.0"
+dependencies = [
+ "embedded-i18n",
+ "miniserde",
+ "serde",
+ "serde_json",
+ "xila-wasm",
+]
+
+[[package]]
 name = "xila-debug-application"
 version = "0.1.0"
 dependencies = [

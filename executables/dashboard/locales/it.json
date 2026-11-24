@@ -1,0 +1,101 @@
+{
+  "age": {
+    "hours": "{count} h",
+    "minutes": "{count} min",
+    "seconds": "{count} s"
+  },
+  "editor": {
+    "critical": "Soglia critica (vuoto per nessuna)",
+    "decimals": "Decimali (vuoto per automatico)",
+    "done": "Fatto",
+    "edit": "Modifica pannello",
+    "expression": "Espressione PromQL",
+    "kind": "Visualizzazione",
+    "new": "Nuovo pannello",
+    "range": "Periodo del grafico",
+    "title": "Titolo",
+    "unit": "Unità",
+    "warning": "Soglia di avviso (vuoto per nessuna)"
+  },
+  "errors": {
+    "configuration": "Le impostazioni sono incomplete",
+    "http": "Errore di Grafana {status}",
+    "invalid_response": "Risposta inattesa da Grafana",
+    "missing_token": "Nessun token Grafana: aggiungine uno nelle impostazioni",
+    "network": "Nessuna connessione di rete",
+    "not_found": "Non trovato su Grafana (404)",
+    "query": "Errore della query: {message}",
+    "storage": "Impossibile leggere o salvare le impostazioni",
+    "timeout": "Grafana non ha risposto in tempo",
+    "too_large": "La risposta è troppo grande",
+    "unauthorized": "Grafana ha rifiutato il token (401 o 403)"
+  },
+  "header": {
+    "importing": "Caricamento della dashboard...",
+    "loading": "Caricamento...",
+    "title": "Dashboard",
+    "updated": "Aggiornato {age} fa"
+  },
+  "invalid": {
+    "dashboard": "Un uid di dashboard contiene solo lettere, cifre, -, _ e .",
+    "data_source": "Inserisci l'uid della sorgente dati",
+    "decimals": "I decimali devono essere un intero da 0 a 6",
+    "expression": "Inserisci un'espressione PromQL",
+    "refresh": "Il periodo deve essere un numero intero di almeno 10 secondi",
+    "threshold": "Le soglie devono essere numeri",
+    "title": "Inserisci un titolo di al massimo 64 caratteri",
+    "token": "Inserisci il token, senza spazi",
+    "too_many_panels": "Ci sono troppi pannelli",
+    "url": "L'URL deve iniziare con https:// o http://"
+  },
+  "kinds": {
+    "chart": "Grafico",
+    "value": "Valore"
+  },
+  "main": {
+    "no_panels": "Nessun pannello: aggiungine nelle impostazioni.",
+    "not_configured": "Apri le impostazioni per collegarti a Grafana.",
+    "not_reloaded": "Dashboard non ricaricata, è mostrata l'ultima copia: {error}"
+  },
+  "settings": {
+    "add": "Aggiungi pannello",
+    "cancel": "Annulla",
+    "connected": "Connesso: {title} = {value}",
+    "connection": "Connessione",
+    "convert": "Converti in manuale",
+    "dashboard": "Uid della dashboard (vuoto per pannelli manuali)",
+    "data_source": "Uid della sorgente dati",
+    "delete": "Elimina",
+    "edit": "Modifica",
+    "hide": "Nascondi",
+    "imported": "{count} pannelli da {title}, {skipped} saltati",
+    "importing": "Caricamento della dashboard...",
+    "not_imported": "La dashboard viene caricata al salvataggio o al ricaricamento.",
+    "panels": "Pannelli",
+    "refresh": "Periodo di aggiornamento (secondi)",
+    "reload": "Ricarica la dashboard",
+    "replace": "Sostituisci",
+    "save": "Salva",
+    "show": "Mostra",
+    "test": "Prova la connessione",
+    "testing": "Prova in corso...",
+    "title": "Impostazioni",
+    "token": "Token",
+    "token_set": "Token salvato",
+    "url": "URL di Grafana"
+  },
+  "tile": {
+    "more": "+{count} altri",
+    "no_data": "Nessun dato",
+    "range": "da {minimum} a {maximum}"
+  },
+  "units": {
+    "bytes": "Byte",
+    "bytes_per_second": "Byte al secondo",
+    "celsius": "Gradi Celsius",
+    "fraction": "Percentuale (da 0 a 1)",
+    "none": "Nessuna",
+    "percent": "Percentuale (da 0 a 100)",
+    "seconds": "Secondi"
+  }
+}

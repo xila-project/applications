@@ -186,6 +186,11 @@ const guestUiTests = [
     calls: /\btext\(\s*"([^"]+)"\s*\)/g,
   },
   {
+    application: "dashboard",
+    file: "executables/wasm/tests/dashboard.rs",
+    calls: /\btext\(\s*"([^"]+)"\s*\)/g,
+  },
+  {
     application: "pixel_painter",
     file: "executables/wasm/tests/pixel_painter.rs",
     calls: /\bstatus\(\s*manager\s*,\s*"([^"]+)"/g,

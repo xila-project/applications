@@ -1,0 +1,206 @@
+{
+ "results": {
+  "P0": {
+   "status": 200,
+   "frames": [
+    {
+     "schema": {
+      "name": "",
+      "refId": "P0",
+      "meta": {
+       "type": "numeric-multi",
+       "typeVersion": [
+        0,
+        1
+       ],
+       "executedQueryString": "Expr: ..."
+      },
+      "fields": [
+       {
+        "name": "Time",
+        "type": "time",
+        "typeInfo": {
+         "frame": "time.Time"
+        },
+        "config": {
+         "interval": 60000
+        }
+       },
+       {
+        "name": "Value",
+        "type": "number",
+        "typeInfo": {
+         "frame": "float64",
+         "nullable": true
+        },
+        "labels": {
+         "instance": "alpha"
+        },
+        "config": {}
+       }
+      ]
+     },
+     "data": {
+      "values": [
+       [
+        1767225600000
+       ],
+       [
+        0.25
+       ]
+      ]
+     }
+    },
+    {
+     "schema": {
+      "name": "",
+      "refId": "P0",
+      "meta": {
+       "type": "numeric-multi",
+       "typeVersion": [
+        0,
+        1
+       ],
+       "executedQueryString": "Expr: ..."
+      },
+      "fields": [
+       {
+        "name": "Time",
+        "type": "time",
+        "typeInfo": {
+         "frame": "time.Time"
+        },
+        "config": {
+         "interval": 60000
+        }
+       },
+       {
+        "name": "Value",
+        "type": "number",
+        "typeInfo": {
+         "frame": "float64",
+         "nullable": true
+        },
+        "labels": {
+         "instance": "beta"
+        },
+        "config": {}
+       }
+      ]
+     },
+     "data": {
+      "values": [
+       [
+        1767225600000
+       ],
+       [
+        0.5
+       ]
+      ]
+     }
+    },
+    {
+     "schema": {
+      "name": "",
+      "refId": "P0",
+      "meta": {
+       "type": "numeric-multi",
+       "typeVersion": [
+        0,
+        1
+       ],
+       "executedQueryString": "Expr: ..."
+      },
+      "fields": [
+       {
+        "name": "Time",
+        "type": "time",
+        "typeInfo": {
+         "frame": "time.Time"
+        },
+        "config": {
+         "interval": 60000
+        }
+       },
+       {
+        "name": "Value",
+        "type": "number",
+        "typeInfo": {
+         "frame": "float64",
+         "nullable": true
+        },
+        "labels": {
+         "instance": "gamma"
+        },
+        "config": {}
+       }
+      ]
+     },
+     "data": {
+      "values": [
+       [
+        1767225600000
+       ],
+       [
+        0.75
+       ]
+      ]
+     }
+    },
+    {
+     "schema": {
+      "name": "",
+      "refId": "P0",
+      "meta": {
+       "type": "numeric-multi",
+       "typeVersion": [
+        0,
+        1
+       ],
+       "executedQueryString": "Expr: ..."
+      },
+      "fields": [
+       {
+        "name": "Time",
+        "type": "time",
+        "typeInfo": {
+         "frame": "time.Time"
+        },
+        "config": {
+         "interval": 60000
+        }
+       },
+       {
+        "name": "Value",
+        "type": "number",
+        "typeInfo": {
+         "frame": "float64",
+         "nullable": true
+        },
+        "labels": {
+         "instance": "delta"
+        },
+        "config": {}
+       }
+      ]
+     },
+     "data": {
+      "values": [
+       [
+        1767225600000
+       ],
+       [
+        1.0
+       ]
+      ]
+     }
+    }
+   ]
+  },
+  "P1": {
+   "error": "bad_data: invalid parameter \"query\": parse error",
+   "errorSource": "downstream",
+   "status": 400
+  }
+ }
+}

@@ -1,0 +1,36 @@
+[package]
+name = "xila-dashboard"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+build = "../wasm_guest_build.rs"
+description = "Shows Grafana panel values and charts on a Xila device."
+license = "GPL-2.0-only"
+
+[build-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dependencies]
+embedded-i18n = { workspace = true }
+miniserde = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm = { workspace = true, default-features = false, features = [
+  "guest",
+  "graphics",
+  "memory_32",
+] }
+
+[[bin]]
+name = "dashboard"
+path = "src/main.rs"
+
+[lib]
+name = "dashboard"
+
+[package.metadata.i18n]
+load-path = "locales"
+default-locale = "en"
+fallback = ["en"]
+strict = true

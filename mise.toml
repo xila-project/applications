@@ -9,18 +9,18 @@ binaryen_version = "133"
 
 [tasks."check:guest"]
 description = "Check all WASI guest applications"
-run = "cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits"
+run = "cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits -p xila-dashboard"
 
 [tasks."build:applications"]
-description = "Build and size-optimize the seven WASI application artifacts"
+description = "Build and size-optimize the eight WASI application artifacts"
 tools."aqua:WebAssembly/binaryen" = "{{ vars.binaryen_version }}"
 run = """
 set -eu
-cargo build --locked --target wasm32-wasip1 --profile release-wasm -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits
+cargo build --locked --target wasm32-wasip1 --profile release-wasm -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits -p xila-dashboard
 # The enabled proposals are exactly those the host accepts: keep them in sync with
 # executables/wasm/src/host/engine.rs, so the optimizer can neither reject a guest nor
 # emit an instruction the engine refuses. Everything else stays off.
-for application in calculator clock weather pixel_painter text_editor synth digits; do
+for application in calculator clock weather pixel_painter text_editor synth digits dashboard; do
   module="target/wasm32-wasip1/release-wasm/$application.wasm"
   wasm-opt -Oz \
     --strip-debug \
