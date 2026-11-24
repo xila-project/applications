@@ -262,10 +262,21 @@ impl Terminal {
                 inner.display,
                 inner.buffer.as_ptr() as *const core::ffi::c_char,
             );
-            lvgl::lv_obj_scroll_to_view(inner.display, true);
+            Self::show_last_line(inner.display);
         }
 
         Ok(())
+    }
+
+    /// Scrolls the output to its last line, without an animation.
+    ///
+    /// An animated scroll redraws the whole output on every frame for up to
+    /// 400 ms, and each print started a new one.
+    ///
+    /// # Safety
+    /// `display` must be live and the caller must hold the LVGL lock.
+    unsafe fn show_last_line(display: *mut lvgl::lv_obj_t) {
+        unsafe { lvgl::lv_obj_scroll_to_view(display, false) };
     }
 
     async fn print_line_internal(inner: &mut Inner, text: &str) -> Result<()> {
@@ -279,7 +290,7 @@ impl Terminal {
                 inner.display,
                 inner.buffer.as_ptr() as *const core::ffi::c_char,
             );
-            lvgl::lv_obj_scroll_to_view(inner.display, true);
+            Self::show_last_line(inner.display);
         }
 
         Ok(())
@@ -493,5 +504,27 @@ mod setup_failure_tests {
             "graphics lock must be released after Terminal setup error"
         );
         assert_eq!(manager.get_window_count().await.unwrap(), baseline_windows);
+    }
+
+    #[xila::task::test(task_path = xila::task)]
+    async fn printing_shows_the_last_line_without_animating_the_scroll() {
+        let manager = headless_graphics_manager().await;
+        let terminal = Terminal::new(manager).await.unwrap();
+        for line in 0..40 {
+            terminal.print(&std::format!("line {line}\n")).unwrap();
+        }
+        manager
+            .lock_function(|| unsafe {
+                let display = terminal.inner.try_read().unwrap().display;
+                let container = lvgl::lv_obj_get_parent(display);
+                lvgl::lv_obj_update_layout(container);
+                // The output is longer than its container, and already at its end.
+                assert!(lvgl::lv_obj_get_scroll_y(container) > 0);
+                assert_eq!(lvgl::lv_obj_get_scroll_bottom(container), 0);
+                assert!(lvgl::lv_anim_get(container.cast(), None).is_null());
+                Ok(())
+            })
+            .await
+            .unwrap();
     }
 }
