@@ -30,7 +30,6 @@ struct Interface {
     compact: bool,
     path: *mut Object,
     text: *mut Object,
-    keyboard: *mut Object,
     status: *mut Object,
     page_label: *mut Object,
     working: Option<WorkingCopy>,
@@ -91,7 +90,6 @@ pub fn run() -> wasm::Result<()> {
             } else if code == EventCode::Clicked as u32 && target == ui.more {
                 ui.details_open = !ui.details_open;
                 unsafe {
-                    object_add_flag(ui.keyboard, ObjectFlag::Hidden)?;
                     set_hidden(ui.details, !ui.details_open)?;
                     set_hidden(ui.text, false)?;
                     if ui.compact {
@@ -104,7 +102,6 @@ pub fn run() -> wasm::Result<()> {
                 && let Some(action) = ui.actions.iter().position(|button| *button == target)
             {
                 unsafe {
-                    object_add_flag(ui.keyboard, ObjectFlag::Hidden)?;
                     object_add_flag(ui.details, ObjectFlag::Hidden)?;
                     set_hidden(ui.text, false)?;
                     if ui.compact {
@@ -124,22 +121,6 @@ pub fn run() -> wasm::Result<()> {
                     6 => ui.save_document()?,
                     _ => (),
                 }
-            } else if code == EventCode::Focused as u32 && (target == ui.path || target == ui.text)
-            {
-                unsafe {
-                    keyboard_set_textarea(ui.keyboard, target)?;
-                    if ui.compact {
-                        object_add_flag(ui.navigation, ObjectFlag::Hidden)?;
-                        object_add_flag(ui.status, ObjectFlag::Hidden)?;
-                        set_hidden(ui.text, target == ui.path)?;
-                        set_hidden(ui.secondary, target == ui.path)?;
-                        if target == ui.text {
-                            object_add_flag(ui.details, ObjectFlag::Hidden)?;
-                            ui.details_open = false;
-                        }
-                    }
-                    object_remove_flag(ui.keyboard, ObjectFlag::Hidden)?;
-                }
             } else if code == EventCode::ValueChanged as u32 && target == ui.text {
                 if ui.working_unusable {
                     ui.revision = ui.revision.wrapping_add(1);
@@ -147,18 +128,6 @@ pub fn run() -> wasm::Result<()> {
                     ui.confirm_close = None;
                 }
                 ui.refresh_title()?;
-            } else if (code == EventCode::Ready as u32 || code == EventCode::Cancel as u32)
-                && target == ui.keyboard
-            {
-                unsafe {
-                    object_add_flag(ui.keyboard, ObjectFlag::Hidden)?;
-                    set_hidden(ui.text, false)?;
-                    if ui.compact {
-                        set_hidden(ui.secondary, false)?;
-                    }
-                    set_hidden(ui.navigation, false)?;
-                    set_hidden(ui.status, false)?;
-                }
             }
             ui.refresh_title()?;
         }
@@ -270,12 +239,9 @@ impl Interface {
             label_set_text(status, c"".as_ptr())?;
             object_set_font(status, 0, 0)?;
             object_set_width(status, percentage(100)?)?;
-            let keyboard = keyboard_create(window)?;
-            object_set_size(keyboard, percentage(100)?, if compact { 100 } else { 180 })?;
-            object_add_flag(keyboard, ObjectFlag::Hidden)?;
-            // Leave room for the shell's home swipe band below the status/keyboard.
+            // Leave room for the shell's home swipe band below the status.
             row(window, HOME_BAND)?;
-            for object in actions.into_iter().chain([more, path, text, keyboard]) {
+            for object in actions.into_iter().chain([more, path, text]) {
                 object_add_flag(object, ObjectFlag::EventBubble)?;
             }
             let mut ui = Self {
@@ -291,7 +257,6 @@ impl Interface {
                 compact,
                 path,
                 text,
-                keyboard,
                 status,
                 page_label,
                 working: None,
@@ -479,7 +444,6 @@ impl Interface {
         }
         let initial = CString::new(initial).map_err(|_| -1)?;
         unsafe {
-            object_add_flag(self.keyboard, ObjectFlag::Hidden)?;
             let picker = if let Some(picker) = self.retained_picker {
                 file_picker_reset(picker, mode as u32, initial.as_ptr())?;
                 picker

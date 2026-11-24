@@ -22,7 +22,6 @@ struct Interface {
     slider: *mut Object,
     brush_label: *mut Object,
     path: *mut Object,
-    keyboard: *mut Object,
     status: *mut Object,
     drawing: Drawing,
     color: u8,
@@ -111,17 +110,6 @@ pub fn run() -> wasm::Result<()> {
                         10..=12 => unsafe { ui.show_page((action - 10) as usize)? },
                         _ => (),
                     }
-                }
-            } else if code == EventCode::Focused as u32 && target == ui.path {
-                unsafe {
-                    keyboard_set_textarea(ui.keyboard, ui.path)?;
-                    object_remove_flag(ui.keyboard, ObjectFlag::Hidden)?;
-                }
-            } else if (code == EventCode::Ready as u32 || code == EventCode::Cancel as u32)
-                && target == ui.keyboard
-            {
-                unsafe {
-                    object_add_flag(ui.keyboard, ObjectFlag::Hidden)?;
                 }
             }
         }
@@ -304,10 +292,6 @@ impl Interface {
             object_remove_flag(canvas, ObjectFlag::Scrollable)?;
             let status = Self::label(window, c"")?;
             object_set_width(status, percentage(100)?)?;
-            let keyboard = keyboard_create(files)?;
-            object_set_width(keyboard, percentage(100)?)?;
-            object_set_height(keyboard, 90)?;
-            object_add_flag(keyboard, ObjectFlag::Hidden)?;
             let mut ui = Self {
                 window,
                 canvas,
@@ -322,7 +306,6 @@ impl Interface {
                 slider,
                 brush_label,
                 path,
-                keyboard,
                 status,
                 drawing: Drawing::new(),
                 color: 1,
@@ -403,7 +386,6 @@ impl Interface {
                     if selected == index { 0 } else { 2 },
                 )?;
             }
-            object_add_flag(self.keyboard, ObjectFlag::Hidden)?;
             Ok(())
         }
     }
