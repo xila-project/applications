@@ -84,26 +84,23 @@ pub fn mask(count: usize) -> String {
 }
 
 /// Applies an edit of a masked field to the secret it hides. The field shows
-/// one mask character per secret character, so deleted characters are cut
-/// from the end and characters typed after the mask are appended.
+/// one mask character per secret character, so each mask character stands for
+/// the next character of the secret, and any other character is new text,
+/// wherever it was typed. Characters deleted are taken from the end: the
+/// field cannot tell which of its mask characters went.
 pub fn apply_masked_edit(secret: &mut String, shown: &str) {
-    let kept = shown
-        .chars()
-        .take_while(|character| *character == MASK)
-        .count();
-    if kept < secret.chars().count() {
-        let end = secret
-            .char_indices()
-            .nth(kept)
-            .map_or(secret.len(), |(index, _)| index);
-        secret.truncate(end);
+    let mut old = secret.chars();
+    let mut edited = String::new();
+    for character in shown.chars() {
+        if character == MASK {
+            if let Some(kept) = old.next() {
+                edited.push(kept);
+            }
+        } else {
+            edited.push(character);
+        }
     }
-    secret.extend(
-        shown
-            .chars()
-            .skip(kept)
-            .filter(|character| *character != MASK),
-    );
+    *secret = edited;
 }
 
 #[cfg(test)]
@@ -146,5 +143,18 @@ mod tests {
         assert_eq!(token, "abc");
         apply_masked_edit(&mut token, "");
         assert_eq!(token, "");
+    }
+
+    #[test]
+    fn masked_edits_keep_the_secret_when_typing_elsewhere_than_the_end() {
+        let mut token = String::from("abcd");
+        // Typed in the middle, then at the start.
+        apply_masked_edit(&mut token, "**x**");
+        assert_eq!(token, "abxcd");
+        apply_masked_edit(&mut token, "y*****");
+        assert_eq!(token, "yabxcd");
+        // A pasted value replaces the whole field.
+        apply_masked_edit(&mut token, "glsa_pasted");
+        assert_eq!(token, "glsa_pasted");
     }
 }
