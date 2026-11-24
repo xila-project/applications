@@ -5,7 +5,7 @@ edition = "2024"
 rust-version.workspace = true
 build = "../wasm_guest_build.rs"
 description = "Shows Grafana panel values and charts on a Xila device."
-license = "GPL-2.0-only"
+license = "Apache-2.0"
 
 [build-dependencies]
 serde = { version = "1", features = ["derive"] }
