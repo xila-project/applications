@@ -15,7 +15,10 @@ use core::{
     task::Poll,
     time::Duration,
 };
-use xila::graphics::{Manager, Window, lvgl};
+use xila::{
+    graphics::{Manager, Window, lvgl},
+    task::JoinHandle,
+};
 
 /// Text of a label, or `None` for a null object.
 unsafe fn label_text(label: *mut lvgl::lv_obj_t) -> Option<&'static [u8]> {
@@ -66,6 +69,24 @@ unsafe fn find_key(root: *mut lvgl::lv_obj_t, text: &str) -> *mut lvgl::lv_obj_t
     matches[0]
 }
 
+/// Turns on the angle mode switch, the second child of the display card's
+/// first row; off means radians.
+async fn select_degrees(manager: &Manager) {
+    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let _lock = manager.synchronous_lock();
+    unsafe {
+        let card = lvgl::lv_obj_get_child(root, 0);
+        let switch = lvgl::lv_obj_get_child(lvgl::lv_obj_get_child(card, 0), 1);
+        assert!(lvgl::lv_obj_check_type(switch, &lvgl::lv_switch_class));
+        lvgl::lv_obj_add_state(switch, lvgl::LV_STATE_CHECKED as lvgl::lv_state_t);
+        lvgl::lv_obj_send_event(
+            switch,
+            lvgl::lv_event_code_t_LV_EVENT_VALUE_CHANGED,
+            core::ptr::null_mut(),
+        );
+    }
+}
+
 async fn press(manager: &Manager, key: &str) {
     let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
@@ -103,14 +124,28 @@ async fn wait_for_keys(manager: &Manager, keys: &[&str]) {
 }
 
 async fn wait_for_display(manager: &Manager, expected: &str) {
+    wait_for_display_text(manager, expected, false).await;
+}
+
+/// Like [`wait_for_display`], but the whole text must match, so that a
+/// result is not mistaken for the start of an error message.
+async fn wait_for_display_exactly(manager: &Manager, expected: &str) {
+    wait_for_display_text(manager, expected, true).await;
+}
+
+async fn wait_for_display_text(manager: &Manager, expected: &str, exact: bool) {
     for _ in 0..200 {
         if manager.get_window_count().await.unwrap() > 0 {
             let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
             let _lock = manager.synchronous_lock();
             unsafe {
-                if label_text(display_label(root))
-                    .is_some_and(|text| text.starts_with(expected.as_bytes()))
-                {
+                if label_text(display_label(root)).is_some_and(|text| {
+                    if exact {
+                        text == expected.as_bytes()
+                    } else {
+                        text.starts_with(expected.as_bytes())
+                    }
+                }) {
                     return;
                 }
             }
@@ -130,7 +165,68 @@ async fn real_calculator_guest_evaluates_buttons_with_small_fuel_slices() {
     run_calculator(&["--instruction-limit", "20000"]).await;
 }
 
+/// Evaluates the deepest expression the guest accepts, 31 nested function
+/// calls (the parser allows 32 levels), in degrees, which converts the angle
+/// at every level. This is the deepest call chain of the bundled guests and
+/// needs between 16 and 20 KiB of the guest's 32 KiB stack.
+#[xila::task::test(task_path=xila::task)]
+async fn real_calculator_guest_evaluates_the_deepest_nested_calls() {
+    const DEPTH: usize = 31;
+    let (manager, handle) = start_calculator(&[]).await;
+    wait_for_display(manager, "0").await;
+    select_degrees(manager).await;
+    press(manager, "fn").await;
+    wait_for_keys(manager, &["123", "C"]).await;
+    // One key at a time: the window event queue is bounded.
+    let mut expression = String::new();
+    for _ in 0..DEPTH {
+        press(manager, "sin").await;
+        expression.push_str("sin(");
+        wait_for_display_exactly(manager, &expression).await;
+    }
+    press(manager, "123").await;
+    wait_for_keys(manager, &["0"]).await;
+    press(manager, "0").await;
+    expression.push('0');
+    wait_for_display_exactly(manager, &expression).await;
+    press(manager, "fn").await;
+    wait_for_keys(manager, &[")"]).await;
+    for _ in 0..DEPTH {
+        press(manager, ")").await;
+        expression.push(')');
+        wait_for_display_exactly(manager, &expression).await;
+    }
+    press(manager, "123").await;
+    wait_for_keys(manager, &["="]).await;
+    press(manager, "=").await;
+    wait_for_display_exactly(manager, "0").await;
+    close_calculator(manager, handle).await;
+}
+
 async fn run_calculator(options: &[&str]) {
+    let (manager, handle) = start_calculator(options).await;
+    wait_for_display(manager, "0").await;
+    wait_for_keys(manager, &["="]).await;
+    // Keys are real theme-styled buttons, found by their visible label.
+    for (key, expected) in [("1", "1"), ("+", "1+"), ("2", "1+2"), ("=", "3")] {
+        press(manager, key).await;
+        wait_for_display(manager, expected).await;
+    }
+    // The 320x240 test display uses the compact layout: `fn` pages to the
+    // functions and `123` pages back to the digits.
+    press(manager, "fn").await;
+    // The scientific page has the 123 key and creates its Clear key last.
+    // The guest then drains the events queued during creation.
+    wait_for_keys(manager, &["123", "C"]).await;
+    press(manager, "sqrt").await;
+    wait_for_display(manager, "sqrt(").await;
+    press(manager, "123").await;
+    wait_for_keys(manager, &["7"]).await;
+    close_calculator(manager, handle).await;
+}
+
+/// Loads the real guest and starts it with `options`.
+async fn start_calculator(options: &[&str]) -> (&'static Manager, JoinHandle<isize>) {
     let mut standard = testing::initialize(false, false).await;
     let manager = support::manager().await;
     let context = support::context(&standard, Some(manager));
@@ -164,23 +260,11 @@ async fn run_calculator(options: &[&str]) {
     )
     .await
     .unwrap();
-    wait_for_display(manager, "0").await;
-    wait_for_keys(manager, &["="]).await;
-    // Keys are real theme-styled buttons, found by their visible label.
-    for (key, expected) in [("1", "1"), ("+", "1+"), ("2", "1+2"), ("=", "3")] {
-        press(manager, key).await;
-        wait_for_display(manager, expected).await;
-    }
-    // The 320x240 test display uses the compact layout: `fn` pages to the
-    // functions and `123` pages back to the digits.
-    press(manager, "fn").await;
-    // The scientific page has the 123 key and creates its Clear key last.
-    // The guest then drains the events queued during creation.
-    wait_for_keys(manager, &["123", "C"]).await;
-    press(manager, "sqrt").await;
-    wait_for_display(manager, "sqrt(").await;
-    press(manager, "123").await;
-    wait_for_keys(manager, &["7"]).await;
+    (manager, handle)
+}
+
+/// Requests the window to close and waits for the guest to exit successfully.
+async fn close_calculator(manager: &Manager, handle: JoinHandle<isize>) {
     let root = manager.get_window_identifier(0).await.unwrap();
     manager.send_window_close_request(root).await.unwrap();
     let mut join = core::pin::pin!(handle.join());

@@ -21,7 +21,7 @@
 //! | memory64                | `memory_64` builds only | the host ABI has one address width |
 //! | multi-memory            | disabled | the host ABI addresses the single `memory` export |
 //! | SIMD, relaxed SIMD      | disabled | no guest uses it; the engine support is large    |
-//! | custom page sizes       | disabled | no toolchain emits it                            |
+//! | custom page sizes       | enabled  | bundled guests use 1-byte pages to shrink initial memory |
 //! | wide arithmetic         | disabled | no toolchain emits it                            |
 //! | threads / atomics       | unsupported by Wasmi                                       |
 //!
@@ -115,7 +115,7 @@ pub fn configuration(translation: Translation) -> Config {
         .wasm_tail_call(true)
         .wasm_extended_const(true)
         .wasm_multi_memory(false)
-        .wasm_custom_page_sizes(false)
+        .wasm_custom_page_sizes(true)
         .wasm_wide_arithmetic(false);
     #[cfg(feature = "memory_64")]
     configuration.wasm_memory64(true);
@@ -126,7 +126,7 @@ pub fn configuration(translation: Translation) -> Config {
 mod tests {
     extern crate std;
     use super::{Translation, configuration};
-    use wasmi::{Engine, Module};
+    use wasmi::{Engine, Linker, Module, Store};
 
     /// Validation does not depend on the translation mode: both must agree.
     fn validates(text: &str) -> bool {
@@ -197,6 +197,37 @@ mod tests {
     }
 
     #[test]
+    fn byte_pages_grow_in_bytes_up_to_the_declared_maximum() {
+        let binary = wat::parse_str(
+            r#"(module
+                (memory (export "memory") 12 16 (pagesize 1))
+                (data (i32.const 11) "x")
+                (func (export "size") (result i32) memory.size)
+                (func (export "grow") (param i32) (result i32) local.get 0 memory.grow))"#,
+        )
+        .unwrap();
+
+        for translation in [Translation::Eager, Translation::Lazy] {
+            let engine = Engine::new(&configuration(translation));
+            let module = Module::new(&engine, &binary[..]).unwrap();
+            let mut store = Store::new(&engine, ());
+            store.set_fuel(10_000).unwrap();
+            let instance = Linker::new(&engine)
+                .instantiate_and_start(&mut store, &module)
+                .unwrap();
+            let size = instance.get_typed_func::<(), i32>(&store, "size").unwrap();
+            let grow = instance.get_typed_func::<i32, i32>(&store, "grow").unwrap();
+            let memory = instance.get_memory(&store, "memory").unwrap();
+
+            assert_eq!(size.call(&mut store, ()).unwrap(), 12);
+            assert_eq!(grow.call(&mut store, 4).unwrap(), 12);
+            assert_eq!(grow.call(&mut store, 1).unwrap(), -1);
+            assert_eq!(size.call(&mut store, ()).unwrap(), 16);
+            assert_eq!(&memory.data(&store)[11..], b"x\0\0\0\0");
+        }
+    }
+
+    #[test]
     fn proposals_the_host_does_not_offer_are_rejected() {
         // SIMD
         assert!(!validates(
@@ -211,8 +242,6 @@ mod tests {
         ));
         // multi-memory
         assert!(!validates("(module (memory 1) (memory 1))"));
-        // custom page sizes
-        assert!(!validates("(module (memory 1 (pagesize 1)))"));
         // wide arithmetic
         assert!(!validates(
             "(module (func (param i64 i64) (result i64 i64)
