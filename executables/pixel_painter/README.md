@@ -10,8 +10,8 @@ red (R), blue (B), green (G), yellow (Y), violet (V), and brown (Br). Choose a
 The 160×100 logical picture scales to the available canvas with letterboxing;
 resizing or rotating the display preserves the drawing.
 
-Save/Open uses the absolute path in the text field. Focusing it opens an on-screen
-keyboard; its accept/cancel key hides it. The default is
+Save/Open uses the absolute path in the text field. On touch-only boards, tapping the field opens the system
+keyboard. The default is
 `<home>/applications/pixel_painter/data/drawing.xpnt` in the user's home
 (`/users/<user name>` for new accounts), provisioned by the launcher for each
 user. Enter a path inside an existing writable SD mount
