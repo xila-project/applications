@@ -76,6 +76,20 @@ pub fn top_three(scores: [f32; 10]) -> Option<[(u8, f32); 3]> {
     Some([ranked[0], ranked[1], ranked[2]])
 }
 
+/// A probability as a whole percentage, rounded half up. Without `libm`, `core` has no
+/// `round`, and `core::fmt` float formatting is kept out of the guest on purpose. Values
+/// outside `0.0..=1.0` saturate at the ends of the `u32` range and NaN becomes zero, which
+/// [`top_three`] never lets through.
+pub fn percentage(probability: f32) -> u32 {
+    (probability * 100.0 + 0.5) as u32
+}
+
+/// A duration in tenths of a millisecond, rounded half up, so a caller can show
+/// `tenths / 10` and `tenths % 10` as `12.3`.
+pub fn tenths_of_milliseconds(duration: core::time::Duration) -> u128 {
+    (duration.as_micros() + 50) / 100
+}
+
 /// Validate the text read from [`BACKEND_PATH`]: short, printable ASCII without spaces, so
 /// that arbitrary node content cannot disturb the label. Returns `None` for anything else.
 pub fn backend_label(bytes: &[u8]) -> Option<&str> {

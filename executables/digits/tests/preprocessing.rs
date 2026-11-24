@@ -1,4 +1,5 @@
-use digits::{prepare, top_three};
+use core::time::Duration;
+use digits::{percentage, prepare, tenths_of_milliseconds, top_three};
 use pixel_painter::drawing::{Drawing, PIXELS};
 
 #[test]
@@ -32,4 +33,31 @@ fn rankings_are_descending_and_reject_invalid_scores() {
     assert!(top_three([f32::INFINITY; 10]).is_none());
     assert!(top_three([-1.0; 10]).is_none());
     assert!(top_three([0.0; 10]).is_none());
+}
+
+#[test]
+fn percentages_round_half_up_and_stay_in_range() {
+    assert_eq!(percentage(0.0), 0);
+    assert_eq!(percentage(1.0), 100);
+    assert_eq!(percentage(0.994), 99);
+    assert_eq!(percentage(0.996), 100);
+    assert_eq!(percentage(0.125), 13);
+    assert_eq!(percentage(0.004), 0);
+    assert_eq!(percentage(0.005), 1);
+    assert_eq!(percentage(f32::NAN), 0);
+    assert_eq!(percentage(-1.0), 0);
+}
+
+#[test]
+fn inference_time_is_shown_in_tenths_of_milliseconds() {
+    assert_eq!(tenths_of_milliseconds(Duration::ZERO), 0);
+    assert_eq!(tenths_of_milliseconds(Duration::from_micros(49)), 0);
+    assert_eq!(tenths_of_milliseconds(Duration::from_micros(50)), 1);
+    assert_eq!(tenths_of_milliseconds(Duration::from_micros(1_949)), 19);
+    assert_eq!(tenths_of_milliseconds(Duration::from_micros(1_950)), 20);
+    assert_eq!(tenths_of_milliseconds(Duration::from_millis(12)), 120);
+    assert_eq!(
+        tenths_of_milliseconds(Duration::from_secs(3600)),
+        36_000_000
+    );
 }

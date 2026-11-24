@@ -11,7 +11,7 @@ use weather::{
     model::{CurrentWeather, DailyWeather, HourlyWeather},
     state::{WeatherData, fetch_weather, map_status_message},
     trigger::should_refresh,
-    view::{chart_series, compass, condition, day_label, hour_label},
+    view::{chart_series, compass, condition, day_label, format_fixed, hour_label},
 };
 
 /// shadcn button variant, numbered as `lv_theme_shadcn_variant_t`.
@@ -343,7 +343,10 @@ impl Interface {
                 Some(now) => {
                     set_text(
                         self.temperature,
-                        &format!("{:.1}°C", now.temperature_2m.unwrap_or_default()),
+                        &format!(
+                            "{}°C",
+                            format_fixed(now.temperature_2m.unwrap_or_default(), 1)
+                        ),
                     )?;
                     set_text(
                         self.condition,
@@ -354,7 +357,7 @@ impl Interface {
                         &t!(
                             "now.feels_like",
                             temperature =
-                                format!("{:.1}", now.apparent_temperature.unwrap_or_default())
+                                format_fixed(now.apparent_temperature.unwrap_or_default(), 1)
                         )
                         .to_string(),
                     )?;
@@ -364,18 +367,24 @@ impl Interface {
                     set_text(
                         self.wind.value,
                         &format!(
-                            "{:.0} km/h {}",
-                            now.wind_speed_10m.unwrap_or_default(),
+                            "{} km/h {}",
+                            format_fixed(now.wind_speed_10m.unwrap_or_default(), 0),
                             compass(now.wind_direction_10m.unwrap_or_default())
                         ),
                     )?;
                     set_text(
                         self.gusts.value,
-                        &format!("{:.0} km/h", now.wind_gusts_10m.unwrap_or_default()),
+                        &format!(
+                            "{} km/h",
+                            format_fixed(now.wind_gusts_10m.unwrap_or_default(), 0)
+                        ),
                     )?;
                     set_text(
                         self.precipitation.value,
-                        &format!("{:.1} mm", now.precipitation.unwrap_or_default()),
+                        &format!(
+                            "{} mm",
+                            format_fixed(now.precipitation.unwrap_or_default(), 1)
+                        ),
                     )?;
                 }
                 None => {
@@ -390,12 +399,12 @@ impl Interface {
             set_text(
                 self.details,
                 &format!(
-                    "{:.4}, {:.4}{separator}{} ({}){separator}{:.0} m",
-                    data.latitude,
-                    data.longitude,
+                    "{}, {}{separator}{} ({}){separator}{} m",
+                    format_fixed(data.latitude, 4),
+                    format_fixed(data.longitude, 4),
                     forecast.timezone.as_deref().unwrap_or("?"),
                     forecast.timezone_abbreviation.as_deref().unwrap_or("?"),
-                    forecast.elevation.unwrap_or_default()
+                    format_fixed(forecast.elevation.unwrap_or_default(), 0)
                 ),
             )?;
             set_hidden(self.empty_state, true)?;
@@ -448,8 +457,8 @@ impl Interface {
                     "hourly.range",
                     start = hour_label(&times[0]),
                     end = hour_label(&times[count - 1]),
-                    minimum = format!("{minimum:.0}"),
-                    maximum = format!("{maximum:.0}")
+                    minimum = format_fixed(minimum, 0),
+                    maximum = format_fixed(maximum, 0)
                 )
                 .to_string(),
             )?;
@@ -498,14 +507,18 @@ impl Interface {
                 // loses the least important part first.
                 let text = if self.compact {
                     format!(
-                        "{}  {low:.0}°/{high:.0}°  {rain}%  {}",
+                        "{}  {}°/{}°  {rain}%  {}",
                         day_label(date),
+                        format_fixed(low, 0),
+                        format_fixed(high, 0),
                         condition(code)
                     )
                 } else {
                     format!(
-                        "{}   {low:.0}° / {high:.0}°   {}   {}",
+                        "{}   {}° / {}°   {}   {}",
                         day_label(date),
+                        format_fixed(low, 0),
+                        format_fixed(high, 0),
                         condition(code),
                         t!("daily.rain_chance", chance = rain)
                     )
