@@ -313,6 +313,22 @@ impl<S: Source> Reader<S> {
             .ok_or(Error::InvalidResponse)
     }
 
+    /// Consumes a number of any length, which [`Reader::number`] would refuse.
+    fn skip_number(&mut self) -> Result<()> {
+        let mut digits = 0usize;
+        while let Some(byte) = self.next()? {
+            if !matches!(byte, b'0'..=b'9' | b'-' | b'+' | b'.' | b'e' | b'E') {
+                self.peeked = Some(byte);
+                break;
+            }
+            digits += 1;
+        }
+        if digits == 0 {
+            return Err(Error::InvalidResponse);
+        }
+        Ok(())
+    }
+
     /// A number, or `None` for `null` and any other kind of value, which is
     /// skipped.
     pub fn optional_number(&mut self) -> Result<Option<f64>> {
@@ -369,9 +385,7 @@ impl<S: Source> Reader<S> {
                     self.read_string(&mut |_| Ok(()))?;
                 }
                 b't' | b'f' | b'n' => self.literal()?,
-                b'-' | b'0'..=b'9' => {
-                    self.number()?;
-                }
+                b'-' | b'0'..=b'9' => self.skip_number()?,
                 _ => return Err(Error::InvalidResponse),
             }
             if depth == 0 {
@@ -461,6 +475,13 @@ mod tests {
         );
         assert_eq!(reader("[1,").skip(), Err(Error::InvalidResponse));
         assert_eq!(reader("tru").skip(), Err(Error::InvalidResponse));
+        // A number literal too long to read is still skipped.
+        let long = std::format!("[{}, 1]", "7".repeat(100));
+        assert_eq!(reader(&long).skip(), Ok(()));
+        assert_eq!(
+            reader(&"7".repeat(100)).number(),
+            Err(Error::InvalidResponse)
+        );
         assert_eq!(reader("\"\u{1}\"").skip(), Err(Error::InvalidResponse));
         let mut long_key = reader(r#"{"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa": 1}"#);
         long_key
