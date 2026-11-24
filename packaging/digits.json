@@ -11,5 +11,10 @@
     "icon": "",
     "show_in_launcher": true
   },
+  "metadata": {
+    "summary": "Recognizes handwritten digits from 0 to 9 with a neural network.",
+    "license": "Apache-2.0",
+    "source": "https://github.com/xila-project/applications/tree/main/executables/digits"
+  },
   "$schema": "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
 }

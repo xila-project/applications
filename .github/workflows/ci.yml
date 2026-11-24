@@ -199,6 +199,7 @@ jobs:
       - name: "Verify | Package signature and digest"
         env:
           CI_PACKAGE_DIRECTORY: ${{ runner.temp }}/package-output
+          CI_PACKAGE_MANIFEST: packaging/${{ matrix.app }}.json
           CI_PACKAGE_SIGNATURE: ${{ env.SIGN_WITH_SECRET == 'true' && 'verified, repository development key' || 'verified, throwaway key (not published)' }}
           EXPECTED_SHA256: ${{ steps.package.outputs.package-sha256 }}
           XILA_PACKAGE_EXECUTABLE: ${{ steps.package.outputs.xila-package-path }}
