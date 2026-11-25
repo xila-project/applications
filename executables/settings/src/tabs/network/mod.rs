@@ -49,7 +49,12 @@ impl NetworkTab {
             Ok(kind) => file
                 .as_synchronous_file_mut()
                 .control(network::IS_LINK_UP, &())
-                .map(|up| Some((kind, up))),
+                .map(|up| {
+                    Some((
+                        InterfaceKind::try_from(kind).ok()?,
+                        bool::try_from(up).ok()?,
+                    ))
+                }),
             // Protocol clients share this directory but are not interfaces.
             Err(xila::virtual_file_system::IoErrorKind::Unsupported) => Ok(None),
             Err(error) => Err(error),

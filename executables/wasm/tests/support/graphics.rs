@@ -45,7 +45,7 @@ impl DirectBaseOperations for HeadlessDevice {
                         graphics::Point::new(320, 240);
                 }
                 graphics::WAS_RESIZED::IDENTIFIER => {
-                    *graphics::WAS_RESIZED::cast_output(output)? = false
+                    *graphics::WAS_RESIZED::cast_output(output)? = 0
                 }
                 graphics::SET_DRAWING_AREA::IDENTIFIER => (),
                 _ => return Err(file_system::IoErrorKind::Unsupported),

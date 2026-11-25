@@ -270,10 +270,14 @@ impl Layout {
             Err(xila::virtual_file_system::IoErrorKind::Unsupported) => return Ok(None),
             Err(error) => return Err(Error::FailedToOpenDirectory(error)),
         };
+        let kind = InterfaceKind::try_from(kind).map_err(Error::FailedToOpenDirectory)?;
         let is_up = file
             .as_synchronous_file_mut()
             .control(network::IS_LINK_UP, &())
             .map_err(Error::FailedToOpenDirectory)?;
+        let is_up = bool::try_from(is_up).map_err(|_| {
+            Error::FailedToOpenDirectory(xila::virtual_file_system::IoErrorKind::InvalidArgument)
+        })?;
         if !is_up {
             return Ok(None);
         }
