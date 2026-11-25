@@ -205,16 +205,28 @@ impl<S: Source> Reader<S> {
     }
 
     /// Reads a string and cuts it at `limit` bytes, on a character boundary.
+    /// The read window can end inside a multi-byte character; the incomplete
+    /// tail is dropped before the cut.
     pub fn truncated_string(&mut self, limit: usize) -> Result<String> {
-        let mut text = Vec::new();
+        let mut bytes = Vec::new();
         self.expect(b'"')?;
-        self.read_string(&mut |bytes| {
-            if text.len() < limit + 4 {
-                text.extend_from_slice(bytes);
+        self.read_string(&mut |chunk| {
+            if bytes.len() < limit + 4 {
+                bytes.extend_from_slice(chunk);
             }
             Ok(())
         })?;
-        let mut text = String::from_utf8(text).map_err(|_| Error::InvalidResponse)?;
+        let bytes = match String::from_utf8(bytes) {
+            Ok(text) => text.into_bytes(),
+            Err(error) => {
+                // Drop the incomplete character the read window cut in half.
+                let valid_up_to = error.utf8_error().valid_up_to();
+                let mut bytes = error.into_bytes();
+                bytes.truncate(valid_up_to);
+                bytes
+            }
+        };
+        let mut text = String::from_utf8(bytes).map_err(|_| Error::InvalidResponse)?;
         if text.len() > limit {
             let mut end = limit;
             while !text.is_char_boundary(end) {
@@ -468,6 +480,11 @@ mod tests {
     fn limits_and_errors() {
         assert_eq!(reader("\"abcdef\"").string(3), Err(Error::TooLarge));
         assert_eq!(reader("\"aé\"").truncated_string(2).unwrap(), "a");
+        // The read window can end inside a multi-byte character: the
+        // incomplete tail is dropped, then the cut lands on a boundary.
+        assert_eq!(reader("\"aéééé\"").truncated_string(2).unwrap(), "a");
+        assert_eq!(reader("\"aéééé\"").truncated_string(4).unwrap(), "aé");
+        assert_eq!(reader("\"日本語です\"").truncated_string(4).unwrap(), "日");
         assert_eq!(reader("{\"a\" 1}").skip(), Ok(()), "skip is lenient");
         assert_eq!(
             reader("{\"a\" 1}").object(|json, _| json.skip()),
