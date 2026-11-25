@@ -177,7 +177,7 @@ mod shortcut_tests {
                 include_str!("../../../dashboard/shortcut.json"),
             ),
             (
-                "xila.home_assistant",
+                "xila.home-assistant",
                 "home_assistant",
                 include_str!("../../../home_assistant/shortcut.json"),
             ),

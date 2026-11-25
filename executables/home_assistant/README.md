@@ -42,7 +42,7 @@ needs the URL of the server and a long-lived access token.
 The WebAssembly runner gives each application a private configuration
 directory for each user, created with owner-only permissions (`0700`) and
 passed in `XILA_APPLICATION_CONFIGURATION`. Installed from its package, the
-directory is `/users/<user>/applications/xila.home_assistant/configuration`.
+directory is `/users/<user>/applications/xila.home-assistant/configuration`.
 It holds:
 
 - `configuration.json`: the URL of the Home Assistant server, the refresh
@@ -95,7 +95,7 @@ with Platforms' `tools/dev/serial_shell.py`, log in as the user who runs the
 application and write both files. Single quotes keep the JSON literal:
 
 ```text
-cd /users/<user>/applications/xila.home_assistant/configuration
+cd /users/<user>/applications/xila.home-assistant/configuration
 echo '{"url": "http://homeassistant.local:8123", "refresh_seconds": 30, "entities": ["light.living_room", "sensor.outdoor_temperature"]}' > configuration.json
 echo '<token>' > token
 chmod 600 token
