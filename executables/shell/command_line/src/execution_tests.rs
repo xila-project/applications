@@ -2435,3 +2435,399 @@ async fn redirected_standard_error_receives_command_failures() {
     assert_eq!(contents(&shell, "/shell-errors").await, "");
     assert!(!contents(&shell, "/temporary/errors").await.is_empty());
 }
+
+#[cfg(feature = "time-commands")]
+#[xila::task::test(task_path = xila::task)]
+async fn date_shows_utc_and_the_synchronization_source() {
+    let mut shell = shell().await;
+
+    assert_eq!(shell.execute_line("date").await.unwrap(), 0);
+    let output = contents(&shell, "/shell-output").await;
+    assert!(output.contains(" UTC\n"), "{output}");
+    // The test harness seeds UTC from the host clock.
+    assert!(output.contains("UTC source: host\n"), "{output}");
+}
+
+#[cfg(feature = "time-commands")]
+#[xila::task::test(task_path = xila::task)]
+async fn date_set_is_root_only_and_records_a_manual_source() {
+    use xila::users::{GroupIdentifier, UserIdentifier};
+
+    let mut shell = shell().await;
+    let task = shell.task;
+
+    let user = UserIdentifier::new(300);
+    shell
+        .context
+        .users_manager
+        .add_user(
+            user,
+            "date_tester",
+            GroupIdentifier::ROOT,
+            "/users/date_tester",
+        )
+        .await
+        .unwrap();
+    shell
+        .context
+        .task_manager
+        .set_user(task, user)
+        .await
+        .unwrap();
+    assert_ne!(
+        shell
+            .execute_line("date --set 2027-01-15T08:00:00Z")
+            .await
+            .unwrap(),
+        0
+    );
+    assert!(matches!(
+        shell.context.time_manager.synchronization().unwrap().source,
+        xila::time::ClockSource::Host
+    ));
+
+    shell
+        .context
+        .task_manager
+        .set_user(task, UserIdentifier::ROOT)
+        .await
+        .unwrap();
+    assert_eq!(
+        shell
+            .execute_line("date --set 2027-01-15T08:00:00Z")
+            .await
+            .unwrap(),
+        0
+    );
+    assert!(
+        contents(&shell, "/shell-output")
+            .await
+            .contains("UTC set to 2027-01-15 08:00:00 UTC"),
+        "{}",
+        contents(&shell, "/shell-output").await
+    );
+    assert!(matches!(
+        shell.context.time_manager.synchronization().unwrap().source,
+        xila::time::ClockSource::Manual
+    ));
+
+    assert_eq!(shell.execute_line("date").await.unwrap(), 0);
+    let output = contents(&shell, "/shell-output").await;
+    assert!(output.contains("2027-01-15 08:00"), "{output}");
+    assert!(output.contains("UTC source: manual\n"), "{output}");
+
+    assert_ne!(
+        shell
+            .execute_line("date --set 2027-13-15T08:00:00Z")
+            .await
+            .unwrap(),
+        0
+    );
+    assert_ne!(
+        shell
+            .execute_line("date --set 2027-01-15T08:00:00+01:00")
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[cfg(feature = "time-commands")]
+#[xila::task::test(task_path = xila::task)]
+async fn date_shows_local_time_when_tz_is_set() {
+    use xila::users::UserIdentifier;
+
+    let mut shell = shell().await;
+    let task = shell.task;
+    shell
+        .context
+        .task_manager
+        .set_user(task, UserIdentifier::ROOT)
+        .await
+        .unwrap();
+    assert_eq!(
+        shell
+            .execute_line("date --set 2027-01-15T08:00:00Z")
+            .await
+            .unwrap(),
+        0
+    );
+
+    shell
+        .context
+        .task_manager
+        .set_environment_variable(task, "TZ", "CET-1CEST,M3.5.0,M10.5.0/3")
+        .await
+        .unwrap();
+    assert_eq!(shell.execute_line("date").await.unwrap(), 0);
+    let output = contents(&shell, "/shell-output").await;
+    assert!(output.contains("2027-01-15 08:00:00"), "{output}");
+    assert!(output.contains(" UTC\n"), "{output}");
+    assert!(
+        output.contains("2027-01-15 09:00:00")
+            && output.contains("+01:00 CET (local time, TZ=CET-1CEST"),
+        "{output}"
+    );
+
+    // An unparseable TZ only downgrades the display to UTC: a warning goes to
+    // standard error and the command still succeeds.
+    shell
+        .context
+        .task_manager
+        .set_environment_variable(task, "TZ", "not a zone")
+        .await
+        .unwrap();
+    assert_eq!(shell.execute_line("date").await.unwrap(), 0);
+    let output = contents(&shell, "/shell-output").await;
+    // The second `date` printed UTC only: the single local-time line comes
+    // from the first call above.
+    assert!(output.contains(" UTC\n"), "{output}");
+    assert_eq!(output.matches("(local time").count(), 1, "{output}");
+    assert!(
+        contents(&shell, "/shell-errors")
+            .await
+            .contains("warning: TZ is not a valid POSIX time zone rule string"),
+        "{}",
+        contents(&shell, "/shell-errors").await
+    );
+}
+
+#[cfg(feature = "time-commands")]
+#[xila::task::test(task_path = xila::task)]
+async fn date_set_rejects_times_before_the_build_date() {
+    use xila::users::UserIdentifier;
+
+    let mut shell = shell().await;
+    shell
+        .context
+        .task_manager
+        .set_user(shell.task, UserIdentifier::ROOT)
+        .await
+        .unwrap();
+    // 2000 is earlier than any build date of this firmware.
+    assert_ne!(
+        shell
+            .execute_line("date --set 2000-01-01T00:00:00Z")
+            .await
+            .unwrap(),
+        0
+    );
+    assert!(matches!(
+        shell.context.time_manager.synchronization().unwrap().source,
+        xila::time::ClockSource::Host
+    ));
+    // A time after the build date is accepted.
+    assert_eq!(
+        shell
+            .execute_line("date --set 2027-01-15T08:00:00Z")
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[cfg(feature = "time-commands")]
+#[xila::task::test(task_path = xila::task)]
+async fn uptime_shows_the_time_since_boot() {
+    let mut shell = shell().await;
+
+    assert_eq!(shell.execute_line("uptime").await.unwrap(), 0);
+    let output = contents(&shell, "/shell-output").await;
+    assert!(output.starts_with("up "), "{output}");
+    assert!(
+        output.trim_end().ends_with('0') || output.contains(':'),
+        "{output}"
+    );
+}
+
+#[cfg(feature = "time-commands")]
+#[xila::task::test(task_path = xila::task)]
+async fn real_time_clock_command_shows_and_sets_the_clock() {
+    use xila::users::{GroupIdentifier, UserIdentifier};
+
+    let mut shell = shell().await;
+    let task = shell.task;
+    let clock = Box::leak(Box::new(
+        peripherals::real_time_clock::MockRealTimeClock::new(Some(
+            peripherals::real_time_clock::Time::new(1_800_000_000, 0),
+        )),
+    ));
+    drivers_peripherals::real_time_clock::mount_real_time_clock(
+        shell.context.virtual_file_system,
+        task,
+        clock,
+    )
+    .await
+    .unwrap();
+
+    // `show` is readable by every user.
+    assert_eq!(shell.execute_line("real_time_clock show").await.unwrap(), 0);
+    assert!(
+        contents(&shell, "/shell-output")
+            .await
+            .contains("2027-01-15 08:00:00 UTC"),
+        "{}",
+        contents(&shell, "/shell-output").await
+    );
+
+    // The two set subcommands are root only.
+    let user = UserIdentifier::new(301);
+    shell
+        .context
+        .users_manager
+        .add_user(
+            user,
+            "rtc_tester",
+            GroupIdentifier::ROOT,
+            "/users/rtc_tester",
+        )
+        .await
+        .unwrap();
+    shell
+        .context
+        .task_manager
+        .set_user(task, user)
+        .await
+        .unwrap();
+    assert_ne!(
+        shell
+            .execute_line("real_time_clock clock_to_system")
+            .await
+            .unwrap(),
+        0
+    );
+    assert_ne!(
+        shell
+            .execute_line("real_time_clock system_to_clock")
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(clock.write_count(), 0);
+    assert!(matches!(
+        shell.context.time_manager.synchronization().unwrap().source,
+        xila::time::ClockSource::Host
+    ));
+
+    shell
+        .context
+        .task_manager
+        .set_user(task, UserIdentifier::ROOT)
+        .await
+        .unwrap();
+    // system_to_clock stores the system UTC time in the clock.
+    assert_eq!(
+        shell
+            .execute_line("date --set 2027-06-01T12:00:00Z")
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        shell
+            .execute_line("real_time_clock system_to_clock")
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(clock.write_count(), 1);
+    let written = clock.time().unwrap();
+    assert!(
+        (1_811_851_200..=1_811_851_205).contains(&written.seconds),
+        "{written:?}"
+    );
+    assert!(
+        contents(&shell, "/shell-output")
+            .await
+            .contains("Real-time clock set to 2027-06-01 12:00:0"),
+        "{}",
+        contents(&shell, "/shell-output").await
+    );
+
+    // clock_to_system seeds UTC from the clock with ClockSource::Rtc.
+    clock.set_time(Some(peripherals::real_time_clock::Time::new(
+        1_900_000_000,
+        0,
+    )));
+    assert_eq!(
+        shell
+            .execute_line("real_time_clock clock_to_system")
+            .await
+            .unwrap(),
+        0
+    );
+    assert!(matches!(
+        shell.context.time_manager.synchronization().unwrap().source,
+        xila::time::ClockSource::Rtc
+    ));
+    assert!(
+        contents(&shell, "/shell-output")
+            .await
+            .contains("UTC set from the real-time clock to 2030-03-17 17:46:40 UTC"),
+        "{}",
+        contents(&shell, "/shell-output").await
+    );
+
+    assert_ne!(
+        shell
+            .execute_line("real_time_clock frobnicate")
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[cfg(feature = "time-commands")]
+#[xila::task::test(task_path = xila::task)]
+async fn real_time_clock_without_a_valid_time_reports_it() {
+    use xila::users::UserIdentifier;
+
+    let mut shell = shell().await;
+    let clock = Box::leak(Box::new(
+        peripherals::real_time_clock::MockRealTimeClock::new(None),
+    ));
+    drivers_peripherals::real_time_clock::mount_real_time_clock(
+        shell.context.virtual_file_system,
+        shell.task,
+        clock,
+    )
+    .await
+    .unwrap();
+    shell
+        .context
+        .task_manager
+        .set_user(shell.task, UserIdentifier::ROOT)
+        .await
+        .unwrap();
+
+    assert_eq!(shell.execute_line("real_time_clock show").await.unwrap(), 0);
+    assert!(
+        contents(&shell, "/shell-output")
+            .await
+            .contains("The real-time clock holds no valid time"),
+        "{}",
+        contents(&shell, "/shell-output").await
+    );
+    assert_ne!(
+        shell
+            .execute_line("real_time_clock clock_to_system")
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[cfg(feature = "time-commands")]
+#[xila::task::test(task_path = xila::task)]
+async fn the_new_commands_are_listed_in_help() {
+    let mut shell = shell().await;
+
+    assert_eq!(shell.execute_line("help").await.unwrap(), 0);
+    let output = contents(&shell, "/shell-output").await;
+    for command in ["date", "uptime", "real_time_clock"] {
+        assert!(
+            output.contains(command),
+            "{command} missing from:\n{output}"
+        );
+    }
+}
