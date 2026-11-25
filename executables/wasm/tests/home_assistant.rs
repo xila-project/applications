@@ -9,17 +9,21 @@
 //! and the template endpoint.
 //!
 //! It checks that a first start opens the settings when there is no
-//! configuration, and again when there is a configuration but no token. In
-//! the settings it imports a token from a file of the scripted file system
-//! and checks the exact errors of an invalid, an empty and a missing file,
-//! then saves and sees the cards with the imported token. It answers a tap on
-//! a toggle with a service call followed by a refresh, and shows the error
-//! states of a failed service call, a refused token and a missing entity.
-//! With a token that is not an administrator account, the area picker shows
-//! its error. The token field shows a mask until Show is pressed, and an
-//! edit made while it is hidden is discarded. With a slow device, it checks
-//! that a tap made during a refresh is ignored, and that a close request
-//! made during a refresh still exits the application.
+//! configuration, and again when there is a configuration but no token, and
+//! that Cancel then leaves the main screen with its cards. In the settings it
+//! imports a token from a file of the scripted file system and checks the
+//! exact errors of an invalid, an empty and a missing file, then saves and
+//! sees the cards with the imported token. It answers a tap on a toggle with
+//! a service call followed by a refresh, and shows the error states of a
+//! failed service call, a refused token and a missing entity. The token field
+//! shows a mask until Show is pressed; an edit made while it is hidden is
+//! discarded, a typed asterisk is kept while it is shown, Show then edit then
+//! Save writes the edit to the token file, and Cancel leaves the saved token
+//! in place. The area picker lists the areas and the entities of an area and
+//! shows its 401 error on its own page when a call fails while it is open.
+//! With a slow device, it checks that a tap made during a refresh is ignored,
+//! and that a close request made during a refresh or a picker call still
+//! exits the application.
 
 #[path = "support/applications.rs"]
 mod applications;
@@ -98,7 +102,9 @@ impl ScriptedHomeAssistant {
         if text.contains("Bearer bad-token") {
             UNAUTHORIZED.as_bytes().to_vec()
         } else if line.starts_with("POST /api/template ") {
-            if text.contains("Bearer user-token") {
+            if text.contains("Bearer user-token")
+                || (text.contains("area_entities(") && text.contains("Bearer area-token"))
+            {
                 // The template endpoint needs an administrator account.
                 UNAUTHORIZED.as_bytes().to_vec()
             } else {
@@ -320,6 +326,24 @@ async fn wait_label(manager: &Manager, text: &str) {
     panic!("Home Assistant did not display {text:?}");
 }
 
+/// Waits until no label of the window shows `text`.
+async fn wait_no_label(manager: &Manager, text: &str) {
+    for _ in 0..1000 {
+        if manager.get_window_count().await.unwrap() != 0 {
+            let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+            let found = {
+                let _lock = manager.synchronous_lock();
+                unsafe { find_label(root, text) }
+            };
+            if !found {
+                return;
+            }
+        }
+        xila::task::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("Home Assistant still displays {text:?}");
+}
+
 /// Waits until the guest is not inside a refresh: the status line no longer
 /// shows the loading text.
 async fn wait_idle(manager: &Manager) {
@@ -401,25 +425,35 @@ async fn tap(manager: &Manager, caption: &str) {
     }
 }
 
-/// Types `value` into the field that follows the caption `caption`. The
-/// maximum length is lifted while the text is set, so that LVGL does not send
-/// one insert event per character and fill the host event queue.
+/// Types `value` into the field that follows the caption `caption`. The text
+/// is set as-is, without lifting the maximum length: with the limit set, LVGL
+/// sends one insert event per character, and a long value would flood the
+/// host event queue and drop later events, so the values typed here stay
+/// short on purpose.
 async fn type_into(manager: &Manager, caption: &str, value: &str) {
     let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let field = find_field(root, caption);
         assert!(!field.is_null(), "no field after caption {caption:?}");
-        let maximum = lvgl::lv_textarea_get_max_length(field);
-        lvgl::lv_textarea_set_max_length(field, 0);
         let text = CString::new(value).unwrap();
         lvgl::lv_textarea_set_text(field, text.as_ptr());
-        lvgl::lv_textarea_set_max_length(field, maximum);
         lvgl::lv_obj_send_event(
             field,
             lvgl::lv_event_code_t_LV_EVENT_VALUE_CHANGED,
             core::ptr::null_mut(),
         );
+    }
+}
+
+/// The maximum length of the field that follows the caption `caption`.
+async fn field_max_length(manager: &Manager, caption: &str) -> u32 {
+    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let _lock = manager.synchronous_lock();
+    unsafe {
+        let field = find_field(root, caption);
+        assert!(!field.is_null(), "no field after caption {caption:?}");
+        lvgl::lv_textarea_get_max_length(field)
     }
 }
 
@@ -516,6 +550,18 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
         .await
         .unwrap();
 
+    // The scripted token files sit at short paths, so the tests can type the
+    // paths without flooding the host event queue. They are written as the
+    // initial user and stay readable by the guest.
+    for (path, contents) in [
+        ("/b.txt", &b"two words\n"[..]),
+        ("/e.txt", &b"\n"[..]),
+        ("/t.txt", &b"imported-token\n"[..]),
+    ] {
+        xila::virtual_file_system::File::write_to_path(virtual_file_system, task, path, contents)
+            .await
+            .unwrap();
+    }
     let administrator = context
         .users_manager
         .get_user_identifier("administrator")
@@ -530,12 +576,6 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
         .set_user(task, administrator)
         .await
         .unwrap();
-    // Where the scripted SD-card-like token files live, owned by the
-    // administrator the guest runs as.
-    virtual_file_system
-        .create_directory(task, &"/users/administrator/import")
-        .await
-        .ok();
     let launch = |standard| {
         xila::executable::execute(
             context,
@@ -600,69 +640,44 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     wait_label(manager, &text("settings.title")).await;
     wait_settings_ready(manager).await;
 
+    // Cancel leaves the main screen with its cards built from the
+    // configuration; the settings open again from the header button. The
+    // cards already exist behind the settings, so wait for the settings
+    // page itself to be gone before tapping the header button: a tap sent
+    // while the guest still processes the Cancel would reopen the settings
+    // over the typed text.
+    tap(manager, &text("settings.cancel")).await;
+    wait_no_label(manager, &text("settings.title")).await;
+    wait_label(manager, "light.living_room").await;
+    tap(manager, "\u{F013}").await;
+    wait_label(manager, &text("settings.title")).await;
+    wait_settings_ready(manager).await;
+
     // Import a token from a file of the scripted file system. The invalid,
-    // the empty and the missing files each show their own error.
-    write_file(
-        virtual_file_system,
-        task,
-        "/users/administrator/import/bad.txt",
-        b"two words\n",
-    )
-    .await;
-    write_file(
-        virtual_file_system,
-        task,
-        "/users/administrator/import/empty.txt",
-        b"\n",
-    )
-    .await;
-    write_file(
-        virtual_file_system,
-        task,
-        "/users/administrator/import/token.txt",
-        b"imported-token\n",
-    )
-    .await;
+    // the empty and the missing files each show their own error. The paths
+    // stay short because type_into sets the text without lifting the field
+    // limit, and a long value would flood the host event queue.
     let import_path = text("settings.import_path");
     let import = text("settings.import");
-    type_into(manager, &import_path, "/users/administrator/import/bad.txt").await;
+    type_into(manager, &import_path, "/b.txt").await;
     tap(manager, &import).await;
     wait_label(manager, &text("errors.import_invalid")).await;
-    type_into(
-        manager,
-        &import_path,
-        "/users/administrator/import/empty.txt",
-    )
-    .await;
+    type_into(manager, &import_path, "/e.txt").await;
     tap(manager, &import).await;
     wait_label(manager, &text("errors.import_empty")).await;
-    type_into(
-        manager,
-        &import_path,
-        "/users/administrator/import/absent.txt",
-    )
-    .await;
+    type_into(manager, &import_path, "/x.txt").await;
     tap(manager, &import).await;
     wait_label(manager, &text("errors.import_missing")).await;
-    type_into(
-        manager,
-        &import_path,
-        "/users/administrator/import/token.txt",
-    )
-    .await;
+    type_into(manager, &import_path, "/t.txt").await;
     tap(manager, &import).await;
     wait_label(manager, &text("settings.imported")).await;
     // The imported token is hidden behind the mask, and the source file is
     // unchanged.
     wait_field_text(manager, &text("settings.token"), SECRET_MASK).await;
     assert_eq!(
-        read_file(
-            virtual_file_system,
-            task,
-            "/users/administrator/import/token.txt"
-        )
-        .await
-        .unwrap(),
+        read_file(virtual_file_system, task, "/t.txt")
+            .await
+            .unwrap(),
         b"imported-token\n"
     );
 
@@ -785,10 +800,10 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     wait_join(manager, fourth).await;
     *home_assistant.delay.lock().unwrap() = Duration::ZERO;
 
-    // The settings from the header: the saved token is hidden behind the
-    // mask until Show is pressed, and an edit made while it is hidden is
-    // discarded. The area picker lists the areas of the server, then the
-    // entities of one area, and saving adds the chosen entity.
+    // The token field edits: the saved token is hidden behind the mask, an
+    // edit made while it is hidden is discarded, Show reveals the token with
+    // the maximum length restored, a typed asterisk is kept while it is
+    // shown, and Save writes the edit to the token file.
     write_file(
         virtual_file_system,
         task,
@@ -801,6 +816,11 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     wait_label(manager, "Living room").await;
     wait_requests(home_assistant, before + 4).await;
     wait_idle(manager).await;
+    {
+        let requests = home_assistant.requests.lock().unwrap();
+        let request = String::from_utf8(requests[before].clone()).unwrap();
+        assert!(request.contains("\r\nAuthorization: Bearer test-token\r\n"));
+    }
     tap(manager, "\u{F013}").await;
     wait_label(manager, &text("settings.title")).await;
     wait_settings_ready(manager).await;
@@ -809,12 +829,89 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     // An edit made while the field is hidden is discarded.
     type_into(manager, &text("settings.token"), "hacked").await;
     wait_field_text(manager, &text("settings.token"), SECRET_MASK).await;
-    // Show reveals the saved token, not the discarded edit.
+    // Show reveals the saved token, not the discarded edit, and the maximum
+    // length of the field is restored after the bounded text set.
     tap(manager, &text("settings.show")).await;
     wait_field_text(manager, &text("settings.token"), "test-token").await;
+    assert_eq!(
+        field_max_length(manager, &text("settings.token")).await,
+        512
+    );
+    // A typed asterisk is kept while the field is shown.
+    type_into(manager, &text("settings.token"), "a*b").await;
+    wait_field_text(manager, &text("settings.token"), "a*b").await;
     tap(manager, &text("settings.hide")).await;
     wait_field_text(manager, &text("settings.token"), SECRET_MASK).await;
-    // The area picker asks the template endpoint with the token.
+    assert_eq!(
+        field_max_length(manager, &text("settings.token")).await,
+        512
+    );
+    // Save writes the edited token; the refresh after it uses the new one.
+    tap(manager, &text("settings.save")).await;
+    wait_label(manager, "Living room").await;
+    wait_requests(home_assistant, before + 8).await;
+    wait_idle(manager).await;
+    {
+        assert_eq!(
+            read_file(virtual_file_system, task, &format!("{directory}/token"))
+                .await
+                .unwrap(),
+            b"a*b"
+        );
+        let requests = home_assistant.requests.lock().unwrap();
+        for request in &requests[before + 4..before + 8] {
+            let request = String::from_utf8(request.clone()).unwrap();
+            assert!(request.starts_with("GET /api/states/"), "{request}");
+            assert!(
+                request.contains("\r\nAuthorization: Bearer a*b\r\n"),
+                "{request}"
+            );
+        }
+    }
+    close_and_join(manager, fifth).await;
+
+    // Cancel keeps the saved token: an edit that is not saved never reaches
+    // the token file, and no request carries it.
+    let before = home_assistant.requests.lock().unwrap().len();
+    let sixth = launch(standard.duplicate().await.unwrap()).await.unwrap();
+    wait_label(manager, "Living room").await;
+    wait_requests(home_assistant, before + 4).await;
+    wait_idle(manager).await;
+    tap(manager, "\u{F013}").await;
+    wait_label(manager, &text("settings.title")).await;
+    wait_settings_ready(manager).await;
+    tap(manager, &text("settings.show")).await;
+    wait_field_text(manager, &text("settings.token"), "a*b").await;
+    type_into(manager, &text("settings.token"), "zzz").await;
+    wait_field_text(manager, &text("settings.token"), "zzz").await;
+    tap(manager, &text("settings.cancel")).await;
+    wait_label(manager, "Living room").await;
+    assert_eq!(
+        read_file(virtual_file_system, task, &format!("{directory}/token"))
+            .await
+            .unwrap(),
+        b"a*b"
+    );
+    {
+        let requests = home_assistant.requests.lock().unwrap();
+        for request in &requests[before..] {
+            let request = String::from_utf8(request.clone()).unwrap();
+            assert!(!request.contains("Bearer zzz"), "{request}");
+        }
+    }
+    close_and_join(manager, sixth).await;
+
+    // The area picker lists the areas of the server, then the entities of one
+    // area, and saving adds the chosen entity. All of it with the saved,
+    // edited token.
+    let before = home_assistant.requests.lock().unwrap().len();
+    let seventh = launch(standard.duplicate().await.unwrap()).await.unwrap();
+    wait_label(manager, "Living room").await;
+    wait_requests(home_assistant, before + 4).await;
+    wait_idle(manager).await;
+    tap(manager, "\u{F013}").await;
+    wait_label(manager, &text("settings.title")).await;
+    wait_settings_ready(manager).await;
     tap(manager, &text("settings.add_from_server")).await;
     wait_label(manager, &text("settings.picker_title")).await;
     wait_requests(home_assistant, before + 5).await;
@@ -826,11 +923,15 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
             template.starts_with("POST /api/template HTTP/1.1\r\n"),
             "{template}"
         );
-        assert!(template.contains("\r\nAuthorization: Bearer test-token\r\n"));
+        assert!(template.contains("\r\nAuthorization: Bearer a*b\r\n"));
         assert!(template.contains("{% for area in areas() %}"), "{template}");
     }
+    // Wait for the areas call to finish (the loading line is gone) before
+    // tapping: a tap sent while the guest still loads would be drained.
+    wait_no_label(manager, &text("settings.loading")).await;
     tap(manager, "Living room (living_room)").await;
     wait_label(manager, "Pump (switch.pump)").await;
+    wait_no_label(manager, &text("settings.loading")).await;
     wait_requests(home_assistant, before + 6).await;
     {
         let requests = home_assistant.requests.lock().unwrap();
@@ -839,7 +940,7 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
             template.contains("area_entities('living_room')"),
             "{template}"
         );
-        assert!(template.contains("\r\nAuthorization: Bearer test-token\r\n"));
+        assert!(template.contains("\r\nAuthorization: Bearer a*b\r\n"));
     }
     set_switch(manager, "Pump (switch.pump)", true).await;
     tap(manager, &text("settings.back")).await;
@@ -853,14 +954,43 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
         for request in &requests[before + 6..before + 11] {
             let request = String::from_utf8(request.clone()).unwrap();
             assert!(request.starts_with("GET /api/states/"), "{request}");
-            assert!(request.contains("\r\nAuthorization: Bearer test-token\r\n"));
+            assert!(request.contains("\r\nAuthorization: Bearer a*b\r\n"));
         }
         assert!(requests[before + 10].starts_with(b"GET /api/states/switch.pump "));
     }
-    close_and_join(manager, fifth).await;
+    close_and_join(manager, seventh).await;
 
-    // A token that is not an administrator account: the cards show, and the
-    // area picker gets a 401 on the template endpoint.
+    // A 401 on an area's entity list while the picker is open: the error shows
+    // on the picker page, which stays open.
+    write_file(
+        virtual_file_system,
+        task,
+        &format!("{directory}/token"),
+        b"area-token\n",
+    )
+    .await;
+    let before = home_assistant.requests.lock().unwrap().len();
+    let eighth = launch(standard.duplicate().await.unwrap()).await.unwrap();
+    wait_label(manager, "Living room").await;
+    wait_requests(home_assistant, before + 4).await;
+    wait_idle(manager).await;
+    tap(manager, "\u{F013}").await;
+    wait_label(manager, &text("settings.title")).await;
+    wait_settings_ready(manager).await;
+    tap(manager, &text("settings.add_from_server")).await;
+    wait_label(manager, &text("settings.picker_title")).await;
+    wait_requests(home_assistant, before + 5).await;
+    wait_label(manager, "Living room (living_room)").await;
+    wait_no_label(manager, &text("settings.loading")).await;
+    tap(manager, "Living room (living_room)").await;
+    wait_requests(home_assistant, before + 7).await;
+    // The error is on the picker page, and the picker is still open.
+    wait_label(manager, &text("errors.admin_needed")).await;
+    wait_label(manager, &text("settings.picker_title")).await;
+    close_and_join(manager, eighth).await;
+
+    // A 401 on the areas call itself: the picker closes and the settings page
+    // shows the error.
     write_file(
         virtual_file_system,
         task,
@@ -869,23 +999,16 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     )
     .await;
     let before = home_assistant.requests.lock().unwrap().len();
-    let sixth = launch(standard).await.unwrap();
+    let ninth = launch(standard.duplicate().await.unwrap()).await.unwrap();
     wait_label(manager, "Living room").await;
     wait_requests(home_assistant, before + 5).await;
     wait_idle(manager).await;
-    {
-        let requests = home_assistant.requests.lock().unwrap();
-        assert!(requests[before].starts_with(b"GET /api/states/light.living_room "));
-        let request = String::from_utf8(requests[before].clone()).unwrap();
-        assert!(request.contains("\r\nAuthorization: Bearer user-token\r\n"));
-    }
     tap(manager, "\u{F013}").await;
     wait_label(manager, &text("settings.title")).await;
     wait_settings_ready(manager).await;
     tap(manager, &text("settings.add_from_server")).await;
-    wait_label(manager, &text("settings.picker_title")).await;
-    wait_label(manager, &text("errors.admin_needed")).await;
     wait_requests(home_assistant, before + 6).await;
+    wait_label(manager, &text("errors.admin_needed")).await;
     {
         let requests = home_assistant.requests.lock().unwrap();
         let template = String::from_utf8(requests[before + 5].clone()).unwrap();
@@ -895,5 +1018,30 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
         );
         assert!(template.contains("\r\nAuthorization: Bearer user-token\r\n"));
     }
-    close_and_join(manager, sixth).await;
+    close_and_join(manager, ninth).await;
+
+    // A close request during a picker call still exits the guest.
+    write_file(
+        virtual_file_system,
+        task,
+        &format!("{directory}/token"),
+        b"test-token\n",
+    )
+    .await;
+    *home_assistant.delay.lock().unwrap() = Duration::from_millis(400);
+    let before = home_assistant.requests.lock().unwrap().len();
+    let tenth = launch(standard).await.unwrap();
+    wait_label(manager, "Living room").await;
+    wait_requests(home_assistant, before + 4).await;
+    wait_idle(manager).await;
+    tap(manager, "\u{F013}").await;
+    wait_label(manager, &text("settings.title")).await;
+    wait_settings_ready(manager).await;
+    tap(manager, &text("settings.add_from_server")).await;
+    // The areas call is written, its answer is still delayed: the guest is
+    // inside the picker call.
+    wait_requests(home_assistant, before + 5).await;
+    send_close(manager).await;
+    wait_join(manager, tenth).await;
+    *home_assistant.delay.lock().unwrap() = Duration::ZERO;
 }
