@@ -12,6 +12,7 @@ pub mod configuration;
 pub mod error;
 pub mod json;
 pub mod net;
+pub mod picker;
 pub mod service;
 pub mod state;
 pub mod storage;

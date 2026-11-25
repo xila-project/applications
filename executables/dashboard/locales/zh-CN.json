@@ -81,6 +81,7 @@
     "testing": "正在测试...",
     "title": "设置",
     "token": "令牌",
+    "token_hint": "按“显示”可输入或修改。",
     "token_set": "已设置令牌",
     "url": "Grafana URL"
   },

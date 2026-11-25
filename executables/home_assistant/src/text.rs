@@ -2,6 +2,7 @@
 
 use crate::configuration::Invalid;
 use crate::error::Error;
+use crate::storage::MAXIMUM_TOKEN_LENGTH;
 use embedded_i18n::t;
 use std::string::{String, ToString};
 
@@ -12,7 +13,18 @@ pub fn error_message(error: &Error) -> String {
         Error::Network => String::from(t!("errors.network")),
         Error::Timeout => String::from(t!("errors.timeout")),
         Error::Unauthorized => String::from(t!("errors.unauthorized")),
+        Error::Forbidden => String::from(t!("errors.forbidden")),
         Error::NotFound => String::from(t!("errors.not_found")),
+        Error::AdminNeeded => String::from(t!("errors.admin_needed")),
+        Error::ImportMissing => String::from(t!("errors.import_missing")),
+        Error::ImportRead => String::from(t!("errors.import_read")),
+        Error::ImportEmpty => String::from(t!("errors.import_empty")),
+        Error::ImportInvalid => String::from(t!("errors.import_invalid")),
+        Error::ImportTooLong => t!(
+            "errors.import_too_long",
+            count = MAXIMUM_TOKEN_LENGTH as u64
+        )
+        .to_string(),
         Error::Http(status) => t!("errors.http", status = status).to_string(),
         Error::InvalidResponse => String::from(t!("errors.invalid_response")),
         Error::TooLarge => String::from(t!("errors.too_large")),
@@ -49,13 +61,41 @@ mod tests {
     fn messages_come_from_the_catalog() {
         assert_eq!(
             error_message(&Error::Unauthorized),
-            "Home Assistant refused the token (401 or 403)"
+            "Home Assistant refused the token (401)"
         );
-        assert_eq!(error_message(&Error::NotFound), "Entity not found (404)");
+        assert_eq!(
+            error_message(&Error::Forbidden),
+            "Home Assistant refused the request (403)"
+        );
+        assert_eq!(error_message(&Error::NotFound), "Not found (404)");
         assert_eq!(error_message(&Error::Http(502)), "Home Assistant error 502");
         assert_eq!(
             error_message(&Error::MissingToken),
-            "No token: add one to the token file"
+            "No token: add one in the settings or import it from a file"
+        );
+        assert_eq!(
+            error_message(&Error::AdminNeeded),
+            "Home Assistant refused the request: check the token and that it belongs to an administrator"
+        );
+        assert_eq!(
+            error_message(&Error::ImportMissing),
+            "The file does not exist"
+        );
+        assert_eq!(
+            error_message(&Error::ImportEmpty),
+            "The file holds no token"
+        );
+        assert_eq!(
+            error_message(&Error::ImportInvalid),
+            "The token holds characters a header cannot carry"
+        );
+        assert_eq!(
+            error_message(&Error::ImportTooLong),
+            "The token is too long (at most 512 bytes)"
+        );
+        assert_eq!(
+            error_message(&Error::ImportRead),
+            "The file could not be read"
         );
         assert_eq!(age(42), "42 s");
         assert_eq!(age(600), "10 min");

@@ -4,7 +4,8 @@
 use crate::configuration::Configuration;
 use crate::error::{Error, Result};
 use crate::json::Reader;
-use crate::net::{Connector, Endpoint, read_response, status_error};
+use crate::net::{Connector, Endpoint, read_body, read_response, status_error};
+use crate::picker::{MAXIMUM_TEMPLATE_ANSWER_LENGTH, template_body};
 use crate::service::{service_path, state_path};
 use crate::state::{self, EntityState};
 use std::{string::String, vec::Vec};
@@ -52,6 +53,31 @@ pub fn call_service<C: Connector>(
     Ok(())
 }
 
+/// Renders a template: `POST /api/template` with `{"template": "..."}`. The
+/// answer is plain text, read whole but bounded, so a template that renders a
+/// lot cannot fill memory. The endpoint needs an administrator.
+pub fn render_template<C: Connector>(
+    connector: &mut C,
+    endpoint: &Endpoint,
+    token: &str,
+    template: &str,
+) -> Result<String> {
+    let body = template_body(template);
+    let request = endpoint.request("POST", "/api/template", token, Some(body.as_bytes()));
+    let transport = connector.send(endpoint.device(), &request)?;
+    drop(request);
+    drop(body);
+    let (status, mut response) = read_response(transport)?;
+    if status == 401 {
+        // The template endpoint needs an administrator account.
+        return Err(Error::AdminNeeded);
+    }
+    if status != 200 {
+        return Err(status_error(status));
+    }
+    read_body(&mut response, MAXIMUM_TEMPLATE_ANSWER_LENGTH)
+}
+
 /// Reads every configured entity state, one request each, in order. An
 /// entity that fails does not stop the others: its error is returned in its
 /// slot, so a missing entity (404) shows on its card alone. A server-level
@@ -70,7 +96,7 @@ pub fn refresh_states<C: Connector>(
         let result = fetch_state(connector, &endpoint, token, entity_id);
         let fatal = matches!(
             &result,
-            Err(Error::Network | Error::Timeout | Error::Unauthorized)
+            Err(Error::Network | Error::Timeout | Error::Unauthorized | Error::Forbidden)
         );
         results.push(result);
         if fatal {
@@ -159,7 +185,7 @@ mod tests {
     fn state_errors_map_to_user_states() {
         for (response, expected) in [
             ("HTTP/1.1 401 Unauthorized\r\n\r\n{}", Error::Unauthorized),
-            ("HTTP/1.1 403 Forbidden\r\n\r\n{}", Error::Unauthorized),
+            ("HTTP/1.1 403 Forbidden\r\n\r\n{}", Error::Forbidden),
             ("HTTP/1.1 404 Not Found\r\n\r\n{}", Error::NotFound),
             (
                 "HTTP/1.1 500 Internal Server Error\r\n\r\n",
@@ -290,6 +316,46 @@ mod tests {
         assert_eq!(results[0], Err(Error::NotFound));
         assert!(results[1].is_ok() && results[2].is_ok());
         assert_eq!(connector.requests.len(), 3);
+    }
+
+    #[test]
+    fn renders_a_template_as_bounded_plain_text() {
+        let answer = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nliving_room|Living room\n";
+        let mut connector = recorder(&[answer]);
+        let text = render_template(
+            &mut connector,
+            &endpoint(),
+            "secret",
+            &crate::picker::areas_template(),
+        )
+        .unwrap();
+        assert_eq!(text, "living_room|Living room\n");
+        let (_device, request) = &connector.requests[0];
+        assert!(request.starts_with("POST /api/template HTTP/1.1\r\n"));
+        assert!(request.contains("\r\nAuthorization: Bearer secret\r\n"));
+        assert!(request.contains("\r\nContent-Type: application/json\r\n"));
+        assert!(
+            request.contains("{% for area in areas() %}{{ area }}|{{ (area_name(area) or area)")
+        );
+        assert!(request.contains("replace('|', ' ')"));
+        // A refused token on the template endpoint means a non-administrator
+        // account; a failure status maps to its error, a huge answer to TooLarge.
+        let mut connector = recorder(&["HTTP/1.1 401 Unauthorized\r\n\r\n{}"]);
+        assert_eq!(
+            render_template(&mut connector, &endpoint(), "t", "x"),
+            Err(Error::AdminNeeded)
+        );
+        let mut connector = recorder(&["HTTP/1.1 403 Forbidden\r\n\r\n{}"]);
+        assert_eq!(
+            render_template(&mut connector, &endpoint(), "t", "x"),
+            Err(Error::Forbidden)
+        );
+        let huge = format!("HTTP/1.1 200 OK\r\n\r\n{}", "a".repeat(100_000));
+        let mut connector = recorder(&[&huge]);
+        assert_eq!(
+            render_template(&mut connector, &endpoint(), "t", "x"),
+            Err(Error::TooLarge)
+        );
     }
 
     #[test]

@@ -68,8 +68,10 @@ is no configuration yet. They hold:
   in seconds (at least 10) and the uid of a dashboard to import (empty for
   manual panels). **Test connection** runs one query (the first panel, else
   `vector(1)`) and shows its value or the error.
-- **Token:** a masked field with a show and hide button. A saved token is
-  never shown again: the settings show "Token set" with a **Replace** action.
+- **Token:** a field that starts visible while it is empty and hides behind a
+  mask once it holds a token, with a show and hide button and a hint while it
+  is hidden, so a set token is not displayed. A saved token is never shown
+  again: the settings show "Token set" with a **Replace** action.
 - **Panels:** the imported panels with their visibility switch, **Reload
   dashboard** and **Convert to manual**; or the manual panels with **Edit**,
   **Delete** and **Add panel**. The panel editor holds the title, the PromQL

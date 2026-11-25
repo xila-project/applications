@@ -9,16 +9,23 @@
     "turn_on": "オンにする"
   },
   "errors": {
+    "admin_needed": "Home Assistant がリクエストを拒否しました。トークンと、それが管理者アカウントのものかを確認してください",
     "configuration": "設定ファイルが不完全または無効です",
+    "forbidden": "Home Assistant がリクエストを拒否しました (403)",
     "http": "Home Assistantエラー {status}",
+    "import_empty": "ファイルにトークンがありません",
+    "import_invalid": "トークンにヘッダーに含められない文字が含まれています",
+    "import_missing": "ファイルが存在しません",
+    "import_read": "ファイルを読み取れませんでした",
+    "import_too_long": "トークンが長すぎます（最大 {count} バイト）",
     "invalid_response": "Home Assistantから予期しない応答がありました",
-    "missing_token": "トークンがありません: tokenファイルに追加してください",
+    "missing_token": "トークンがありません：設定で追加するか、ファイルからインポートしてください",
     "network": "ネットワークに接続していません",
-    "not_found": "エンティティが見つかりません (404)",
+    "not_found": "見つかりません (404)",
     "storage": "設定を読み込めませんでした",
     "timeout": "Home Assistantから応答が時間内にありませんでした",
     "too_large": "応答が大きすぎます",
-    "unauthorized": "Home Assistantがトークンを拒否しました (401 または 403)"
+    "unauthorized": "Home Assistant がトークンを拒否しました (401)"
   },
   "header": {
     "loading": "読み込み中...",
@@ -32,7 +39,40 @@
     "url": "URLはhttps://またはhttp://で始まり、?、#、@を含んではいけません"
   },
   "main": {
-    "no_entities": "表示するエンティティがありません: configuration.jsonに追加してください。",
-    "not_configured": "設定がありません: configuration.jsonとtokenファイルを作成してください。"
+    "no_entities": "表示するエンティティがありません: 設定画面で追加してください。",
+    "not_configured": "設定がありません: 設定画面でサーバーを設定してください。"
+  },
+  "settings": {
+    "add_from_server": "サーバーから追加",
+    "add_manual": "ID で追加",
+    "advanced": "詳細設定",
+    "back": "戻る",
+    "cancel": "キャンセル",
+    "connection": "接続",
+    "down": "下へ",
+    "entities": "エンティティ",
+    "entity_id": "エンティティ ID",
+    "hide": "隠す",
+    "import": "ファイルからインポート",
+    "import_path": "トークンファイルのパス",
+    "imported": "トークンをインポートしました",
+    "list_truncated": "リストが切り詰められました：最初の256件のみ表示します",
+    "loading": "読み込み中...",
+    "no_areas": "サーバーにエリアがありません",
+    "no_entities_in_area": "対応するエンティティがありません",
+    "picker_title": "サーバーからエンティティを追加",
+    "refresh": "更新間隔（秒）",
+    "remove": "削除",
+    "save": "保存",
+    "show": "表示",
+    "title": "設定",
+    "token": "長期アクセス トークン",
+    "token_help_create": "Home Assistant でトークンを作成：プロフィール、セキュリティ、長期アクセストークンの順に選択します。",
+    "token_help_terminal": "または Xila ターミナルから: echo '<token>' > /users/<user>/applications/xila.home-assistant/configuration/token",
+    "token_hint": "表示を押して入力または変更します。",
+    "too_many_entities": "表示できるのは最大 {count} 個のエンティティです。先に 1 つ削除してください",
+    "up": "上へ",
+    "url": "サーバーの URL",
+    "without_area": "エリアなしのエンティティ"
   }
 }

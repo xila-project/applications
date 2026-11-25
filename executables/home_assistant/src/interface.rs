@@ -1,6 +1,8 @@
-//! Main screen: a header with the title, the time since the last refresh and
-//! the errors, then a grid of entity cards. Each card shows one configured
-//! entity and the controls its domain has.
+//! Main screen: a header with the title, the time since the last refresh, the
+//! errors and the settings button, then a grid of entity cards. Each card
+//! shows one configured entity and the controls its domain has. The settings
+//! screen opens over it, automatically when the configuration or the token
+//! is missing.
 
 use core::ptr::null_mut;
 use std::{
@@ -21,6 +23,7 @@ use home_assistant::{
 };
 use wasm::*;
 
+use crate::settings::{Context, Outcome, Settings};
 use crate::widgets::*;
 
 include!(concat!(env!("OUT_DIR"), "/shortcut_icon.rs"));
@@ -51,10 +54,16 @@ pub struct Interface {
     columns: i32,
     storage: Option<Storage>,
     configuration: Option<Configuration>,
+    /// The parsed configuration that failed validation, kept as the draft of
+    /// the settings when they open at start.
+    setup_draft: Option<Configuration>,
+    /// The long-lived access token of the token file.
     token: Option<String>,
+    header: *mut Object,
     title: *mut Object,
     status: *mut Object,
     refresh_button: *mut Object,
+    settings_button: *mut Object,
     notice: *mut Object,
     grid: *mut Object,
     cards: Vec<Card>,
@@ -76,6 +85,7 @@ pub struct Interface {
     /// Which configuration field failed validation at start.
     startup_invalid: Option<Invalid>,
     shown_status: String,
+    settings: Option<Settings>,
 }
 
 impl Interface {
@@ -101,6 +111,7 @@ impl Interface {
             let status = label(header, "", FONT_SMALL)?;
             object_set_text_color(status, MUTED_COLOR, 0)?;
             let refresh_button = button(header, SYMBOL_REFRESH, GHOST)?;
+            let settings_button = button(header, SYMBOL_SETTINGS, GHOST)?;
 
             let notice = paragraph(window, "", FONT_SMALL)?;
             object_set_text_color(notice, ERROR_COLOR, 0)?;
@@ -113,10 +124,13 @@ impl Interface {
                 columns,
                 storage: Storage::from_environment(),
                 configuration: None,
+                setup_draft: None,
                 token: None,
+                header,
                 title,
                 status,
                 refresh_button,
+                settings_button,
                 notice,
                 grid,
                 cards: Vec::new(),
@@ -131,6 +145,7 @@ impl Interface {
                 startup_error: None,
                 startup_invalid: None,
                 shown_status: String::new(),
+                settings: None,
             })
         }
     }
@@ -147,7 +162,8 @@ impl Interface {
         }
     }
 
-    /// Reads the files, builds the cards and shows the first states.
+    /// Reads the files, builds the cards and shows the first states; opens the
+    /// settings when the configuration or the token is missing.
     fn start(&mut self) -> wasm::Result<()> {
         match &self.storage {
             None => self.startup_error = Some(Error::Storage),
@@ -158,30 +174,85 @@ impl Interface {
                 }
                 match storage.token() {
                     Ok(token) => self.token = token,
-                    Err(error) => {
-                        // A configuration error shows first when both fail.
-                        if self.startup_error.is_none() {
-                            self.startup_error = Some(error);
-                        }
-                    }
+                    // A configuration error shows first when both fail.
+                    Err(error) if self.startup_error.is_none() => self.startup_error = Some(error),
+                    Err(_) => (),
                 }
             }
         }
-        let invalid = self
-            .configuration
-            .as_ref()
-            .and_then(|configuration| configuration.validate().err());
-        if let Some(invalid) = invalid {
+        if let Some(configuration) = &self.configuration
+            && let Err(invalid) = configuration.validate()
+        {
             self.startup_invalid = Some(invalid);
+            self.setup_draft = Some(configuration.clone());
             self.configuration = None;
         }
-        if self.configuration.is_some() && self.token.is_none() && self.startup_error.is_none() {
-            self.startup_error = Some(Error::MissingToken);
+        self.show_notice()?;
+        // The settings open by themselves when the configuration or the
+        // token is missing, even though the missing token is also a start
+        // error: it shows once, in the settings. The cards are built anyway,
+        // so the main screen is usable after Cancel.
+        let needs_setup = self.configuration.is_none() || self.token.is_none();
+        if needs_setup {
+            if self.configuration.is_some() {
+                self.rebuild()?;
+            }
+            return self.open_settings();
         }
         if self.configuration.is_none() {
-            return self.show_notice();
+            return Ok(());
         }
         self.rebuild()?;
+        self.refresh()
+    }
+
+    fn open_settings(&mut self) -> wasm::Result<()> {
+        let draft = self.configuration.as_ref().or(self.setup_draft.as_ref());
+        let token = self.token.as_deref();
+        let settings = unsafe { Settings::open(self.window, draft, token)? };
+        // The settings fill the window: the header, the notice and the card
+        // grid hide while they are open.
+        unsafe {
+            set_hidden(self.header, true)?;
+            set_hidden(self.notice, true)?;
+            set_hidden(self.grid, true)?;
+        }
+        self.settings = Some(settings);
+        Ok(())
+    }
+
+    fn close_settings(&mut self) -> wasm::Result<()> {
+        if let Some(settings) = self.settings.take() {
+            unsafe {
+                settings.close()?;
+                set_hidden(self.header, false)?;
+                set_hidden(self.notice, false)?;
+                set_hidden(self.grid, false)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// Applies a configuration saved by the settings, and reloads the token
+    /// file written with it.
+    fn apply_saved(&mut self, configuration: Configuration) -> wasm::Result<()> {
+        if let Some(storage) = &self.storage {
+            match storage.token() {
+                Ok(token) => {
+                    self.token = token;
+                    self.startup_error = None;
+                }
+                Err(error) => self.startup_error = Some(error),
+            }
+        }
+        self.configuration = Some(configuration);
+        self.setup_draft = None;
+        self.startup_invalid = None;
+        self.error = None;
+        self.action_error = None;
+        self.last_refresh = None;
+        self.rebuild()?;
+        self.show_notice()?;
         self.refresh()
     }
 
@@ -338,13 +409,12 @@ impl Interface {
         if self.configuration.is_none() || self.entities.is_empty() {
             return Ok(());
         }
+        self.show_busy(t!("header.loading"))?;
         let Some(token) = self.token.clone() else {
-            // The start-up notice already shows the missing or unreadable
-            // token; do not repeat it in the status line.
+            self.error = Some(Error::MissingToken);
             self.finish_refresh(period);
             return Ok(());
         };
-        self.show_busy(t!("header.loading"))?;
         let results = match &self.configuration {
             Some(configuration) => {
                 let entities = self.entities.clone();
@@ -437,10 +507,6 @@ impl Interface {
         let Some(configuration) = &self.configuration else {
             return Ok(());
         };
-        let Some(token) = self.token.clone() else {
-            self.error = Some(Error::MissingToken);
-            return Ok(());
-        };
         let endpoint = match Endpoint::parse(&configuration.url) {
             Ok(endpoint) => endpoint,
             Err(error) => {
@@ -450,6 +516,10 @@ impl Interface {
         };
         self.show_busy(t!("header.loading"))?;
         self.action_error = None;
+        let Some(token) = self.token.clone() else {
+            self.action_error = Some(Error::MissingToken);
+            return Ok(());
+        };
         let body = service::service_body(&entity_id);
         if let Err(error) = api::call_service(
             &mut Devices,
@@ -506,8 +576,35 @@ impl Interface {
     }
 
     fn handle(&mut self, code: u32, target: *mut Object) -> wasm::Result<()> {
+        // The close request must reach the run loop even while the settings
+        // are open: the host sends it only once.
+        if code == EVENT_CLOSE_REQUESTED {
+            self.close_requested = true;
+            return Ok(());
+        }
+        if let Some(settings) = &mut self.settings {
+            let mut context = Context {
+                storage: self.storage.as_ref(),
+                close_requested: &mut self.close_requested,
+            };
+            match unsafe { settings.handle(code, target, &mut context)? } {
+                Outcome::Stay => (),
+                Outcome::Close => {
+                    self.close_settings()?;
+                    self.show_notice()?;
+                }
+                Outcome::Saved(configuration) => {
+                    self.close_settings()?;
+                    self.apply_saved(*configuration)?;
+                }
+            }
+            return Ok(());
+        }
         if code != EventCode::Clicked as u32 {
             return Ok(());
+        }
+        if target == self.settings_button {
+            return self.open_settings();
         }
         if target == self.refresh_button {
             return self.refresh();
@@ -559,10 +656,14 @@ impl Interface {
             if self.close_requested {
                 continue;
             }
-            if self.next_refresh.is_some_and(|next| Instant::now() >= next) {
+            if self.settings.is_none()
+                && self.next_refresh.is_some_and(|next| Instant::now() >= next)
+            {
                 self.refresh()?;
             }
-            self.update_status()?;
+            if self.settings.is_none() {
+                self.update_status()?;
+            }
             sleep(Duration::from_millis(50));
         }
     }

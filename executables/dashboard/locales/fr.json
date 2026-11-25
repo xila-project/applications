@@ -81,6 +81,7 @@
     "testing": "Test en cours…",
     "title": "Réglages",
     "token": "Jeton",
+    "token_hint": "Appuyez sur Afficher pour le saisir ou le modifier.",
     "token_set": "Jeton enregistré",
     "url": "URL de Grafana"
   },

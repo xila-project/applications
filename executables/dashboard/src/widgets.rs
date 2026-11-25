@@ -105,14 +105,16 @@ pub unsafe fn labelled_button(
     }
 }
 
-/// One-line text field with an initial value.
+/// One-line text field with an initial value. The text is set before the
+/// maximum length: setting the limit first makes LVGL send one insert event
+/// per character, which fills the host event queue.
 pub unsafe fn field(parent: *mut Object, value: &str, maximum: u32) -> wasm::Result<*mut Object> {
     unsafe {
         let area = textarea_create(parent)?;
         textarea_set_one_line(area, true)?;
-        textarea_set_max_length(area, maximum)?;
         object_set_width(area, percentage(100)?)?;
         set_field(area, value)?;
+        textarea_set_max_length(area, maximum)?;
         Ok(area)
     }
 }
@@ -120,6 +122,21 @@ pub unsafe fn field(parent: *mut Object, value: &str, maximum: u32) -> wasm::Res
 pub unsafe fn set_field(area: *mut Object, value: &str) -> wasm::Result<()> {
     let value = c_string(value)?;
     unsafe { textarea_set_text(area, value.as_ptr()) }
+}
+
+/// What a hidden secret field shows instead of the secret. The length is
+/// fixed: it must not leak how long the secret is.
+pub const SECRET_MASK: &str = "********";
+
+/// Sets the text of a field that already has its maximum length, without the
+/// one insert event per character that a set limit makes LVGL send: the
+/// limit is lifted while the text is set, then restored.
+pub unsafe fn set_field_bounded(area: *mut Object, value: &str, maximum: u32) -> wasm::Result<()> {
+    unsafe {
+        textarea_set_max_length(area, 0)?;
+        set_field(area, value)?;
+        textarea_set_max_length(area, maximum)
+    }
 }
 
 pub unsafe fn field_text(area: *mut Object) -> wasm::Result<String> {

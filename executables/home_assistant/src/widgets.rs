@@ -1,15 +1,19 @@
 //! Small helpers over the guest graphics calls.
 
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use wasm::*;
 
 /// shadcn button variants, numbered as `lv_theme_shadcn_variant_t`.
 pub const PRIMARY: u32 = 0;
+pub const OUTLINE: u32 = 2;
 pub const GHOST: u32 = 3;
+pub const DESTRUCTIVE: u32 = 4;
 
 pub const FONT_SMALL: u32 = 0;
+pub const FONT_MEDIUM: u32 = 1;
 pub const FONT_LARGE: u32 = 2;
 
+pub const SYMBOL_SETTINGS: &str = "\u{F013}";
 pub const SYMBOL_REFRESH: &str = "\u{F021}";
 /// LVGL icon font glyphs for the media player controls.
 pub const SYMBOL_PREVIOUS: &str = "\u{F048}";
@@ -102,6 +106,65 @@ pub unsafe fn labelled_button(
         set_text(caption, text)?;
         object_align(caption, Align::Center, 0, 0)?;
         Ok((button, caption))
+    }
+}
+
+/// One-line text field with an initial value. The text is set before the
+/// maximum length: setting the limit first makes LVGL send one insert event
+/// per character, which fills the host event queue.
+pub unsafe fn field(parent: *mut Object, value: &str, maximum: u32) -> wasm::Result<*mut Object> {
+    unsafe {
+        let area = textarea_create(parent)?;
+        textarea_set_one_line(area, true)?;
+        object_set_width(area, percentage(100)?)?;
+        set_field(area, value)?;
+        textarea_set_max_length(area, maximum)?;
+        Ok(area)
+    }
+}
+
+/// What a hidden secret field shows instead of the secret. The length is
+/// fixed: it must not leak how long the secret is.
+pub const SECRET_MASK: &str = "********";
+
+pub unsafe fn set_field(area: *mut Object, value: &str) -> wasm::Result<()> {
+    let value = c_string(value)?;
+    unsafe { textarea_set_text(area, value.as_ptr()) }
+}
+
+/// Sets the text of a field that already has its maximum length, without the
+/// one insert event per character that a set limit makes LVGL send: the
+/// limit is lifted while the text is set, then restored.
+pub unsafe fn set_field_bounded(area: *mut Object, value: &str, maximum: u32) -> wasm::Result<()> {
+    unsafe {
+        textarea_set_max_length(area, 0)?;
+        set_field(area, value)?;
+        textarea_set_max_length(area, maximum)
+    }
+}
+
+pub unsafe fn field_text(area: *mut Object) -> wasm::Result<String> {
+    unsafe {
+        let length = textarea_get_text_length(area)?.max(0) as usize;
+        let mut buffer = vec![0i8; length + 1];
+        textarea_get_text(area, buffer.as_mut_ptr(), buffer.len())?;
+        Ok(CStr::from_ptr(buffer.as_ptr())
+            .to_string_lossy()
+            .into_owned())
+    }
+}
+
+pub unsafe fn is_checked(object: *mut Object) -> wasm::Result<bool> {
+    unsafe { Ok(object_get_state(object)? & STATE_CHECKED != 0) }
+}
+
+pub unsafe fn set_checked(object: *mut Object, checked: bool) -> wasm::Result<()> {
+    unsafe {
+        if checked {
+            object_add_state(object, STATE_CHECKED)
+        } else {
+            object_remove_state(object, STATE_CHECKED)
+        }
     }
 }
 

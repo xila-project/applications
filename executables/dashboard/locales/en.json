@@ -81,6 +81,7 @@
     "testing": "Testing...",
     "title": "Settings",
     "token": "Token",
+    "token_hint": "Press Show to enter or change it.",
     "token_set": "Token set",
     "url": "Grafana URL"
   },

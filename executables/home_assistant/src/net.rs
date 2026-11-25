@@ -63,7 +63,8 @@ impl Endpoint {
         }
     }
 
-    /// The request bytes for `path`, below the base path.
+    /// The request bytes for `path`, below the base path, with the bearer
+    /// `token` and an optional JSON `body`.
     pub fn request(&self, method: &str, path: &str, token: &str, body: Option<&[u8]>) -> Vec<u8> {
         let mut head = format!(
             "{method} {}{path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nUser-Agent: {USER_AGENT}\r\nAuthorization: Bearer {token}\r\n",
@@ -166,10 +167,24 @@ pub fn read_response<T: Transport>(mut transport: T) -> Result<(u16, Body<T>)> {
     ))
 }
 
+/// Reads a whole plain-text body, at most `limit` bytes: the answer of
+/// `POST /api/template` is the rendered template as plain text.
+pub fn read_body<T: Transport>(body: &mut Body<T>, limit: usize) -> Result<String> {
+    let mut bytes = Vec::new();
+    while let Some(byte) = body.next_byte()? {
+        if bytes.len() >= limit {
+            return Err(Error::TooLarge);
+        }
+        bytes.push(byte);
+    }
+    String::from_utf8(bytes).map_err(|_| Error::InvalidResponse)
+}
+
 /// Errors for statuses no caller handles.
 pub fn status_error(status: u16) -> Error {
     match status {
-        401 | 403 => Error::Unauthorized,
+        401 => Error::Unauthorized,
+        403 => Error::Forbidden,
         404 => Error::NotFound,
         status => Error::Http(status),
     }
@@ -361,7 +376,7 @@ pub mod tests {
             read_response(canned(&huge, 512)),
             Err(Error::TooLarge)
         ));
-        assert_eq!(status_error(403), Error::Unauthorized);
+        assert_eq!(status_error(403), Error::Forbidden);
         assert_eq!(status_error(502), Error::Http(502));
     }
 }

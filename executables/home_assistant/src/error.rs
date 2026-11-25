@@ -10,10 +10,24 @@ pub enum Error {
     Network,
     /// The server did not answer in time.
     Timeout,
-    /// Home Assistant refused the token (401 or 403).
+    /// Home Assistant refused the token (401).
     Unauthorized,
+    /// Home Assistant refused the request (403).
+    Forbidden,
     /// The entity does not exist (404).
     NotFound,
+    /// 401 on the template endpoint: it needs an administrator account.
+    AdminNeeded,
+    /// The import file does not exist.
+    ImportMissing,
+    /// The import file exists but could not be read.
+    ImportRead,
+    /// The import file holds no token.
+    ImportEmpty,
+    /// The imported token holds characters a header cannot carry.
+    ImportInvalid,
+    /// The imported token is longer than the limit.
+    ImportTooLong,
     /// Any other unexpected HTTP status.
     Http(u16),
     /// The response is not the JSON that was expected.

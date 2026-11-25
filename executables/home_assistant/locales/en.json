@@ -9,16 +9,23 @@
     "turn_on": "Turn on"
   },
   "errors": {
+    "admin_needed": "Home Assistant refused the request: check the token and that it belongs to an administrator",
     "configuration": "The configuration file is incomplete or invalid",
+    "forbidden": "Home Assistant refused the request (403)",
     "http": "Home Assistant error {status}",
+    "import_empty": "The file holds no token",
+    "import_invalid": "The token holds characters a header cannot carry",
+    "import_missing": "The file does not exist",
+    "import_read": "The file could not be read",
+    "import_too_long": "The token is too long (at most {count} bytes)",
     "invalid_response": "Unexpected answer from Home Assistant",
-    "missing_token": "No token: add one to the token file",
+    "missing_token": "No token: add one in the settings or import it from a file",
     "network": "No network connection",
-    "not_found": "Entity not found (404)",
+    "not_found": "Not found (404)",
     "storage": "The configuration could not be read",
     "timeout": "Home Assistant did not answer in time",
     "too_large": "The answer is too large",
-    "unauthorized": "Home Assistant refused the token (401 or 403)"
+    "unauthorized": "Home Assistant refused the token (401)"
   },
   "header": {
     "loading": "Loading...",
@@ -32,7 +39,40 @@
     "url": "The URL must start with https:// or http:// and hold no ?, # or @"
   },
   "main": {
-    "no_entities": "No entities to show: add some to configuration.json.",
-    "not_configured": "No configuration: write configuration.json and a token file."
+    "no_entities": "No entities to show: add some in the settings.",
+    "not_configured": "No configuration: set up the server in the settings."
+  },
+  "settings": {
+    "add_from_server": "Add from the server",
+    "add_manual": "Add by identifier",
+    "advanced": "Advanced",
+    "back": "Back",
+    "cancel": "Cancel",
+    "connection": "Connection",
+    "down": "Down",
+    "entities": "Entities",
+    "entity_id": "Entity identifier",
+    "hide": "Hide",
+    "import": "Import from file",
+    "import_path": "Token file path",
+    "imported": "Token imported",
+    "list_truncated": "The list is truncated: only the first 256 entries show",
+    "loading": "Loading...",
+    "no_areas": "The server has no areas",
+    "no_entities_in_area": "No supported entities here",
+    "picker_title": "Add entities from the server",
+    "refresh": "Refresh period (seconds)",
+    "remove": "Remove",
+    "save": "Save",
+    "show": "Show",
+    "title": "Settings",
+    "token": "Long-lived access token",
+    "token_help_create": "Create the token in Home Assistant: Profile, then Security, then Long-Lived Access Tokens.",
+    "token_help_terminal": "Or from the Xila terminal: echo '<token>' > /users/<user>/applications/xila.home-assistant/configuration/token",
+    "token_hint": "Press Show to enter or change it.",
+    "too_many_entities": "At most {count} entities show: remove one first",
+    "up": "Up",
+    "url": "Server URL",
+    "without_area": "Entities without an area"
   }
 }
