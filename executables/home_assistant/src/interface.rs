@@ -584,6 +584,12 @@ impl Interface {
     }
 
     fn handle(&mut self, code: u32, target: *mut Object) -> wasm::Result<()> {
+        // The close request must reach the run loop even while the settings
+        // are open: the host sends it only once.
+        if code == EVENT_CLOSE_REQUESTED {
+            self.close_requested = true;
+            return Ok(());
+        }
         if let Some(settings) = &mut self.settings {
             let mut context = Context {
                 storage: self.storage.as_ref(),
