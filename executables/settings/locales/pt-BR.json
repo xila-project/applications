@@ -147,6 +147,29 @@
         "apply": "Usar este deslocamento",
         "errors": {
           "abbreviation": "Uma abreviação tem de 3 a 7 letras, dígitos, + ou -."
+        },
+        "months": {
+          "january": "janeiro",
+          "february": "fevereiro",
+          "march": "março",
+          "april": "abril",
+          "may": "maio",
+          "june": "junho",
+          "july": "julho",
+          "august": "agosto",
+          "september": "setembro",
+          "october": "outubro",
+          "november": "novembro",
+          "december": "dezembro"
+        },
+        "weekdays": {
+          "sunday": "domingo",
+          "monday": "segunda-feira",
+          "tuesday": "terça-feira",
+          "wednesday": "quarta-feira",
+          "thursday": "quinta-feira",
+          "friday": "sexta-feira",
+          "saturday": "sábado"
         }
       }
     }

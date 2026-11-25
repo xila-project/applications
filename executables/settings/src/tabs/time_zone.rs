@@ -199,8 +199,8 @@ impl TimeZoneSection {
     /// # Safety
     /// `parent` must be live and the caller must hold the graphics lock.
     pub async unsafe fn create_ui(&mut self, parent: *mut lvgl::lv_obj_t) -> Result<()> {
-        let task = self.context.task_manager.get_current_task_identifier().await;
-        let setting = local_time::load(self.context.virtual_file_system, task).await;
+        // The setting in use, kept in RAM by Core: no file read here.
+        let setting = local_time::stored();
         self.preview = setting.time_zone();
         self.stored_name = setting.name().map(String::from);
 

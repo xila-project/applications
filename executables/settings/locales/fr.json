@@ -147,6 +147,29 @@
         "apply": "Utiliser ce décalage",
         "errors": {
           "abbreviation": "Une abréviation a 3 à 7 lettres, chiffres, + ou -."
+        },
+        "months": {
+          "january": "janvier",
+          "february": "février",
+          "march": "mars",
+          "april": "avril",
+          "may": "mai",
+          "june": "juin",
+          "july": "juillet",
+          "august": "août",
+          "september": "septembre",
+          "october": "octobre",
+          "november": "novembre",
+          "december": "décembre"
+        },
+        "weekdays": {
+          "sunday": "dimanche",
+          "monday": "lundi",
+          "tuesday": "mardi",
+          "wednesday": "mercredi",
+          "thursday": "jeudi",
+          "friday": "vendredi",
+          "saturday": "samedi"
         }
       }
     }

@@ -49,33 +49,43 @@ connection. See the native example's `--mock-wifi` mode for hardware-free testin
 
 ## Time zone
 
-The General tab shows the stored time zone, the local time it gives (updated
-once per second while the tab is shown), and one editor at a time:
+The General tab shows the time zone in use, the local time it gives (updated
+once per second while the tab is shown), and one editor at a time. Only the
+selected editor exists: choosing another one deletes the objects of the
+previous editor and builds the next one.
 
 - **Zone name**, only in builds with a `time-zone-names-*` feature: a region,
-  then a zone of that region from the IANA table that the build links. Saving
-  stores both the IANA name and its POSIX TZ string. This is the default
-  editor when it exists.
-- **UTC offset**: a form that builds the POSIX TZ string, so that nobody has to
-  type one. It takes the offset (UTC-12:00 to UTC+14:00, in steps of 15
-  minutes), an optional daylight saving time with its shift (30 minutes, one
-  hour or two hours) and its rules, and optional abbreviations. The rule
-  presets are "European Union" (last Sunday of March to last Sunday of
-  October at 01:00 UTC, written as the local times of the chosen offset) and
-  "United States" (second Sunday of March to first Sunday of November at
-  02:00 local time); "Custom" takes the month, week (first to fourth, or
-  last), weekday and hour of the start and of the end. Without abbreviations,
-  the numeric form of tzdata is used (`<+01>`). The form shows the generated
-  string and stores it without a name. This is the default editor without a
-  names feature.
+  then a zone of that region from the IANA tables that the build links.
+  Saving stores both the IANA name and its POSIX TZ string. This is the
+  default editor when it exists. When the stored name is not in the tables,
+  no region is selected.
+- **UTC offset**, with the `time-zone-offset-form` feature (default on): a
+  form that builds the POSIX TZ string, so that nobody has to type one. It
+  takes the offset (UTC-12:00 to UTC+14:00, in steps of 15 minutes), an
+  optional daylight saving time with its shift (30 minutes, one hour or two
+  hours) and its rules, and optional abbreviations. The rule presets are
+  "European Union" (last Sunday of March to last Sunday of October at 01:00
+  UTC, written as the local times of the chosen offset) and "United States"
+  (second Sunday of March to first Sunday of November at 02:00 local time);
+  "Custom" takes the month, week (first to fourth, or last), weekday and time
+  (00:00 to 24:45 in steps of 15 minutes) of the start and of the end.
+  Without abbreviations, the numeric form of tzdata is used (`<+01>`). The
+  form shows the generated string and stores it without a name. It builds its
+  daylight saving and custom rule fields only when they are first turned on.
+  This is the default editor without a names feature.
 - **TZ string (advanced)**: a raw POSIX TZ string, checked while it is typed.
+  It also takes rule times that the form does not offer (negative, or above
+  24:45).
 
 The setting is stored by `xila::local_time::set` in
 `/configuration/system/time_zone.json`: only root and members of the
-administrator group can change it, and Settings says so otherwise. Programs
-started after the change use it at once through the `TZ` environment
-variable; the graphical shell clock follows it at its next update; running
-WebAssembly applications keep their value until they restart.
+administrator group can change it, and Settings says so otherwise. An editor
+only records the request; Settings writes the file after it releases the
+graphics lock, then shows the result. Settings reads the setting in use from
+Core (`local_time::stored`), not from the file. Programs started after the
+change use it at once through the `TZ` environment variable; the graphical
+shell clock follows it at its next update; running WebAssembly applications
+keep their value until they restart.
 
 Cargo features select the zone names, one per IANA region of
 `xila-time-zone`, which combine: `time-zone-names-africa`,
@@ -85,7 +95,7 @@ Cargo features select the zone names, one per IANA region of
 `time-zone-names-indian`, `time-zone-names-pacific` and `time-zone-names-all`.
 `time-zone-names-legacy-aliases` adds the legacy aliases (`US/Eastern`). The
 default is no names. The flash cost of each region is in the `xila-time-zone`
-README; with all regions, the table costs about 9.5 KB on Cortex-M. The
-selector keeps the list of regions (11 pointers with all regions) and LVGL
-holds the zone list of the selected region (at most 1,359 bytes, for the
-121 canonical names of America).
+README; with all regions, the 451 names cost about 11.7 KB on Cortex-M. The
+selector keeps the regions as 2-byte name indexes (12 groups with all
+regions) and LVGL holds the zone list of the selected region (at most 1,581
+bytes, for the 144 names of America).

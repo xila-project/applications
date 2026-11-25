@@ -7,7 +7,7 @@
 //! fixed array of [`MAXIMUM_REGIONS`] name indexes (2 bytes each; 12 groups
 //! with `iana-all`, 18 with the legacy aliases) and fills the zone dropdown from the linked tables when
 //! the region changes, in table order. LVGL holds a copy of the zone list of
-//! the selected region, at most 1,627 bytes (the 148 names of `America`).
+//! the selected region, at most 1,581 bytes (the 144 names of `America`).
 //! Applying a zone stores both its name and its TZ string; Core reads only the
 //! TZ string.
 //!

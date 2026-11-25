@@ -119,6 +119,29 @@
         "apply": "使用此偏移",
         "errors": {
           "abbreviation": "缩写为 3 到 7 个字母、数字、+ 或 -。"
+        },
+        "months": {
+          "january": "一月",
+          "february": "二月",
+          "march": "三月",
+          "april": "四月",
+          "may": "五月",
+          "june": "六月",
+          "july": "七月",
+          "august": "八月",
+          "september": "九月",
+          "october": "十月",
+          "november": "十一月",
+          "december": "十二月"
+        },
+        "weekdays": {
+          "sunday": "星期日",
+          "monday": "星期一",
+          "tuesday": "星期二",
+          "wednesday": "星期三",
+          "thursday": "星期四",
+          "friday": "星期五",
+          "saturday": "星期六"
         }
       }
     }

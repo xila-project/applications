@@ -147,6 +147,29 @@
         "apply": "Usa questo scostamento",
         "errors": {
           "abbreviation": "Un'abbreviazione ha da 3 a 7 lettere, cifre, + o -."
+        },
+        "months": {
+          "january": "gennaio",
+          "february": "febbraio",
+          "march": "marzo",
+          "april": "aprile",
+          "may": "maggio",
+          "june": "giugno",
+          "july": "luglio",
+          "august": "agosto",
+          "september": "settembre",
+          "october": "ottobre",
+          "november": "novembre",
+          "december": "dicembre"
+        },
+        "weekdays": {
+          "sunday": "domenica",
+          "monday": "lunedì",
+          "tuesday": "martedì",
+          "wednesday": "mercoledì",
+          "thursday": "giovedì",
+          "friday": "venerdì",
+          "saturday": "sabato"
         }
       }
     }

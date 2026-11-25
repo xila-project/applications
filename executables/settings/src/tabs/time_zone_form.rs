@@ -32,7 +32,7 @@ use crate::error::Result;
 use alloc::string::String;
 use core::fmt::Write;
 use xila::graphics::{Event, EventKind, lvgl};
-use xila::internationalization::{self, t};
+use xila::internationalization::t;
 use xila::time_zone::TimeZone;
 
 /// The smallest and largest offsets that the form offers, in hours.
@@ -470,18 +470,34 @@ impl OffsetForm {
         if !self.start.month.is_null() {
             return Ok(());
         }
-        let formatter = internationalization::DateTimeFormatter::new(
-            internationalization::date_time_locale(internationalization::locale!()),
-        );
-        // Month and weekday names come from the locale of the build. Day
-        // 19,723 is 2024-01-01; 2024-01-14 (day 19,736) is a Sunday.
-        const MONTH_STARTS: [u16; 12] = [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
+        // Month and weekday names come from the catalog of the build; the date
+        // formatter of embedded-i18n would link its locale tables here.
         let months = options(12, |output, index| {
-            let day = 19_723 + 14 + i64::from(MONTH_STARTS[index]);
-            let _ = formatter.write(output, day * 86_400, "%B");
+            output.push_str(match index {
+                0 => t!("general.time_zone.form.months.january"),
+                1 => t!("general.time_zone.form.months.february"),
+                2 => t!("general.time_zone.form.months.march"),
+                3 => t!("general.time_zone.form.months.april"),
+                4 => t!("general.time_zone.form.months.may"),
+                5 => t!("general.time_zone.form.months.june"),
+                6 => t!("general.time_zone.form.months.july"),
+                7 => t!("general.time_zone.form.months.august"),
+                8 => t!("general.time_zone.form.months.september"),
+                9 => t!("general.time_zone.form.months.october"),
+                10 => t!("general.time_zone.form.months.november"),
+                _ => t!("general.time_zone.form.months.december"),
+            })
         });
         let weekdays = options(7, |output, index| {
-            let _ = formatter.write(output, (19_736 + index as i64) * 86_400, "%A");
+            output.push_str(match index {
+                0 => t!("general.time_zone.form.weekdays.sunday"),
+                1 => t!("general.time_zone.form.weekdays.monday"),
+                2 => t!("general.time_zone.form.weekdays.tuesday"),
+                3 => t!("general.time_zone.form.weekdays.wednesday"),
+                4 => t!("general.time_zone.form.weekdays.thursday"),
+                5 => t!("general.time_zone.form.weekdays.friday"),
+                _ => t!("general.time_zone.form.weekdays.saturday"),
+            })
         });
         let weeks = options(5, |output, index| {
             output.push_str(match index {

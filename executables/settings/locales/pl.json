@@ -147,6 +147,29 @@
         "apply": "Użyj tego przesunięcia",
         "errors": {
           "abbreviation": "Skrót ma od 3 do 7 liter, cyfr, + lub -."
+        },
+        "months": {
+          "january": "styczeń",
+          "february": "luty",
+          "march": "marzec",
+          "april": "kwiecień",
+          "may": "maj",
+          "june": "czerwiec",
+          "july": "lipiec",
+          "august": "sierpień",
+          "september": "wrzesień",
+          "october": "październik",
+          "november": "listopad",
+          "december": "grudzień"
+        },
+        "weekdays": {
+          "sunday": "niedziela",
+          "monday": "poniedziałek",
+          "tuesday": "wtorek",
+          "wednesday": "środa",
+          "thursday": "czwartek",
+          "friday": "piątek",
+          "saturday": "sobota"
         }
       }
     }

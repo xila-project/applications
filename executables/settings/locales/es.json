@@ -147,6 +147,29 @@
         "apply": "Usar este desfase",
         "errors": {
           "abbreviation": "Una abreviatura tiene de 3 a 7 letras, dígitos, + o -."
+        },
+        "months": {
+          "january": "enero",
+          "february": "febrero",
+          "march": "marzo",
+          "april": "abril",
+          "may": "mayo",
+          "june": "junio",
+          "july": "julio",
+          "august": "agosto",
+          "september": "septiembre",
+          "october": "octubre",
+          "november": "noviembre",
+          "december": "diciembre"
+        },
+        "weekdays": {
+          "sunday": "domingo",
+          "monday": "lunes",
+          "tuesday": "martes",
+          "wednesday": "miércoles",
+          "thursday": "jueves",
+          "friday": "viernes",
+          "saturday": "sábado"
         }
       }
     }

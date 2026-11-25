@@ -147,6 +147,29 @@
         "apply": "Diesen Versatz verwenden",
         "errors": {
           "abbreviation": "Eine Abkürzung hat 3 bis 7 Buchstaben, Ziffern, + oder -."
+        },
+        "months": {
+          "january": "Januar",
+          "february": "Februar",
+          "march": "März",
+          "april": "April",
+          "may": "Mai",
+          "june": "Juni",
+          "july": "Juli",
+          "august": "August",
+          "september": "September",
+          "october": "Oktober",
+          "november": "November",
+          "december": "Dezember"
+        },
+        "weekdays": {
+          "sunday": "Sonntag",
+          "monday": "Montag",
+          "tuesday": "Dienstag",
+          "wednesday": "Mittwoch",
+          "thursday": "Donnerstag",
+          "friday": "Freitag",
+          "saturday": "Samstag"
         }
       }
     }
