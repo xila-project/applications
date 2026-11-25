@@ -1,0 +1,38 @@
+{
+  "age": {
+    "hours": "{count}小时",
+    "minutes": "{count}分钟",
+    "seconds": "{count}秒"
+  },
+  "controls": {
+    "toggle": "切换",
+    "turn_on": "打开"
+  },
+  "errors": {
+    "configuration": "配置文件不完整或无效",
+    "http": "Home Assistant错误 {status}",
+    "invalid_response": "来自Home Assistant的意外响应",
+    "missing_token": "没有令牌: 请在token文件中添加",
+    "network": "无网络连接",
+    "not_found": "未找到实体 (404)",
+    "storage": "无法读取配置",
+    "timeout": "Home Assistant未及时响应",
+    "too_large": "响应过大",
+    "unauthorized": "Home Assistant拒绝了令牌 (401 或 403)"
+  },
+  "header": {
+    "loading": "加载中...",
+    "title": "Home Assistant",
+    "updated": "更新于{age}前"
+  },
+  "invalid": {
+    "entity": "实体标识符由域和对象标识符组成，例如light.living_room",
+    "refresh": "刷新间隔必须是至少10秒的整数",
+    "too_many_entities": "实体过多（最多24个）",
+    "url": "URL必须以https://或http://开头，且不能包含?、#或@"
+  },
+  "main": {
+    "no_entities": "没有要显示的实体: 请在configuration.json中添加。",
+    "not_configured": "没有配置: 请编写configuration.json和token文件。"
+  }
+}

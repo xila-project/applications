@@ -1,0 +1,38 @@
+{
+  "age": {
+    "hours": "{count} Std.",
+    "minutes": "{count} Min.",
+    "seconds": "{count} Sek."
+  },
+  "controls": {
+    "toggle": "Umschalten",
+    "turn_on": "Einschalten"
+  },
+  "errors": {
+    "configuration": "Die Konfigurationsdatei ist unvollständig oder ungültig",
+    "http": "Home-Assistant-Fehler {status}",
+    "invalid_response": "Unerwartete Antwort von Home Assistant",
+    "missing_token": "Kein Token: Legen Sie eines in der Token-Datei an",
+    "network": "Keine Netzwerkverbindung",
+    "not_found": "Entität nicht gefunden (404)",
+    "storage": "Die Konfiguration konnte nicht gelesen werden",
+    "timeout": "Home Assistant hat nicht rechtzeitig geantwortet",
+    "too_large": "Die Antwort ist zu groß",
+    "unauthorized": "Home Assistant hat das Token abgelehnt (401 oder 403)"
+  },
+  "header": {
+    "loading": "Laden...",
+    "title": "Home Assistant",
+    "updated": "Vor {age} aktualisiert"
+  },
+  "invalid": {
+    "entity": "Eine Entitäts-ID besteht aus Domäne und Objekt-ID, etwa light.living_room",
+    "refresh": "Die Aktualisierungsperiode muss eine ganze Zahl von mindestens 10 Sekunden sein",
+    "too_many_entities": "Es gibt zu viele Entitäten (höchstens 24)",
+    "url": "Die URL muss mit https:// oder http:// beginnen und darf kein ?, # oder @ enthalten"
+  },
+  "main": {
+    "no_entities": "Keine Entitäten anzuzeigen: Fügen Sie welche zur Datei configuration.json hinzu.",
+    "not_configured": "Keine Konfiguration: Schreiben Sie configuration.json und eine Token-Datei."
+  }
+}

@@ -205,16 +205,34 @@ impl<S: Source> Reader<S> {
     }
 
     /// Reads a string and cuts it at `limit` bytes, on a character boundary.
+    /// The read window can end inside a multi-byte character; the incomplete
+    /// tail is dropped before the cut.
     pub fn truncated_string(&mut self, limit: usize) -> Result<String> {
-        let mut text = Vec::new();
+        let mut bytes = Vec::new();
         self.expect(b'"')?;
-        self.read_string(&mut |bytes| {
-            if text.len() < limit + 4 {
-                text.extend_from_slice(bytes);
+        self.read_string(&mut |chunk| {
+            if bytes.len() < limit + 4 {
+                bytes.extend_from_slice(chunk);
             }
             Ok(())
         })?;
-        let mut text = String::from_utf8(text).map_err(|_| Error::InvalidResponse)?;
+        let bytes = match String::from_utf8(bytes) {
+            Ok(text) => text.into_bytes(),
+            Err(error) => {
+                let utf8_error = error.utf8_error();
+                let valid_up_to = utf8_error.valid_up_to();
+                // Only an incomplete character at the cut may be dropped;
+                // any other invalid byte fails the answer.
+                let invalid = utf8_error.error_len().is_some();
+                let mut bytes = error.into_bytes();
+                if invalid {
+                    return Err(Error::InvalidResponse);
+                }
+                bytes.truncate(valid_up_to);
+                bytes
+            }
+        };
+        let mut text = String::from_utf8(bytes).map_err(|_| Error::InvalidResponse)?;
         if text.len() > limit {
             let mut end = limit;
             while !text.is_char_boundary(end) {
@@ -468,6 +486,19 @@ mod tests {
     fn limits_and_errors() {
         assert_eq!(reader("\"abcdef\"").string(3), Err(Error::TooLarge));
         assert_eq!(reader("\"aé\"").truncated_string(2).unwrap(), "a");
+        // The read window can end inside a multi-byte character: the
+        // incomplete tail is dropped, then the cut lands on a boundary.
+        assert_eq!(reader("\"aéééé\"").truncated_string(2).unwrap(), "a");
+        assert_eq!(reader("\"aéééé\"").truncated_string(4).unwrap(), "aé");
+        assert_eq!(reader("\"日本語です\"").truncated_string(4).unwrap(), "日");
+        // An invalid byte inside the string still fails, cut or not.
+        let mut invalid = Reader::new(SliceSource::new(b"\"a\xFFb\""));
+        assert_eq!(invalid.truncated_string(10), Err(Error::InvalidResponse));
+        let mut invalid_long = Reader::new(SliceSource::new(b"\"a\xFFbbbbbbbbbbbbbbbbbbbb\""));
+        assert_eq!(
+            invalid_long.truncated_string(4),
+            Err(Error::InvalidResponse)
+        );
         assert_eq!(reader("{\"a\" 1}").skip(), Ok(()), "skip is lenient");
         assert_eq!(
             reader("{\"a\" 1}").object(|json, _| json.skip()),

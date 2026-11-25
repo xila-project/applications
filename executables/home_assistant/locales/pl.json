@@ -1,0 +1,38 @@
+{
+  "age": {
+    "hours": "{count} godz.",
+    "minutes": "{count} min",
+    "seconds": "{count} s"
+  },
+  "controls": {
+    "toggle": "Przełącz",
+    "turn_on": "Włącz"
+  },
+  "errors": {
+    "configuration": "Plik konfiguracji jest niekompletny lub nieprawidłowy",
+    "http": "Błąd Home Assistant {status}",
+    "invalid_response": "Nieoczekiwana odpowiedź od Home Assistant",
+    "missing_token": "Brak tokenu: dodaj go do pliku token",
+    "network": "Brak połączenia sieciowego",
+    "not_found": "Nie znaleziono encji (404)",
+    "storage": "Nie można odczytać konfiguracji",
+    "timeout": "Home Assistant nie odpowiedział na czas",
+    "too_large": "Odpowiedź jest za duża",
+    "unauthorized": "Home Assistant odrzucił token (401 lub 403)"
+  },
+  "header": {
+    "loading": "Ładowanie...",
+    "title": "Home Assistant",
+    "updated": "Zaktualizowano {age} temu"
+  },
+  "invalid": {
+    "entity": "Identyfikator encji zawiera domenę i identyfikator obiektu, na przykład light.living_room",
+    "refresh": "Okres odświeżania musi być liczbą całkowitą co najmniej 10 sekund",
+    "too_many_entities": "Za dużo encji (maksymalnie 24)",
+    "url": "Adres URL musi zaczynać się od https:// lub http:// i nie może zawierać ?, # ani @"
+  },
+  "main": {
+    "no_entities": "Brak encji do pokazania: dodaj je do pliku configuration.json.",
+    "not_configured": "Brak konfiguracji: napisz configuration.json i plik token."
+  }
+}

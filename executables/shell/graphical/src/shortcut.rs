@@ -176,6 +176,11 @@ mod shortcut_tests {
                 "dashboard",
                 include_str!("../../../dashboard/shortcut.json"),
             ),
+            (
+                "xila.home-assistant",
+                "home_assistant",
+                include_str!("../../../home_assistant/shortcut.json"),
+            ),
         ] {
             let mut shortcut = Shortcut::from_str(source).unwrap();
             let path = alloc::format!("/applications/bundles/{identifier}");

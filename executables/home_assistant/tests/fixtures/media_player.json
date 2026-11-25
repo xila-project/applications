@@ -1,0 +1,27 @@
+{
+  "entity_id": "media_player.television",
+  "state": "playing",
+  "attributes": {
+    "friendly_name": "Television",
+    "media_content_id": "http://192.168.1.10:8080/news.m3u8",
+    "media_content_type": "music",
+    "media_duration": 0,
+    "media_position": 0,
+    "media_title": "The News",
+    "media_artist": "Channel One",
+    "media_album_name": "Live",
+    "source": "Live TV",
+    "source_list": ["Live TV", "HDMI 1", "HDMI 2"],
+    "volume_level": 0.4,
+    "is_volume_muted": false,
+    "supported_features": 21509,
+    "icon": "mdi:television"
+  },
+  "last_changed": "2026-11-25T10:02:00.000000+00:00",
+  "last_updated": "2026-11-25T10:02:00.000000+00:00",
+  "context": {
+    "id": "01KJ6V0Z0T8Y4W2Q3M9X1B7C5L",
+    "parent_id": null,
+    "user_id": null
+  }
+}

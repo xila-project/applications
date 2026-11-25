@@ -1,0 +1,16 @@
+{
+  "entity_id": "script.morning",
+  "state": "on",
+  "attributes": {
+    "friendly_name": "Morning routine",
+    "last_triggered": "2026-11-25T06:30:00.000000+00:00",
+    "icon": "mdi:weather-sunset-up"
+  },
+  "last_changed": "2026-11-25T06:30:01.000000+00:00",
+  "last_updated": "2026-11-25T06:30:01.000000+00:00",
+  "context": {
+    "id": "01KJ6V0Z0T8Y4W2Q3M9X1B7C5H",
+    "parent_id": null,
+    "user_id": null
+  }
+}

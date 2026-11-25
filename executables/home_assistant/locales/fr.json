@@ -1,0 +1,38 @@
+{
+  "age": {
+    "hours": "{count} h",
+    "minutes": "{count} min",
+    "seconds": "{count} s"
+  },
+  "controls": {
+    "toggle": "Basculer",
+    "turn_on": "Activer"
+  },
+  "errors": {
+    "configuration": "Le fichier de configuration est incomplet ou invalide",
+    "http": "Erreur Home Assistant {status}",
+    "invalid_response": "Réponse inattendue de Home Assistant",
+    "missing_token": "Aucun jeton : ajoutez-en un dans le fichier token",
+    "network": "Pas de connexion réseau",
+    "not_found": "Entité introuvable (404)",
+    "storage": "Impossible de lire la configuration",
+    "timeout": "Home Assistant n’a pas répondu à temps",
+    "too_large": "La réponse est trop volumineuse",
+    "unauthorized": "Home Assistant a refusé le jeton (401 ou 403)"
+  },
+  "header": {
+    "loading": "Chargement…",
+    "title": "Home Assistant",
+    "updated": "Mis à jour il y a {age}"
+  },
+  "invalid": {
+    "entity": "Un identifiant d’entité contient un domaine et un identifiant d’objet, comme light.living_room",
+    "refresh": "La période de rafraîchissement doit être un nombre entier d’au moins 10 secondes",
+    "too_many_entities": "Il y a trop d’entités (24 au maximum)",
+    "url": "L’URL doit commencer par https:// ou http:// et ne contient ni ?, ni #, ni @."
+  },
+  "main": {
+    "no_entities": "Aucune entité à afficher : ajoutez-en dans configuration.json.",
+    "not_configured": "Aucune configuration : écrivez configuration.json et un fichier token."
+  }
+}
