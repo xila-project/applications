@@ -8,10 +8,12 @@
 embedded_i18n::i18n!("locales");
 
 pub mod api;
+pub mod auth;
 pub mod configuration;
 pub mod error;
 pub mod json;
 pub mod net;
+pub mod picker;
 pub mod service;
 pub mod state;
 pub mod storage;

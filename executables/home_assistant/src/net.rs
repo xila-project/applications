@@ -63,15 +63,39 @@ impl Endpoint {
         }
     }
 
-    /// The request bytes for `path`, below the base path.
+    /// The request bytes for `path`, below the base path, with the bearer
+    /// `token` and a JSON `body`.
     pub fn request(&self, method: &str, path: &str, token: &str, body: Option<&[u8]>) -> Vec<u8> {
+        self.request_head(
+            method,
+            path,
+            Some(token),
+            body.map(|_| "application/json"),
+            body,
+        )
+    }
+
+    /// The request bytes for `path`, below the base path, with an optional
+    /// bearer token and an optional body with its content type.
+    pub fn request_head(
+        &self,
+        method: &str,
+        path: &str,
+        token: Option<&str>,
+        content_type: Option<&str>,
+        body: Option<&[u8]>,
+    ) -> Vec<u8> {
         let mut head = format!(
-            "{method} {}{path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nUser-Agent: {USER_AGENT}\r\nAuthorization: Bearer {token}\r\n",
+            "{method} {}{path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nUser-Agent: {USER_AGENT}\r\n",
             self.base_path, self.host
         );
+        if let Some(token) = token {
+            head.push_str(&format!("Authorization: Bearer {token}\r\n"));
+        }
         if let Some(body) = body {
+            let content_type = content_type.unwrap_or("application/json");
             head.push_str(&format!(
-                "Content-Type: application/json\r\nContent-Length: {}\r\n",
+                "Content-Type: {content_type}\r\nContent-Length: {}\r\n",
                 body.len()
             ));
         }
@@ -81,6 +105,19 @@ impl Endpoint {
             request.extend_from_slice(body);
         }
         request
+    }
+
+    /// The request bytes for an `application/x-www-form-urlencoded` body on
+    /// `path`, without an authorization header: the authentication endpoints
+    /// take no token.
+    pub fn request_form(&self, method: &str, path: &str, body: &str) -> Vec<u8> {
+        self.request_head(
+            method,
+            path,
+            None,
+            Some("application/x-www-form-urlencoded"),
+            Some(body.as_bytes()),
+        )
     }
 }
 
@@ -164,6 +201,19 @@ pub fn read_response<T: Transport>(mut transport: T) -> Result<(u16, Body<T>)> {
             received: filled - body,
         },
     ))
+}
+
+/// Reads a whole plain-text body, at most `limit` bytes: the answer of
+/// `POST /api/template` is the rendered template as plain text.
+pub fn read_body<T: Transport>(body: &mut Body<T>, limit: usize) -> Result<String> {
+    let mut bytes = Vec::new();
+    while let Some(byte) = body.next_byte()? {
+        if bytes.len() >= limit {
+            return Err(Error::TooLarge);
+        }
+        bytes.push(byte);
+    }
+    String::from_utf8(bytes).map_err(|_| Error::InvalidResponse)
 }
 
 /// Errors for statuses no caller handles.

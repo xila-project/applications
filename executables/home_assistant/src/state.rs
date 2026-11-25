@@ -49,6 +49,12 @@ impl Domain {
         }
     }
 
+    /// Whether the picker offers the domain: the domains the application
+    /// shows with controls or as a value.
+    pub fn is_supported(&self) -> bool {
+        !matches!(self, Self::Other)
+    }
+
     /// Whether the domain is a value only, without controls.
     pub fn is_value_only(&self) -> bool {
         matches!(self, Self::Sensor | Self::BinarySensor | Self::Other)
@@ -235,6 +241,9 @@ mod tests {
             Domain::MediaPlayer
         );
         assert_eq!(Domain::parse("weather.home"), Domain::Other);
+        assert!(Domain::Light.is_supported());
+        assert!(Domain::MediaPlayer.is_supported());
+        assert!(!Domain::Other.is_supported());
         assert_eq!(controls(Domain::Light), &[Control::Toggle]);
         assert_eq!(controls(Domain::Switch), &[Control::Toggle]);
         assert_eq!(controls(Domain::InputBoolean), &[Control::Toggle]);

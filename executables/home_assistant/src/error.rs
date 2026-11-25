@@ -12,6 +12,9 @@ pub enum Error {
     Timeout,
     /// Home Assistant refused the token (401 or 403).
     Unauthorized,
+    /// The refresh token was revoked (400 on a token refresh): the device
+    /// is signed out.
+    Revoked,
     /// The entity does not exist (404).
     NotFound,
     /// Any other unexpected HTTP status.

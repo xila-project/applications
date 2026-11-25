@@ -3,6 +3,8 @@ embedded_i18n::i18n!("locales");
 #[cfg(target_arch = "wasm32")]
 mod interface;
 #[cfg(target_arch = "wasm32")]
+mod settings;
+#[cfg(target_arch = "wasm32")]
 mod widgets;
 
 #[cfg(target_arch = "wasm32")]

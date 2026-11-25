@@ -1,11 +1,13 @@
-//! Configuration and token files.
+//! Configuration, credentials and token files.
 //!
-//! Both live in the application's private configuration directory, which the
+//! All live in the application's private configuration directory, which the
 //! WebAssembly runner creates for each user with owner-only permissions and
-//! passes in `XILA_APPLICATION_CONFIGURATION`. The token never sits in the
-//! configuration file: it stays in its own file, and is never logged or
+//! passes in `XILA_APPLICATION_CONFIGURATION`. The credentials never sit in
+//! the configuration file: the refresh token of a sign-in stays in its own
+//! file, a long-lived access token in another, and neither is ever logged or
 //! shown.
 
+use crate::auth::Credentials;
 use crate::configuration::Configuration;
 use crate::error::{Error, Result};
 use std::{
@@ -18,14 +20,17 @@ use std::{
 
 pub const CONFIGURATION_FILE: &str = "configuration.json";
 pub const TOKEN_FILE: &str = "token";
+pub const CREDENTIALS_FILE: &str = "credentials.json";
 /// Largest configuration file read.
 const MAXIMUM_CONFIGURATION_SIZE: u64 = 16 * 1024;
+/// Largest credentials file read.
+const MAXIMUM_CREDENTIALS_SIZE: u64 = 4 * 1024;
 /// Largest token accepted.
 pub const MAXIMUM_TOKEN_LENGTH: usize = 512;
 
-/// A token is sent in a header: printable ASCII only, so that no character
-/// can end the header line or start another one.
-fn is_valid_token(token: &str) -> bool {
+/// A token is sent in a header or a request body: printable ASCII only, so
+/// that no character can end the line or break the body.
+pub fn is_valid_token(token: &str) -> bool {
     !token.is_empty()
         && token.len() <= MAXIMUM_TOKEN_LENGTH
         && token.bytes().all(|byte| byte.is_ascii_graphic())
@@ -114,6 +119,50 @@ impl Storage {
         self.write(TOKEN_FILE, token.as_bytes())
     }
 
+    /// The credentials of a sign-in, or `None` when there are none.
+    pub fn credentials(&self) -> Result<Option<Credentials>> {
+        let path = self.directory.join(CREDENTIALS_FILE);
+        match fs::metadata(&path) {
+            Ok(metadata) if metadata.len() > MAXIMUM_CREDENTIALS_SIZE => {
+                return Err(Error::TooLarge);
+            }
+            Ok(_) => (),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(_) => return Err(Error::Storage),
+        }
+        let text = fs::read_to_string(path).map_err(|_| Error::Storage)?;
+        Credentials::parse(&text).map(Some)
+    }
+
+    /// Writes the credentials atomically; the refresh token passes the same
+    /// validation as a long-lived token.
+    pub fn save_credentials(&self, credentials: &Credentials) -> Result<()> {
+        let json = credentials.to_json();
+        if json.len() as u64 > MAXIMUM_CREDENTIALS_SIZE {
+            return Err(Error::TooLarge);
+        }
+        self.write(CREDENTIALS_FILE, json.as_bytes())
+    }
+
+    /// Deletes the credentials file, for a sign-out or a switch to a
+    /// long-lived token.
+    pub fn remove_credentials(&self) -> Result<()> {
+        match fs::remove_file(self.directory.join(CREDENTIALS_FILE)) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(_) => Err(Error::Storage),
+        }
+    }
+
+    /// Deletes the token file, for a sign-out or a switch to a sign-in.
+    pub fn remove_token(&self) -> Result<()> {
+        match fs::remove_file(self.directory.join(TOKEN_FILE)) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+            Err(_) => Err(Error::Storage),
+        }
+    }
+
     /// Writes a temporary file, then renames it over `name`, so a failed
     /// write leaves the previous file in place.
     fn write(&self, name: &str, contents: &[u8]) -> Result<()> {
@@ -196,6 +245,27 @@ mod tests {
         storage.save_token("eyJhbGciOi").unwrap();
         fs::write(path.join(CONFIGURATION_FILE), "{").unwrap();
         assert_eq!(storage.load(), Err(Error::Configuration));
+
+        // The credentials file holds the refresh token and the user name.
+        assert_eq!(storage.credentials(), Ok(None));
+        let credentials = Credentials::new("refresh-1", Some(String::from("Alice"))).unwrap();
+        storage.save_credentials(&credentials).unwrap();
+        assert_eq!(storage.credentials().unwrap().as_ref(), Some(&credentials));
+        assert!(!path.join(".credentials.json.new").exists());
+        fs::write(
+            path.join(CREDENTIALS_FILE),
+            "{\"refresh_token\":\"bad token\"}",
+        )
+        .unwrap();
+        assert_eq!(storage.credentials(), Err(Error::MissingToken));
+        fs::write(path.join(CREDENTIALS_FILE), "not json").unwrap();
+        assert_eq!(storage.credentials(), Err(Error::Configuration));
+        storage.remove_credentials().unwrap();
+        assert_eq!(storage.credentials(), Ok(None));
+        storage.remove_credentials().unwrap();
+        storage.remove_token().unwrap();
+        assert_eq!(storage.token(), Ok(None));
+        storage.remove_token().unwrap();
 
         // A configuration that could not be read back is not written.
         let huge = Configuration {
