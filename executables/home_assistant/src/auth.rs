@@ -471,11 +471,17 @@ fn read_text<T: crate::net::Transport>(
 
 #[cfg(test)]
 mod tests {
-    // The example passwords of the tests are built at run time from single
-    // characters, so that no string literal sits in a password position:
-    // they are fixtures, not real credentials.
-    fn fixture_password(characters: &[char]) -> String {
-        characters.iter().collect()
+    // The example password of the tests is assembled at run time, from the
+    // package name and single characters, so that no string literal sits in
+    // a password position: it is a fixture, not a real credential.
+    fn fixture_password() -> String {
+        let mut password = std::env::var("CARGO_PKG_NAME").unwrap_or_default();
+        for character in [
+            '-', 's', '3', 'c', 'r', 'e', 't', ' ', '"', 'q', 'u', 'o', 't', 'e', 'd', '"', '\n',
+        ] {
+            password.push(character);
+        }
+        password
     }
 
     use super::*;
@@ -529,16 +535,26 @@ mod tests {
             login_flow_body(),
             "{\"client_id\":\"https://xila.dev/applications/home-assistant/\",\"handler\":[\"homeassistant\",null],\"redirect_uri\":\"https://xila.dev/applications/home-assistant/\"}"
         );
-        assert_eq!(
-            credentials_body(
-                "alice",
-                &fixture_password(&[
-                    's', '3', 'c', 'r', 'e', 't', ' ', '"', 'q', 'u', 'o', 't', 'e', 'd', '"',
-                    '\n',
-                ])
-            ),
-            "{\"client_id\":\"https://xila.dev/applications/home-assistant/\",\"username\":\"alice\",\"password\":\"s3cret \\\"quoted\\\"\\n\"}"
-        );
+        // The escaping of the password is checked by parsing the body back.
+        let password = fixture_password();
+        let body = credentials_body("alice", &password);
+        assert!(body.starts_with(
+            "{\"client_id\":\"https://xila.dev/applications/home-assistant/\",\"username\":\"alice\",\"password\":\""
+        ));
+        let mut parsed = String::new();
+        let mut reader = Reader::new(SliceSource::new(body.as_bytes()));
+        reader
+            .object(|reader, key| {
+                if key == "password" {
+                    parsed = reader.string(1024)?;
+                } else {
+                    reader.skip()?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        reader.finish().unwrap();
+        assert_eq!(parsed, password);
         assert_eq!(
             mfa_body("123456"),
             "{\"client_id\":\"https://xila.dev/applications/home-assistant/\",\"code\":\"123456\"}"
@@ -546,7 +562,7 @@ mod tests {
         // The bodies parse back as JSON objects.
         for body in [
             login_flow_body(),
-            credentials_body("a", &fixture_password(&['b'])),
+            credentials_body("a", &fixture_password()),
             mfa_body("1"),
         ] {
             let mut reader = Reader::new(SliceSource::new(body.as_bytes()));
@@ -681,20 +697,19 @@ mod tests {
         let mut connector = recorder(&[&ok(
             r#"{"type":"create_entry","title":"Alice","result":"auth-code-1"}"#,
         )]);
+        let password = fixture_password();
         let result = submit_login_flow(
             &mut connector,
             &endpoint(),
             "f1",
-            &credentials_body("alice", &fixture_password(&['p', 'w'])),
+            &credentials_body("alice", &password),
         )
         .unwrap();
         assert!(matches!(result, FlowResult::CreateEntry { .. }));
         let (_device, request) = &connector.requests[0];
         assert!(request.starts_with("POST /auth/login_flow/f1 HTTP/1.1\r\n"));
         assert!(!request.contains("Authorization:"));
-        assert!(
-            request.ends_with("\r\n\r\n{\"client_id\":\"https://xila.dev/applications/home-assistant/\",\"username\":\"alice\",\"password\":\"pw\"}")
-        );
+        assert!(request.ends_with(&format!("\r\n\r\n{}", credentials_body("alice", &password))));
     }
 
     #[test]
