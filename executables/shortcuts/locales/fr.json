@@ -13,11 +13,14 @@
   "errors": {
     "busy": "L’appareil est occupé",
     "configuration": "Le fichier de paramètres est invalide",
+    "configuration_replaced": "Le fichier de paramètres invalide est remplacé par les paramètres actuels",
     "invalid_status": "L’appareil a répondu un état invalide",
     "io": "L’appareil d’émulation a échoué",
     "missing": "L’appareil d’émulation n’existe pas sur ce Xila",
     "not_connected": "Aucun ordinateur n’est connecté",
+    "profile_empty": "Le profil {profile} n’a pas de boutons",
     "profiles": "Le fichier de profils est invalide",
+    "profiles_ignored": "{count} boutons ignorés : le raccourci de {id} dans le profil {profile} est invalide",
     "storage": "La configuration n’a pas pu être lue",
     "too_large": "Le fichier de configuration est trop volumineux"
   },

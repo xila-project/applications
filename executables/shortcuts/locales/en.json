@@ -13,11 +13,14 @@
   "errors": {
     "busy": "The device is busy",
     "configuration": "The settings file is invalid",
+    "configuration_replaced": "The invalid settings file is replaced with the current settings",
     "invalid_status": "The device answered an invalid status",
     "io": "The emulation device failed",
     "missing": "The emulation device does not exist on this Xila",
     "not_connected": "No computer is connected",
+    "profile_empty": "The {profile} profile has no buttons",
     "profiles": "The profiles file is invalid",
+    "profiles_ignored": "Ignored {count} buttons with an invalid shortcut; the first is {id} in the {profile} profile",
     "storage": "The configuration could not be read",
     "too_large": "The configuration file is too large"
   },

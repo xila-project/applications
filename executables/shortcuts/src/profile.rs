@@ -57,20 +57,32 @@ impl Profile {
         })
     }
 
+    /// The translated name of the profile, shown in the settings list and in
+    /// the notices.
+    pub fn name(&self) -> String {
+        match self {
+            Self::Windows => String::from(t!("settings.windows")),
+            Self::Macos => String::from(t!("settings.macos")),
+            Self::Gnome => String::from(t!("settings.gnome")),
+        }
+    }
+
     /// The built-in buttons of the profile, as shortcut texts.
     pub fn default_buttons(&self) -> Vec<Button> {
         let entries: &[(&str, &str)] = match self {
             Self::Windows => &[
                 ("screenshot", "Win+Shift+S"),
-                ("screenshot_full", "Print Screen"),
+                // Win+Print Screen saves the full screen to a file.
+                ("screenshot_full", "Win+Print Screen"),
                 ("copy", "Ctrl+C"),
                 ("paste", "Ctrl+V"),
                 ("undo", "Ctrl+Z"),
                 ("lock", "Win+L"),
                 ("switch_window", "Alt+Tab"),
                 ("show_desktop", "Win+D"),
-                // Windows 11 mutes the microphone system wide.
-                ("mute_microphone", "Win+Alt+M"),
+                // Mutes the microphone in the applications that support it,
+                // for example Microsoft Teams.
+                ("mute_microphone", "Win+Alt+K"),
             ],
             Self::Macos => &[
                 ("screenshot", "Cmd+Shift+4"),
@@ -114,11 +126,25 @@ pub struct Button {
     pub label: Option<String>,
 }
 
+/// A button whose shortcut text does not parse: the profile and the button
+/// identifier, reported in the notice instead of disappearing silently.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InvalidButton {
+    pub profile: Profile,
+    pub id: String,
+    pub reason: crate::shortcut::ParseError,
+}
+
 /// The profiles file: a list of profiles, each with its buttons. A profile
 /// that is absent from the file keeps its built-in buttons.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Profiles {
     entries: Vec<(Profile, Vec<Button>)>,
+    /// The buttons ignored because their shortcut text does not parse with
+    /// the layout the file was parsed with.
+    pub invalid: Vec<InvalidButton>,
+    /// The profiles of the file with an empty button list.
+    pub empty: Vec<Profile>,
 }
 
 /// The file layout of `profiles.json`.
@@ -134,9 +160,12 @@ struct ProfileFile {
 }
 
 impl Profiles {
-    /// Parses the profiles file. An unknown profile identifier, a duplicate
-    /// button identifier or an over-long field is [`Error::Profiles`].
-    pub fn parse(text: &str) -> Result<Self> {
+    /// Parses the profiles file and checks every `keys` text with `layout`.
+    /// An unknown profile identifier, a duplicate button identifier or an
+    /// over-long field is [`Error::Profiles`]; a button whose shortcut does
+    /// not parse is kept but reported in [`Profiles::invalid`], and a
+    /// profile with no buttons is reported in [`Profiles::empty`].
+    pub fn parse(text: &str, layout: Layout) -> Result<Self> {
         let file: File = json::from_str(text).map_err(|_| Error::Profiles)?;
         let mut entries = Vec::new();
         for profile_file in file.profiles {
@@ -166,7 +195,34 @@ impl Profiles {
             }
             entries.push((profile, buttons));
         }
-        Ok(Self { entries })
+        let mut profiles = Self {
+            entries,
+            invalid: Vec::new(),
+            empty: Vec::new(),
+        };
+        profiles.recheck(layout);
+        Ok(profiles)
+    }
+
+    /// Recomputes [`Profiles::invalid`] and [`Profiles::empty`] with
+    /// `layout`, for example after the layout setting changed.
+    pub fn recheck(&mut self, layout: Layout) {
+        self.invalid.clear();
+        self.empty.clear();
+        for (profile, buttons) in &self.entries {
+            if buttons.is_empty() {
+                self.empty.push(*profile);
+            }
+            for button in buttons {
+                if let Err(reason) = Shortcut::parse(&button.keys, layout) {
+                    self.invalid.push(InvalidButton {
+                        profile: *profile,
+                        id: button.id.clone(),
+                        reason,
+                    });
+                }
+            }
+        }
     }
 
     /// Writes the profiles as the profiles file text.
@@ -271,6 +327,8 @@ pub fn parse_error_text(error: &crate::shortcut::ParseError) -> String {
         ParseError::Empty => String::from("empty"),
         ParseError::Unknown(token) => token.clone(),
         ParseError::TooManyKeys => String::from("too many keys"),
+        ParseError::EmptyToken => String::from("empty token"),
+        ParseError::ModifierOnly => String::from("modifier only"),
     }
 }
 
@@ -300,14 +358,14 @@ mod tests {
                 .clone()
         };
         assert_eq!(find(&windows, "screenshot"), "Win+Shift+S");
-        assert_eq!(find(&windows, "screenshot_full"), "Print Screen");
+        assert_eq!(find(&windows, "screenshot_full"), "Win+Print Screen");
         assert_eq!(find(&windows, "copy"), "Ctrl+C");
         assert_eq!(find(&windows, "paste"), "Ctrl+V");
         assert_eq!(find(&windows, "undo"), "Ctrl+Z");
         assert_eq!(find(&windows, "lock"), "Win+L");
         assert_eq!(find(&windows, "switch_window"), "Alt+Tab");
         assert_eq!(find(&windows, "show_desktop"), "Win+D");
-        assert_eq!(find(&windows, "mute_microphone"), "Win+Alt+M");
+        assert_eq!(find(&windows, "mute_microphone"), "Win+Alt+K");
 
         let macos = Profile::Macos.default_buttons();
         assert_eq!(find(&macos, "screenshot"), "Cmd+Shift+4");
@@ -347,6 +405,8 @@ mod tests {
             profiles.buttons(Profile::Windows),
             Profile::Windows.default_buttons()
         );
+        assert!(profiles.invalid.is_empty());
+        assert!(profiles.empty.is_empty());
 
         // A file replaces the buttons of the profiles it lists.
         let text = r#"{
@@ -360,7 +420,7 @@ mod tests {
                 }
             ]
         }"#;
-        let profiles = Profiles::parse(text).unwrap();
+        let profiles = Profiles::parse(text, Layout::Qwerty).unwrap();
         let buttons = profiles.buttons(Profile::Macos);
         assert_eq!(buttons.len(), 2);
         assert_eq!(buttons[0].keys, "Cmd+Shift+5");
@@ -369,7 +429,55 @@ mod tests {
             profiles.buttons(Profile::Gnome),
             Profile::Gnome.default_buttons()
         );
-        assert_eq!(Profiles::parse(&profiles.to_json()).unwrap(), profiles);
+        assert_eq!(
+            Profiles::parse(&profiles.to_json(), Layout::Qwerty).unwrap(),
+            profiles
+        );
+    }
+
+    #[test]
+    fn profiles_file_reports_buttons_that_do_not_parse() {
+        // A button whose shortcut does not parse is kept in the file but
+        // reported with its profile and identifier; a profile with no
+        // buttons is reported too.
+        let text = r#"{
+            "profiles": [
+                {
+                    "id": "windows",
+                    "buttons": [
+                        { "id": "screenshot", "keys": "Win+Shift+S" },
+                        { "id": "broken", "keys": "Ctrl+Nope" },
+                        { "id": "trailing", "keys": "Ctrl+" },
+                        { "id": "only_mods", "keys": "Ctrl+Shift" }
+                    ]
+                },
+                { "id": "gnome", "buttons": [] }
+            ]
+        }"#;
+        let profiles = Profiles::parse(text, Layout::Qwerty).unwrap();
+        assert_eq!(profiles.invalid.len(), 3);
+        assert_eq!(profiles.invalid[0].profile, Profile::Windows);
+        assert_eq!(profiles.invalid[0].id, "broken");
+        assert_eq!(
+            parse_error_text(&profiles.invalid[0].reason),
+            "Nope".to_string()
+        );
+        assert_eq!(profiles.invalid[1].id, "trailing");
+        assert_eq!(parse_error_text(&profiles.invalid[1].reason), "empty token");
+        assert_eq!(profiles.invalid[2].id, "only_mods");
+        assert_eq!(
+            parse_error_text(&profiles.invalid[2].reason),
+            "modifier only"
+        );
+        assert_eq!(profiles.empty, [Profile::Gnome]);
+        // The invalid buttons do not compile.
+        let compiled = compile(&profiles.buttons(Profile::Windows), Layout::Qwerty);
+        assert_eq!(compiled.len(), 1);
+        assert_eq!(compiled[0].id, "screenshot");
+        // A layout change recomputes the report.
+        let mut profiles = profiles;
+        profiles.recheck(Layout::Azerty);
+        assert_eq!(profiles.invalid.len(), 3);
     }
 
     #[test]
@@ -384,7 +492,11 @@ mod tests {
             r#"{"profiles": [{"id": "windows", "buttons": [{"id": "a", "keys": "Ctrl+C", "label": ""}]}]}"#,
             r#"{"profiles": [{"id": "windows", "buttons": []}, {"id": "windows", "buttons": []}]}"#,
         ] {
-            assert_eq!(Profiles::parse(text), Err(Error::Profiles), "{text}");
+            assert_eq!(
+                Profiles::parse(text, Layout::Qwerty),
+                Err(Error::Profiles),
+                "{text}"
+            );
         }
         // Too many buttons.
         let mut buttons = String::from("[");
@@ -396,7 +508,7 @@ mod tests {
         }
         buttons.push(']');
         let text = format!(r#"{{"profiles": [{{"id": "windows", "buttons": {buttons}}}]}}"#);
-        assert_eq!(Profiles::parse(&text), Err(Error::Profiles));
+        assert_eq!(Profiles::parse(&text, Layout::Qwerty), Err(Error::Profiles));
     }
 
     #[test]

@@ -1,16 +1,20 @@
 //! Shortcut parsing.
 //!
 //! A shortcut is written in the configuration file as tokens joined by `+`,
-//! for example `Win+Shift+S`, `Ctrl+C` or `Print Screen`. The tokens before
-//! the last key are modifiers; the key itself is a letter, a digit or a
-//! named key. Letters map through the keyboard layout setting, because HID
-//! sends key positions: `Ctrl+Z` means the key that shows Z on the keyboard
-//! of the user.
+//! for example `Win+Shift+S`, `Ctrl+C` or `Print Screen`. The tokens are
+//! modifiers followed by one or more keys; a key is a letter, a digit or a
+//! named key. The `+` key itself cannot be written, because `+` joins the
+//! tokens: a trailing `+` or an empty token is rejected. Letters map
+//! through the keyboard layout setting, because HID sends key positions:
+//! `Ctrl+Z` means the key that shows Z on the keyboard of the user. On
+//! AZERTY a digit gets Shift added, because the digit row produces
+//! `&é"'(-è_çà` without it.
 
 use crate::channel::{self, Channel};
 use crate::error::Result;
 use crate::hid::{KEY_COUNT, Modifiers, keyboard};
 use crate::layout::Layout;
+use crate::profile::Profile;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -26,6 +30,11 @@ pub enum ParseError {
     Unknown(String),
     /// More key usages than one keyboard message holds.
     TooManyKeys,
+    /// The text holds an empty token, such as a trailing `+`: the `+` key
+    /// cannot be written.
+    EmptyToken,
+    /// The text names only modifiers, no key.
+    ModifierOnly,
 }
 
 /// A parsed shortcut: the modifier bitmask and the key usages to press.
@@ -42,6 +51,9 @@ impl Shortcut {
     /// not be longer than [`MAXIMUM_TEXT_LENGTH`]; the profiles check that
     /// before parsing.
     pub fn parse(text: &str, layout: Layout) -> core::result::Result<Self, ParseError> {
+        if text.trim().is_empty() {
+            return Err(ParseError::Empty);
+        }
         let mut modifiers = Modifiers::NONE;
         let mut keys = [0u8; KEY_COUNT];
         let mut key_count = 0usize;
@@ -49,7 +61,9 @@ impl Shortcut {
         for token in text.split('+') {
             let token = token.trim();
             if token.is_empty() {
-                continue;
+                // A trailing `+` or a doubled `++`: the `+` key cannot be
+                // written, because `+` joins the tokens.
+                return Err(ParseError::EmptyToken);
             }
             saw_any = true;
             if let Some(bit) = modifier_of(token) {
@@ -67,6 +81,21 @@ impl Shortcut {
         if !saw_any {
             return Err(ParseError::Empty);
         }
+        if key_count == 0 {
+            return Err(ParseError::ModifierOnly);
+        }
+        // On AZERTY the digit row produces `&é"'(-è_çà` without Shift, so a
+        // shortcut that uses a digit adds Shift to send the digit itself. A
+        // digit that already has Shift is kept as it is.
+        if layout == Layout::Azerty
+            && keys[..key_count]
+                .iter()
+                .any(|usage| (keyboard::NUMBER_1..=keyboard::NUMBER_0).contains(usage))
+            && !modifiers.contains(Modifiers::LEFT_SHIFT)
+            && !modifiers.contains(Modifiers::RIGHT_SHIFT)
+        {
+            modifiers.insert(Modifiers::LEFT_SHIFT);
+        }
         Ok(Self {
             modifiers,
             keys,
@@ -79,34 +108,87 @@ impl Shortcut {
         channel::tap_keys(channel, self.modifiers, self.keys)
     }
 
-    /// The text of the shortcut with the key labels of the layout, such as
-    /// `Ctrl+Z` shown on an AZERTY keyboard.
-    pub fn display_text(&self, layout: Layout) -> String {
+    /// The text of the shortcut shown on the button, with the key labels of
+    /// the layout and the modifier names of the profile, such as `Ctrl+Z`
+    /// on an AZERTY keyboard. Windows and GNOME show the left GUI key as
+    /// `Win` or `Super` first, then `Ctrl`, `Alt` and `Shift`; macOS shows
+    /// `Ctrl`, `Option`, `Cmd` and `Shift`, with Alt shown as Option, so
+    /// `Cmd+Shift+4` displays as `Cmd+Shift+4`.
+    pub fn display_text(&self, layout: Layout, profile: Profile) -> String {
         let mut parts = Vec::new();
         let modifiers = self.modifiers;
-        if modifiers.contains(Modifiers::LEFT_GUI) {
-            parts.push(String::from("Win"));
-        }
-        if modifiers.contains(Modifiers::LEFT_CONTROL) {
-            parts.push(String::from("Ctrl"));
-        }
-        if modifiers.contains(Modifiers::LEFT_SHIFT) {
-            parts.push(String::from("Shift"));
-        }
-        if modifiers.contains(Modifiers::LEFT_ALT) {
-            parts.push(String::from("Alt"));
-        }
-        if modifiers.contains(Modifiers::RIGHT_CONTROL) {
-            parts.push(String::from("Right Ctrl"));
-        }
-        if modifiers.contains(Modifiers::RIGHT_SHIFT) {
-            parts.push(String::from("Right Shift"));
-        }
-        if modifiers.contains(Modifiers::RIGHT_ALT) {
-            parts.push(String::from("Alt Gr"));
-        }
-        if modifiers.contains(Modifiers::RIGHT_GUI) {
-            parts.push(String::from("Right Win"));
+        let gui = match profile {
+            Profile::Windows => "Win",
+            Profile::Macos => "Cmd",
+            Profile::Gnome => "Super",
+        };
+        let right_gui = match profile {
+            Profile::Windows => "Right Win",
+            Profile::Macos => "Right Cmd",
+            Profile::Gnome => "Right Super",
+        };
+        let alt = match profile {
+            Profile::Macos => "Option",
+            _ => "Alt",
+        };
+        let right_alt = match profile {
+            Profile::Macos => "Right Option",
+            _ => "Alt Gr",
+        };
+        match profile {
+            Profile::Macos => {
+                // macOS order: Ctrl, Option, Cmd, Shift.
+                if modifiers.contains(Modifiers::LEFT_CONTROL) {
+                    parts.push(String::from("Ctrl"));
+                }
+                if modifiers.contains(Modifiers::LEFT_ALT) {
+                    parts.push(String::from(alt));
+                }
+                if modifiers.contains(Modifiers::LEFT_GUI) {
+                    parts.push(String::from(gui));
+                }
+                if modifiers.contains(Modifiers::LEFT_SHIFT) {
+                    parts.push(String::from("Shift"));
+                }
+                if modifiers.contains(Modifiers::RIGHT_CONTROL) {
+                    parts.push(String::from("Right Ctrl"));
+                }
+                if modifiers.contains(Modifiers::RIGHT_ALT) {
+                    parts.push(String::from(right_alt));
+                }
+                if modifiers.contains(Modifiers::RIGHT_GUI) {
+                    parts.push(String::from(right_gui));
+                }
+                if modifiers.contains(Modifiers::RIGHT_SHIFT) {
+                    parts.push(String::from("Right Shift"));
+                }
+            }
+            Profile::Windows | Profile::Gnome => {
+                if modifiers.contains(Modifiers::LEFT_GUI) {
+                    parts.push(String::from(gui));
+                }
+                if modifiers.contains(Modifiers::LEFT_CONTROL) {
+                    parts.push(String::from("Ctrl"));
+                }
+                if modifiers.contains(Modifiers::LEFT_ALT) {
+                    parts.push(String::from(alt));
+                }
+                if modifiers.contains(Modifiers::LEFT_SHIFT) {
+                    parts.push(String::from("Shift"));
+                }
+                if modifiers.contains(Modifiers::RIGHT_CONTROL) {
+                    parts.push(String::from("Right Ctrl"));
+                }
+                if modifiers.contains(Modifiers::RIGHT_ALT) {
+                    parts.push(String::from(right_alt));
+                }
+                if modifiers.contains(Modifiers::RIGHT_SHIFT) {
+                    parts.push(String::from("Right Shift"));
+                }
+                if modifiers.contains(Modifiers::RIGHT_GUI) {
+                    parts.push(String::from(right_gui));
+                }
+            }
         }
         for &usage in &self.keys {
             if usage == 0 {
@@ -324,6 +406,28 @@ mod tests {
     }
 
     #[test]
+    fn azerty_digits_get_shift_added() {
+        // Ctrl+1 on AZERTY: the digit row produces & without Shift, so the
+        // shortcut becomes Ctrl+Shift+1 and the computer receives 1.
+        let shortcut = Shortcut::parse("Ctrl+1", Layout::Azerty).unwrap();
+        assert_eq!(
+            shortcut.modifiers,
+            Modifiers::LEFT_CONTROL | Modifiers::LEFT_SHIFT
+        );
+        assert_eq!(shortcut.modifiers.bits(), 0x03);
+        assert_eq!(shortcut.keys[0], keyboard::NUMBER_1);
+        // A digit that already has Shift is kept as it is.
+        let shortcut = Shortcut::parse("Cmd+Shift+4", Layout::Azerty).unwrap();
+        assert_eq!(shortcut.modifiers.bits(), 0x0A);
+        assert_eq!(shortcut.keys[0], keyboard::NUMBER_4);
+        // On the other layouts a digit gets no Shift.
+        let shortcut = Shortcut::parse("Ctrl+1", Layout::Qwerty).unwrap();
+        assert_eq!(shortcut.modifiers, Modifiers::LEFT_CONTROL);
+        let shortcut = Shortcut::parse("Ctrl+1", Layout::Qwertz).unwrap();
+        assert_eq!(shortcut.modifiers, Modifiers::LEFT_CONTROL);
+    }
+
+    #[test]
     fn rejects_invalid_texts() {
         assert_eq!(parse(""), Err(ParseError::Empty));
         assert_eq!(parse("   "), Err(ParseError::Empty));
@@ -332,21 +436,61 @@ mod tests {
             Err(ParseError::Unknown(String::from("Hyper")))
         );
         assert_eq!(parse("A+B+C+D+E+F+G"), Err(ParseError::TooManyKeys));
-        // A shortcut without a key is accepted as a modifier-only press.
-        let shortcut = parse("Ctrl").unwrap();
-        assert_eq!(shortcut.modifiers, Modifiers::LEFT_CONTROL);
-        assert_eq!(shortcut.keys, [0; KEY_COUNT]);
+        // A trailing `+` and a doubled `++` are rejected: the `+` key cannot
+        // be written.
+        assert_eq!(parse("Ctrl+"), Err(ParseError::EmptyToken));
+        assert_eq!(parse("Ctrl++C"), Err(ParseError::EmptyToken));
+        // A modifier-only shortcut is rejected.
+        assert_eq!(parse("Ctrl"), Err(ParseError::ModifierOnly));
+        assert_eq!(parse("Ctrl+Shift"), Err(ParseError::ModifierOnly));
     }
 
     #[test]
-    fn display_text_shows_the_layout_labels() {
+    fn display_text_shows_the_layout_labels_and_profile_names() {
         let shortcut = Shortcut::parse("Ctrl+Z", Layout::Qwerty).unwrap();
-        assert_eq!(shortcut.display_text(Layout::Qwerty), "Ctrl+Z");
-        assert_eq!(shortcut.display_text(Layout::Azerty), "Ctrl+W");
+        assert_eq!(
+            shortcut.display_text(Layout::Qwerty, Profile::Windows),
+            "Ctrl+Z"
+        );
+        assert_eq!(
+            shortcut.display_text(Layout::Azerty, Profile::Windows),
+            "Ctrl+W"
+        );
+        // The left GUI key is Win on Windows, Cmd on macOS, Super on GNOME.
         let shortcut = Shortcut::parse("Win+Shift+S", Layout::Qwerty).unwrap();
-        assert_eq!(shortcut.display_text(Layout::Qwerty), "Win+Shift+S");
+        assert_eq!(
+            shortcut.display_text(Layout::Qwerty, Profile::Windows),
+            "Win+Shift+S"
+        );
+        assert_eq!(
+            shortcut.display_text(Layout::Qwerty, Profile::Macos),
+            "Cmd+Shift+S"
+        );
+        assert_eq!(
+            shortcut.display_text(Layout::Qwerty, Profile::Gnome),
+            "Super+Shift+S"
+        );
+        // macOS shows the order Ctrl, Option, Cmd, Shift and Alt as Option.
+        let shortcut = Shortcut::parse("Ctrl+Alt+Shift+Cmd+S", Layout::Qwerty).unwrap();
+        assert_eq!(
+            shortcut.display_text(Layout::Qwerty, Profile::Macos),
+            "Ctrl+Option+Cmd+Shift+S"
+        );
+        assert_eq!(
+            shortcut.display_text(Layout::Qwerty, Profile::Windows),
+            "Win+Ctrl+Alt+Shift+S"
+        );
         let shortcut = Shortcut::parse("Print Screen", Layout::Qwerty).unwrap();
-        assert_eq!(shortcut.display_text(Layout::Qwerty), "Print Screen");
+        assert_eq!(
+            shortcut.display_text(Layout::Qwerty, Profile::Gnome),
+            "Print Screen"
+        );
+        // On AZERTY with a digit, the added Shift shows too.
+        let shortcut = Shortcut::parse("Ctrl+1", Layout::Azerty).unwrap();
+        assert_eq!(
+            shortcut.display_text(Layout::Azerty, Profile::Windows),
+            "Ctrl+Shift+1"
+        );
     }
 
     #[test]

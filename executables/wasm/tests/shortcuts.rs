@@ -9,9 +9,10 @@
 //! that records every 8-byte message and answers the GET_STATUS control
 //! command. A connected run taps play/pause and the screenshot button of
 //! each profile and checks the exact bytes, including the release messages.
-//! Busy and short writes are injected to check the retries. A second run
-//! without the device node checks the clear message and the disabled
-//! buttons.
+//! Busy and short writes are injected to check the retries, a failing press
+//! checks that the release is still sent, and a drag on the mouse pad
+//! checks the relative movement message. A second run without the device
+//! node checks the clear message and the disabled buttons.
 
 #[path = "support/applications.rs"]
 mod applications;
@@ -36,7 +37,7 @@ use xila::{
         ControlCommand, ControlCommandIdentifier, DirectBaseOperations, DirectCharacterDevice,
         IoErrorKind, MountOperations, Path, Size,
     },
-    graphics::{Manager, lvgl},
+    graphics::{Manager, Point, State, lvgl},
     shared::AnyByLayout,
 };
 
@@ -55,6 +56,9 @@ struct ScriptedHumanInterface {
     busy_writes: AtomicUsize,
     /// Accept only the first message of each write.
     short_writes: AtomicBool,
+    /// Writes whose first message is a press fail with NotConnected; the
+    /// release messages still go through.
+    fail_presses: AtomicBool,
     connected: AtomicBool,
     indicators: AtomicU8,
 }
@@ -65,6 +69,7 @@ impl ScriptedHumanInterface {
             messages: Mutex::new(Vec::new()),
             busy_writes: AtomicUsize::new(0),
             short_writes: AtomicBool::new(false),
+            fail_presses: AtomicBool::new(false),
             connected: AtomicBool::new(true),
             indicators: AtomicU8::new(0),
         }))
@@ -102,6 +107,11 @@ impl DirectBaseOperations for ScriptedHumanInterface {
         if self.busy_writes.load(Ordering::Relaxed) > 0 {
             self.busy_writes.fetch_sub(1, Ordering::Relaxed);
             return Poll::Ready(Err(IoErrorKind::WouldBlock));
+        }
+        // A press is a first message with any byte after the kind set.
+        let is_press = buffer.len() >= 8 && buffer[1..8].iter().any(|&byte| byte != 0);
+        if is_press && self.fail_presses.load(Ordering::Relaxed) {
+            return Poll::Ready(Err(IoErrorKind::NotConnected));
         }
         let count = if self.short_writes.load(Ordering::Relaxed) {
             buffer.len().min(8)
@@ -148,14 +158,24 @@ impl DirectBaseOperations for ScriptedHumanInterface {
 }
 
 unsafe fn find_label(root: *mut lvgl::lv_obj_t, text: &str) -> bool {
+    unsafe { !find_label_object(root, text).is_null() }
+}
+
+/// First label object whose text is `text`.
+unsafe fn find_label_object(root: *mut lvgl::lv_obj_t, text: &str) -> *mut lvgl::lv_obj_t {
     unsafe {
         if lvgl::lv_obj_has_class(root, &lvgl::lv_label_class)
             && CStr::from_ptr(lvgl::lv_label_get_text(root)).to_bytes() == text.as_bytes()
         {
-            return true;
+            return root;
         }
-        (0..lvgl::lv_obj_get_child_count(root))
-            .any(|index| find_label(lvgl::lv_obj_get_child(root, index as i32), text))
+        for index in 0..lvgl::lv_obj_get_child_count(root) {
+            let found = find_label_object(lvgl::lv_obj_get_child(root, index as i32), text);
+            if !found.is_null() {
+                return found;
+            }
+        }
+        core::ptr::null_mut()
     }
 }
 
@@ -284,6 +304,60 @@ async fn tap(manager: &Manager, caption: &str) {
             core::ptr::null_mut(),
         );
     }
+}
+
+/// Advances the fake clock past the input read period, then runs one LVGL
+/// timer pass under the graphics lock, so the injected input events are read
+/// and dispatched to the objects under the pointer.
+async fn pump_lvgl(manager: &Manager) {
+    xila::task::sleep(Duration::from_millis(50)).await;
+    let _lock = manager.synchronous_lock();
+    unsafe {
+        lvgl::lv_timer_handler();
+    }
+}
+
+/// Switches to the mouse pad tab and drags on the pad by (`dx`, `dy`)
+/// pixels, as a finger would: move to the pad center, press, move, release.
+async fn drag_on_pad(manager: &Manager, dx: i32, dy: i32) {
+    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let (center_x, center_y) = {
+        let _lock = manager.synchronous_lock();
+        unsafe {
+            let tabs = find_class(root, &raw const lvgl::lv_tabview_class);
+            assert!(!tabs.is_null(), "no tab view in the Shortcuts window");
+            // Media, shortcuts, mouse, settings.
+            lvgl::lv_tabview_set_active(tabs, 2, false);
+            lvgl::lv_obj_update_layout(root);
+            let hint = find_label_object(root, &text("mouse.pad_hint"));
+            assert!(!hint.is_null(), "no mouse pad hint label");
+            let tab = lvgl::lv_obj_get_parent(hint);
+            let main = lvgl::lv_obj_get_child(tab, 1);
+            let pad = lvgl::lv_obj_get_child(main, 0);
+            assert!(!pad.is_null(), "no mouse pad");
+            // Absolute screen coordinates of the pad.
+            let mut area: lvgl::lv_area_t = core::mem::zeroed();
+            lvgl::lv_obj_get_coords(pad, &mut area);
+            ((area.x1 + area.x2) / 2, (area.y1 + area.y2) / 2)
+        }
+    };
+    manager
+        .inject_pointer_move(Point::new(center_x as i16, center_y as i16))
+        .await
+        .unwrap();
+    pump_lvgl(manager).await;
+    manager.inject_pointer_button(State::Pressed).await.unwrap();
+    pump_lvgl(manager).await;
+    manager
+        .inject_pointer_move(Point::new((center_x + dx) as i16, (center_y + dy) as i16))
+        .await
+        .unwrap();
+    pump_lvgl(manager).await;
+    manager
+        .inject_pointer_button(State::Released)
+        .await
+        .unwrap();
+    pump_lvgl(manager).await;
 }
 
 /// Selects a value on the first dropdown of the window, as the settings tab
@@ -467,9 +541,10 @@ async fn real_shortcuts_guest_sends_media_and_profile_messages() {
     );
 
     // Switch the computer profile to macOS in the settings and tap the
-    // screenshot button again: Cmd+Shift+4.
+    // screenshot button again: Cmd+Shift+4. Wait for the new shortcut text
+    // to show, so the grid rebuild has finished before the tap.
     select_dropdown(manager, 1).await;
-    xila::task::sleep(Duration::from_millis(300)).await;
+    wait_label(manager, "Cmd+Shift+4").await;
     device.clear();
     tap(manager, &text("buttons.screenshot")).await;
     let messages = wait_messages(device, 2).await;
@@ -483,7 +558,7 @@ async fn real_shortcuts_guest_sends_media_and_profile_messages() {
 
     // Linux (GNOME): Print Screen alone.
     select_dropdown(manager, 2).await;
-    xila::task::sleep(Duration::from_millis(300)).await;
+    wait_label(manager, "Print Screen").await;
     device.clear();
     tap(manager, &text("buttons.screenshot")).await;
     let messages = wait_messages(device, 2).await;
@@ -510,6 +585,22 @@ async fn real_shortcuts_guest_sends_media_and_profile_messages() {
         ]
     );
     device.short_writes.store(false, Ordering::Relaxed);
+
+    // A failing press still sends the release: only the all-zero release
+    // message reaches the device.
+    device.fail_presses.store(true, Ordering::Relaxed);
+    device.clear();
+    tap(manager, "\u{F04C}").await;
+    let messages = wait_messages(device, 1).await;
+    assert_eq!(messages, [[2, 0, 0, 0, 0, 0, 0, 0]]); // release only
+    device.fail_presses.store(false, Ordering::Relaxed);
+
+    // A drag of 10 px right and 6 px down on the mouse pad sends one
+    // relative movement message.
+    device.clear();
+    drag_on_pad(manager, 10, 6).await;
+    let messages = wait_messages(device, 1).await;
+    assert_eq!(messages, [[3, 0, 10, 6, 0, 0, 0, 0]]); // mouse move
 
     // The caps lock indicator of the computer shows in the status line.
     device

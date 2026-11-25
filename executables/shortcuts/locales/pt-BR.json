@@ -13,11 +13,14 @@
   "errors": {
     "busy": "O dispositivo está ocupado",
     "configuration": "O arquivo de configurações é inválido",
+    "configuration_replaced": "O arquivo de configurações inválido é substituído pelas configurações atuais",
     "invalid_status": "O dispositivo respondeu com um status inválido",
     "io": "O dispositivo de emulação falhou",
     "missing": "Este Xila não tem dispositivo de emulação",
     "not_connected": "Nenhum computador está conectado",
+    "profile_empty": "O perfil {profile} não tem botões",
     "profiles": "O arquivo de perfis é inválido",
+    "profiles_ignored": "{count} botões ignorados com atalho inválido; o primeiro é {id} no perfil {profile}",
     "storage": "Não foi possível ler a configuração",
     "too_large": "O arquivo de configuração é muito grande"
   },

@@ -13,11 +13,14 @@
   "errors": {
     "busy": "设备忙",
     "configuration": "设置文件无效",
+    "configuration_replaced": "无效的设置文件已被当前设置替换",
     "invalid_status": "设备返回了无效状态",
     "io": "模拟设备失败",
     "missing": "此 Xila 没有模拟设备",
     "not_connected": "未连接任何计算机",
+    "profile_empty": "{profile} 配置文件没有按钮",
     "profiles": "配置文件无效",
+    "profiles_ignored": "已忽略 {count} 个快捷键无效的按钮；第一个是 {profile} 配置文件中的 {id}",
     "storage": "无法读取配置",
     "too_large": "配置文件过大"
   },

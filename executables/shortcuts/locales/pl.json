@@ -13,11 +13,14 @@
   "errors": {
     "busy": "Urządzenie jest zajęte",
     "configuration": "Plik ustawień jest nieprawidłowy",
+    "configuration_replaced": "Nieprawidłowy plik ustawień jest zastępowany bieżącymi ustawieniami",
     "invalid_status": "Urządzenie odpowiedziało nieprawidłowym stanem",
     "io": "Urządzenie emulacji nie powiodło się",
     "missing": "To Xila nie ma urządzenia emulacji",
     "not_connected": "Nie połączono z żadnym komputerem",
+    "profile_empty": "Profil {profile} nie ma przycisków",
     "profiles": "Plik profili jest nieprawidłowy",
+    "profiles_ignored": "Zignorowano {count} przycisków z nieprawidłowym skrótem; pierwszy to {id} w profilu {profile}",
     "storage": "Nie można odczytać konfiguracji",
     "too_large": "Plik konfiguracji jest za duży"
   },

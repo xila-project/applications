@@ -6,6 +6,7 @@
 
 use crate::configuration::Settings;
 use crate::error::{Error, Result};
+use crate::layout::Layout;
 use crate::profile::Profiles;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -55,12 +56,14 @@ impl Storage {
         self.write(SETTINGS_FILE, settings.to_json().as_bytes())
     }
 
-    /// The profiles, or `None` when there is no profiles file yet.
-    pub fn load_profiles(&self) -> Result<Option<Profiles>> {
+    /// The profiles, or `None` when there is no profiles file yet. Every
+    /// `keys` text is checked with `layout`, so the report of ignored
+    /// buttons matches the layout the shortcuts compile with.
+    pub fn load_profiles(&self, layout: Layout) -> Result<Option<Profiles>> {
         let Some(text) = self.read(PROFILES_FILE)? else {
             return Ok(None);
         };
-        Profiles::parse(&text).map(Some)
+        Profiles::parse(&text, layout).map(Some)
     }
 
     /// Reads one file, `None` when it does not exist.
@@ -124,7 +127,7 @@ mod tests {
         let path = directory("round-trip");
         let storage = Storage::new(&path);
         assert_eq!(storage.load_settings(), Ok(None));
-        assert_eq!(storage.load_profiles(), Ok(None));
+        assert_eq!(storage.load_profiles(Layout::Qwerty), Ok(None));
 
         let settings = Settings {
             profile: crate::profile::Profile::Macos,
@@ -164,15 +167,16 @@ mod tests {
         let storage = Storage::new(&path);
         let profiles = Profiles::parse(
             r#"{"profiles": [{"id": "windows", "buttons": [{"id": "screenshot", "keys": "Win+Shift+S"}]}]}"#,
+            Layout::Qwerty,
         )
         .unwrap();
         // Profiles are only read, never written by the application, but the
         // storage can write them back for tests.
         let text = profiles.to_json();
         storage.write(PROFILES_FILE, text.as_bytes()).unwrap();
-        assert_eq!(storage.load_profiles(), Ok(Some(profiles)));
+        assert_eq!(storage.load_profiles(Layout::Qwerty), Ok(Some(profiles)));
         fs::write(path.join(PROFILES_FILE), "{").unwrap();
-        assert_eq!(storage.load_profiles(), Err(Error::Profiles));
+        assert_eq!(storage.load_profiles(Layout::Qwerty), Err(Error::Profiles));
         fs::remove_dir_all(path).unwrap();
     }
 }

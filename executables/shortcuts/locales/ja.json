@@ -13,11 +13,14 @@
   "errors": {
     "busy": "デバイスがビジーです",
     "configuration": "設定ファイルが無効です",
+    "configuration_replaced": "無効な設定ファイルは現在の設定で置き換えられました",
     "invalid_status": "デバイスが無効なステータスを返しました",
     "io": "エミュレーションデバイスが失敗しました",
     "missing": "この Xila にはエミュレーションデバイスがありません",
     "not_connected": "コンピューターに接続されていません",
+    "profile_empty": "{profile} プロファイルにはボタンがありません",
     "profiles": "プロファイルファイルが無効です",
+    "profiles_ignored": "ショートカットが無効なため {count} 個のボタンを無視しました。先頭は {profile} プロファイルの {id} です",
     "storage": "設定を読み込めませんでした",
     "too_large": "設定ファイルが大きすぎます"
   },

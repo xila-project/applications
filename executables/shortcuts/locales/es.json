@@ -13,11 +13,14 @@
   "errors": {
     "busy": "El dispositivo está ocupado",
     "configuration": "El archivo de ajustes no es válido",
+    "configuration_replaced": "El archivo de ajustes no válido se reemplaza por los ajustes actuales",
     "invalid_status": "El dispositivo respondió con un estado no válido",
     "io": "El dispositivo de emulación falló",
     "missing": "Este Xila no tiene dispositivo de emulación",
     "not_connected": "No hay ningún equipo conectado",
+    "profile_empty": "El perfil {profile} no tiene botones",
     "profiles": "El archivo de perfiles no es válido",
+    "profiles_ignored": "Se ignoraron {count} botones con un atajo no válido; el primero es {id} en el perfil {profile}",
     "storage": "No se pudo leer la configuración",
     "too_large": "El archivo de configuración es demasiado grande"
   },

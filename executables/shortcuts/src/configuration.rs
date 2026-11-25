@@ -44,18 +44,14 @@ impl Settings {
     /// computer.
     pub fn parse(text: &str) -> Result<Self> {
         let file: File = json::from_str(text).map_err(|_| Error::Configuration)?;
-        let profile = file
-            .profile
-            .as_deref()
-            .map(Profile::parse_id)
-            .transpose()?
-            .unwrap_or_default();
-        let layout = file
-            .layout
-            .as_deref()
-            .map(Layout::parse_id)
-            .transpose()?
-            .unwrap_or_default();
+        let profile = match file.profile.as_deref() {
+            None => Profile::default(),
+            Some(text) => Profile::parse_id(text).ok_or(Error::Configuration)?,
+        };
+        let layout = match file.layout.as_deref() {
+            None => Layout::default(),
+            Some(text) => Layout::parse_id(text).ok_or(Error::Configuration)?,
+        };
         Ok(Self {
             profile,
             layout,
@@ -70,21 +66,6 @@ impl Settings {
             layout: Some(String::from(self.layout.id())),
             mouse_pad: Some(self.mouse_pad),
         })
-    }
-}
-
-/// Helper for the `?` on an unknown identifier: maps `None` to the error.
-trait ParseId<T> {
-    fn transpose(self) -> Result<Option<T>>;
-}
-
-impl<T> ParseId<T> for Option<Option<T>> {
-    fn transpose(self) -> Result<Option<T>> {
-        match self {
-            Some(Some(value)) => Ok(Some(value)),
-            Some(None) => Err(Error::Configuration),
-            None => Ok(None),
-        }
     }
 }
 

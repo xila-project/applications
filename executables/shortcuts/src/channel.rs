@@ -48,6 +48,11 @@ pub fn write_all(channel: &mut impl Channel, mut bytes: &[u8]) -> Result<()> {
                     channel.pause();
                 }
                 Ok(count) => {
+                    // A returned count larger than the slice or not a
+                    // multiple of the message size is a broken device.
+                    if count > bytes.len() || count % hid::MESSAGE_SIZE != 0 {
+                        return Err(Error::Io);
+                    }
                     bytes = &bytes[count..];
                     break;
                 }
@@ -204,6 +209,29 @@ pub fn mouse_scroll(channel: &mut impl Channel, wheel: i8) -> Result<()> {
             wheel,
             pan: 0,
         }],
+    )
+}
+
+/// Sends the all-zero release messages of keyboard, consumer control and
+/// mouse, as a safety net at start and at exit: no key, control or button
+/// stays pressed on the computer.
+pub fn release_all(channel: &mut impl Channel) -> Result<()> {
+    send(
+        channel,
+        &[
+            Message::Keyboard {
+                modifiers: Modifiers::NONE,
+                keys: [0; KEY_COUNT],
+            },
+            Message::Consumer { usage: 0 },
+            Message::Mouse {
+                buttons: MouseButtons::NONE,
+                x: 0,
+                y: 0,
+                wheel: 0,
+                pan: 0,
+            },
+        ],
     )
 }
 
@@ -455,6 +483,41 @@ mod tests {
         let mut channel = Scripted::connected();
         channel.status[0] = 9; // wrong version
         assert_eq!(query_status(&mut channel), Err(Error::InvalidStatus));
+    }
+
+    #[test]
+    fn a_broken_count_is_an_error() {
+        /// Accepts a count larger than the slice, or not a multiple of 8.
+        struct BrokenCount {
+            count: usize,
+        }
+        impl Channel for BrokenCount {
+            fn write(&mut self, bytes: &[u8]) -> Result<usize> {
+                let _ = bytes;
+                Ok(self.count)
+            }
+            fn control(&mut self, _command: u32, _input: &[u8], _output: &mut [u8]) -> Result<()> {
+                Ok(())
+            }
+        }
+        let mut channel = BrokenCount { count: 100 };
+        assert_eq!(tap_consumer(&mut channel, consumer::MUTE), Err(Error::Io));
+        let mut channel = BrokenCount { count: 12 };
+        assert_eq!(tap_consumer(&mut channel, consumer::MUTE), Err(Error::Io));
+    }
+
+    #[test]
+    fn release_all_sends_the_three_zero_messages() {
+        let mut channel = Scripted::connected();
+        release_all(&mut channel).unwrap();
+        assert_eq!(
+            channel.bytes(),
+            vec![
+                1, 0, 0, 0, 0, 0, 0, 0, // keyboard release
+                2, 0, 0, 0, 0, 0, 0, 0, // consumer release
+                3, 0, 0, 0, 0, 0, 0, 0, // mouse release
+            ]
+        );
     }
 
     #[test]

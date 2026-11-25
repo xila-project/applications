@@ -79,6 +79,7 @@ pub struct Interface {
     window: *mut Object,
     status: *mut Object,
     notice: *mut Object,
+    action_notice: *mut Object,
     tabs: *mut Object,
     media_buttons: Vec<MediaButton>,
     grid: *mut Object,
@@ -101,6 +102,15 @@ pub struct Interface {
     close_requested: bool,
     shown_status: String,
     columns: i32,
+    /// The persistent start-up notice lines, such as a broken file: they
+    /// stay while the action notice below changes with every tap.
+    startup_lines: Vec<String>,
+    /// Whether the settings file was broken at start, so saving it warns
+    /// that it is replaced.
+    settings_broken: bool,
+    /// The disabled state last applied to the controls, so they are only
+    /// touched when the connection state changes or the tabs are rebuilt.
+    applied_disabled: Option<bool>,
 }
 
 impl Interface {
@@ -128,11 +138,15 @@ impl Interface {
             let notice = paragraph(window, "", FONT_SMALL)?;
             object_set_text_color(notice, ERROR_COLOR, 0)?;
             set_hidden(notice, true)?;
+            let action_notice = paragraph(window, "", FONT_SMALL)?;
+            object_set_text_color(action_notice, ERROR_COLOR, 0)?;
+            set_hidden(action_notice, true)?;
 
             Ok(Self {
                 window,
                 status,
                 notice,
+                action_notice,
                 tabs: null_mut(),
                 media_buttons: Vec::new(),
                 grid: null_mut(),
@@ -155,53 +169,90 @@ impl Interface {
                 close_requested: false,
                 shown_status: String::new(),
                 columns,
+                startup_lines: Vec::new(),
+                settings_broken: false,
+                applied_disabled: None,
             })
         }
     }
 
     /// Reads the files, opens the device and builds the tabs.
     fn start(&mut self) -> wasm::Result<()> {
-        let mut startup_error: Option<shortcuts::Error> = None;
+        let mut startup_lines: Vec<String> = Vec::new();
         if let Some(storage) = &self.storage {
             match storage.load_settings() {
                 Ok(Some(settings)) => self.settings = settings,
                 Ok(None) => (),
-                Err(_) => startup_error = Some(shortcuts::Error::Configuration),
+                Err(error) => {
+                    self.settings_broken = error == shortcuts::Error::Configuration;
+                    startup_lines.push(error_text(error));
+                }
             }
-            match storage.load_profiles() {
+            match storage.load_profiles(self.settings.layout) {
                 Ok(Some(profiles)) => self.profiles = profiles,
                 Ok(None) => (),
-                Err(error) => {
-                    if startup_error.is_none() {
-                        startup_error = Some(error);
-                    }
-                }
+                // Both broken files are shown, one per line.
+                Err(error) => startup_lines.push(error_text(error)),
             }
         }
         // The device node can be absent on a Xila without a human interface
         // lower half: the message says so and the buttons stay disabled.
         match Emulation::open() {
-            Ok(device) => self.device = Some(device),
+            Ok(device) => {
+                self.device = Some(device);
+                // Safety net: release everything that might stay pressed.
+                if let Some(device) = &mut self.device {
+                    let _ = channel::release_all(device);
+                }
+            }
             Err(shortcuts::Error::Missing) => {
-                self.set_notice(t!("status.no_device"))?;
+                startup_lines.push(String::from(t!("status.no_device")));
             }
             Err(error) => {
-                startup_error = Some(error);
+                startup_lines.push(error_text(error));
             }
         }
-        if let Some(error) = startup_error {
-            self.set_notice(&error_text(error))?;
-        }
+        self.startup_lines = startup_lines;
         unsafe { self.build_tabs()? };
+        self.refresh_notice()?;
         self.poll_status();
         Ok(())
     }
 
-    /// Shows `text` in the notice line, or hides the line when empty.
-    fn set_notice(&mut self, text: &str) -> wasm::Result<()> {
+    /// Renders the start-up notice: the persistent lines, then the report of
+    /// the profiles file, one per line. Hides the line when there is nothing
+    /// to say.
+    fn refresh_notice(&mut self) -> wasm::Result<()> {
+        let mut lines = self.startup_lines.clone();
+        if !self.profiles.invalid.is_empty() {
+            let first = &self.profiles.invalid[0];
+            lines.push(
+                t!(
+                    "errors.profiles_ignored",
+                    count = self.profiles.invalid.len(),
+                    id = first.id.as_str(),
+                    profile = first.profile.name().as_str()
+                )
+                .to_string(),
+            );
+        }
+        for profile in &self.profiles.empty {
+            lines.push(t!("errors.profile_empty", profile = profile.name().as_str()).to_string());
+        }
+        let text = lines.join("\n");
         unsafe {
             set_hidden(self.notice, text.is_empty())?;
-            set_text(self.notice, text)?;
+            set_text(self.notice, &text)?;
+        }
+        Ok(())
+    }
+
+    /// Shows `text` in the action notice line, or hides the line when empty.
+    /// The start-up notice above is not touched.
+    fn set_action_notice(&mut self, text: &str) -> wasm::Result<()> {
+        unsafe {
+            set_hidden(self.action_notice, text.is_empty())?;
+            set_text(self.action_notice, text)?;
         }
         Ok(())
     }
@@ -222,6 +273,9 @@ impl Interface {
             self.profile_dropdown = null_mut();
             self.layout_dropdown = null_mut();
             self.mouse_switch = null_mut();
+            // The controls are new objects: the connection state is applied
+            // to them again.
+            self.applied_disabled = None;
 
             let tabs = tabview_create(self.window)?;
             object_set_width(tabs, percentage(100)?)?;
@@ -302,6 +356,9 @@ impl Interface {
             for button in self.shortcut_buttons.drain(..) {
                 delete(button.object)?;
             }
+            // The layout may have changed: recompute the report of ignored
+            // buttons, then compile.
+            self.profiles.recheck(self.settings.layout);
             let buttons = self.profiles.buttons(self.settings.profile);
             let compiled = profile::compile(&buttons, self.settings.layout);
             let width = if self.columns == 3 { 31 } else { 48 };
@@ -321,7 +378,9 @@ impl Interface {
                 object_set_font(caption, FONT_SMALL, 0)?;
                 object_set_text_align(caption, TextAlign::Center as u32, 0)?;
                 let keys = label_create(object)?;
-                let text = button.shortcut.display_text(self.settings.layout);
+                let text = button
+                    .shortcut
+                    .display_text(self.settings.layout, self.settings.profile);
                 set_text(keys, &text)?;
                 object_set_font(keys, FONT_SMALL, 0)?;
                 object_set_text_color(keys, MUTED_COLOR, 0)?;
@@ -331,7 +390,10 @@ impl Interface {
                     shortcut: button.shortcut,
                 });
             }
+            // The buttons are new objects: apply the state to them again.
+            self.applied_disabled = None;
             self.apply_connection()?;
+            self.refresh_notice()?;
             Ok(())
         }
     }
@@ -459,10 +521,15 @@ impl Interface {
         }
     }
 
-    /// Enables or disables every control with the connection state.
+    /// Enables or disables every control with the connection state. The
+    /// objects are only touched when the state changes or the tabs were
+    /// rebuilt, not on every poll.
     unsafe fn apply_connection(&mut self) -> wasm::Result<()> {
         unsafe {
             let disabled = !self.connected || self.device.is_none();
+            if self.applied_disabled == Some(disabled) {
+                return Ok(());
+            }
             let state = if disabled { STATE_DISABLED } else { 0 };
             for object in self
                 .media_buttons
@@ -481,6 +548,7 @@ impl Interface {
                     object_remove_state(object, state)?;
                 }
             }
+            self.applied_disabled = Some(disabled);
             Ok(())
         }
     }
@@ -510,17 +578,19 @@ impl Interface {
         Ok(())
     }
 
-    /// Sends one action to the device, showing its error in the notice line.
+    /// Sends one action to the device, showing its result in the action
+    /// notice line, which a successful action clears again. The start-up
+    /// notice is kept as it is.
     fn act(&mut self, action: impl FnOnce(&mut Emulation) -> shortcuts::Result<()>) {
         let Some(device) = &mut self.device else {
             return;
         };
         match action(device) {
             Ok(()) => {
-                let _ = self.set_notice("");
+                let _ = self.set_action_notice("");
             }
             Err(error) => {
-                let _ = self.set_notice(&error_text(error));
+                let _ = self.set_action_notice(&error_text(error));
             }
         }
     }
@@ -605,9 +675,17 @@ impl Interface {
         Ok(())
     }
 
-    fn save_settings(&self) {
-        if let Some(storage) = &self.storage {
-            let _ = storage.save_settings(&self.settings);
+    fn save_settings(&mut self) {
+        if let Some(storage) = &self.storage
+            && storage.save_settings(&self.settings).is_ok()
+            && self.settings_broken
+        {
+            // The broken file was replaced: say so in the start-up
+            // notice, which stays visible.
+            self.settings_broken = false;
+            self.startup_lines
+                .push(String::from(t!("errors.configuration_replaced")));
+            let _ = self.refresh_notice();
         }
     }
 
@@ -615,6 +693,10 @@ impl Interface {
         self.start()?;
         loop {
             if self.close_requested {
+                // Safety net: release everything before leaving.
+                if let Some(device) = &mut self.device {
+                    let _ = channel::release_all(device);
+                }
                 unsafe { delete(self.window)? };
                 return Ok(());
             }

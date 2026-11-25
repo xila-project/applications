@@ -29,7 +29,8 @@ impl Pad {
     }
 
     /// The movement to send for a pointer now at (`x`, `y`), each component
-    /// clamped to the `i8` range. The remainder stays pending.
+    /// clamped to -127..127, so the -128 of `i8` stays unused. The remainder
+    /// stays pending.
     pub fn drag(&mut self, x: i32, y: i32) -> (i8, i8) {
         let Some((last_x, last_y)) = self.last else {
             self.last = Some((x, y));
@@ -38,8 +39,8 @@ impl Pad {
         self.last = Some((x, y));
         let total_x = (x - last_x) + self.pending.0;
         let total_y = (y - last_y) + self.pending.1;
-        let step_x = total_x.clamp(i32::from(i8::MIN), i32::from(i8::MAX));
-        let step_y = total_y.clamp(i32::from(i8::MIN), i32::from(i8::MAX));
+        let step_x = total_x.clamp(-127, 127);
+        let step_y = total_y.clamp(-127, 127);
         self.pending = (total_x - step_x, total_y - step_y);
         (step_x as i8, step_y as i8)
     }
@@ -90,7 +91,7 @@ impl Scroll {
         self.pending += last_y - y;
         let steps = self.pending / Self::PIXELS_PER_STEP;
         self.pending %= Self::PIXELS_PER_STEP;
-        steps.clamp(i32::from(i8::MIN), i32::from(i8::MAX)) as i8
+        steps.clamp(-127, 127) as i8
     }
 
     /// The drag ended.
@@ -122,15 +123,16 @@ mod tests {
         let mut pad = Pad::new();
         pad.press(0, 0);
         // A fast drag of 300 px right: reports of 127 while the remainder
-        // exceeds one step, then the rest.
+        // exceeds one step, then the rest. The movement never reaches the
+        // -128 of i8.
         assert_eq!(pad.drag(300, 0), (127, 0));
         assert_eq!(pad.drag(300, 0), (127, 0));
         assert_eq!(pad.drag(310, 0), (56, 0));
         assert_eq!(pad.drag(310, 0), (0, 0));
-        // And back to the left: -128 fits per report.
-        assert_eq!(pad.drag(0, 0), (-128, 0));
-        assert_eq!(pad.drag(0, 0), (-128, 0));
-        assert_eq!(pad.drag(2, 0), (-52, 0));
+        // And back to the left: -127 per report.
+        assert_eq!(pad.drag(0, 0), (-127, 0));
+        assert_eq!(pad.drag(0, 0), (-127, 0));
+        assert_eq!(pad.drag(2, 0), (-54, 0));
         assert_eq!(pad.drag(2, 0), (0, 0));
     }
 

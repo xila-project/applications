@@ -13,11 +13,14 @@
   "errors": {
     "busy": "Il dispositivo è occupato",
     "configuration": "Il file delle impostazioni non è valido",
+    "configuration_replaced": "Il file delle impostazioni non valido viene sostituito con le impostazioni attuali",
     "invalid_status": "Il dispositivo ha risposto con uno stato non valido",
     "io": "Il dispositivo di emulazione non è riuscito",
     "missing": "Questo Xila non ha un dispositivo di emulazione",
     "not_connected": "Nessun computer è connesso",
+    "profile_empty": "Il profilo {profile} non ha pulsanti",
     "profiles": "Il file dei profili non è valido",
+    "profiles_ignored": "Ignorati {count} pulsanti con una scorciatoia non valida; il primo è {id} nel profilo {profile}",
     "storage": "Impossibile leggere la configurazione",
     "too_large": "Il file di configurazione è troppo grande"
   },
