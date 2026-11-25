@@ -874,6 +874,67 @@ async fn fd_filestat_set_times_applies_exactly_the_requested_fields() {
 }
 
 #[xila::task::test(task_path = xila::task)]
+async fn filestat_reports_the_status_change_time_and_a_zero_dev() {
+    let mut guest = Guest::new().await;
+    let fd = guest.file_with("f", b"data");
+    // Distinct access and modification times, so every timestamp field of the
+    // filestat is checked against its own statistics field.
+    assert_eq!(
+        guest.call(
+            "fd_filestat_set_times",
+            &[i(fd), l(111 * SECOND), l(222 * SECOND), i(ATIM | MTIM)]
+        ),
+        0
+    );
+    guest.sync_all();
+    let path = "/sandbox/f".to_string();
+    let statistics = guest
+        .vfs
+        .get_statistics_for_task(guest.task, &path.as_str())
+        .await
+        .unwrap();
+    assert_eq!(
+        (statistics.access.as_u64(), statistics.modification.as_u64()),
+        (111, 222)
+    );
+    let check_filestat = |guest: &Guest, buffer: usize| {
+        assert_eq!(guest.u64_at(buffer), 0, "dev stays 0");
+        assert_eq!(guest.u64_at(buffer + 8), statistics.inode, "ino");
+        assert_eq!(guest.get(buffer + 16, 1)[0], 4, "filetype");
+        assert_eq!(guest.u64_at(buffer + 24), statistics.links, "nlink");
+        assert_eq!(guest.u64_at(buffer + 32), statistics.size, "size");
+        assert_eq!(
+            guest.u64_at(buffer + 40),
+            statistics.access.as_u64() * 1_000_000_000,
+            "atime"
+        );
+        assert_eq!(
+            guest.u64_at(buffer + 48),
+            statistics.modification.as_u64() * 1_000_000_000,
+            "mtime"
+        );
+        // `ctim` is the last status change time, not the creation time.
+        assert_eq!(
+            guest.u64_at(buffer + 56),
+            statistics.status.as_u64() * 1_000_000_000,
+            "ctime"
+        );
+    };
+    // Through the open descriptor, then through the path beneath the preopen.
+    assert_eq!(guest.call("fd_filestat_get", &[i(fd), i(1300)]), 0);
+    check_filestat(&guest, 1300);
+    let [pointer, length] = guest.text(0, "f");
+    assert_eq!(
+        guest.call(
+            "path_filestat_get",
+            &[i(ROOT), i(NO_FOLLOW), pointer, length, i(1300)]
+        ),
+        0
+    );
+    check_filestat(&guest, 1300);
+}
+
+#[xila::task::test(task_path = xila::task)]
 async fn the_now_flags_read_the_realtime_clock() {
     let mut guest = Guest::new().await;
     guest

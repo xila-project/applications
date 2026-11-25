@@ -103,6 +103,7 @@ confinement root.
 | `fd_sync`, `fd_datasync` | Flush the file (a directory has nothing to flush) |
 | `fd_advise` | Validates the advice (`EINVAL` outside 0–5) and succeeds: there is no page cache |
 | `fd_allocate` | Like `posix_fallocate`: grows to `offset + len`, never shrinks, `len == 0` is `EINVAL`, overflow `EFBIG`, read-only `EBADF` |
+| `fd_filestat_get`, `path_filestat_get` | `ctim` reports the last status change time (`Statistics::status`), not the creation time. `dev` is 0: the Core `Statistics` carries no device or mount identifier yet (gap G14 in the review on xila-project/core#835), so `(dev, ino)` does not identify a file across mounts until a Core change adds the identifier |
 | `fd_filestat_set_size` | Truncates or zero-extends a writable file |
 | `fd_filestat_set_times`, `path_filestat_set_times` | `ATIM`/`MTIM`/`*_NOW` with the Preview 1 invalid combinations as `EINVAL`; `lookupflags` `SYMLINK_FOLLOW`; Xila stores whole seconds, so nanoseconds are truncated; `*_NOW` uses the realtime clock |
 | `fd_fdstat_set_flags` | Replaces the status flags: append and nonblocking are honored, `DSYNC`/`RSYNC`/`SYNC` are `ENOTSUP`, unknown bits `EINVAL` |
