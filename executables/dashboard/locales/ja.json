@@ -81,6 +81,7 @@
     "testing": "テスト中...",
     "title": "設定",
     "token": "トークン",
+    "token_hint": "表示を押して入力または変更します。",
     "token_set": "トークン設定済み",
     "url": "Grafana の URL"
   },

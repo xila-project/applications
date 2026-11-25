@@ -105,14 +105,16 @@ pub unsafe fn labelled_button(
     }
 }
 
-/// One-line text field with an initial value.
+/// One-line text field with an initial value. The text is set before the
+/// maximum length: setting the limit first makes LVGL send one insert event
+/// per character, which fills the host event queue.
 pub unsafe fn field(parent: *mut Object, value: &str, maximum: u32) -> wasm::Result<*mut Object> {
     unsafe {
         let area = textarea_create(parent)?;
         textarea_set_one_line(area, true)?;
-        textarea_set_max_length(area, maximum)?;
         object_set_width(area, percentage(100)?)?;
         set_field(area, value)?;
+        textarea_set_max_length(area, maximum)?;
         Ok(area)
     }
 }

@@ -81,6 +81,7 @@
     "testing": "Prova in corso...",
     "title": "Impostazioni",
     "token": "Token",
+    "token_hint": "Premi Mostra per inserirlo o modificarlo.",
     "token_set": "Token salvato",
     "url": "URL di Grafana"
   },

@@ -81,6 +81,7 @@
     "testing": "Sprawdzanie...",
     "title": "Ustawienia",
     "token": "Token",
+    "token_hint": "Naciśnij Pokaż, aby go wpisać lub zmienić.",
     "token_set": "Token zapisany",
     "url": "Adres URL Grafany"
   },

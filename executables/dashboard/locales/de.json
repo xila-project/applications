@@ -81,6 +81,7 @@
     "testing": "Wird getestet...",
     "title": "Einstellungen",
     "token": "Token",
+    "token_hint": "Drücken Sie auf Anzeigen, um ihn einzugeben oder zu ändern.",
     "token_set": "Token gespeichert",
     "url": "Grafana-URL"
   },
