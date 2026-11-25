@@ -156,5 +156,20 @@
     "prompts": {
       "password": "[sudo] Hasło użytkownika {arg0}: "
     }
+  },
+  "time_zone": {
+    "labels": {
+      "name": "Strefa czasowa",
+      "string": "Ciąg TZ",
+      "local": "Czas lokalny"
+    },
+    "custom": "własna",
+    "unsynchronized": "nieustawiony (zegar nie jest zsynchronizowany)",
+    "no_names": "Ta wersja nie ma nazw stref; podaj ciąg TZ POSIX.",
+    "saved": "Zapisano strefę czasową. Programy uruchamiane od teraz będą jej używać.",
+    "errors": {
+      "invalid": "Nieprawidłowa strefa czasowa: podaj ciąg TZ POSIX, na przykład CET-1CEST,M3.5.0,M10.5.0/3, lub nazwę strefy z time_zone -l.",
+      "failed_to_set": "Nie można zapisać strefy czasowej: {arg0}"
+    }
   }
 }

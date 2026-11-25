@@ -34,6 +34,7 @@ mod realpath;
 mod sleep;
 mod statistics;
 mod tail;
+mod time_zone;
 mod touch;
 mod tree;
 #[cfg(feature = "time-commands")]
@@ -148,6 +149,7 @@ pub enum UserCommandKind {
     WordCount,
     Head,
     Tail,
+    TimeZone,
     Touch,
     Sleep,
     Help,
@@ -292,6 +294,11 @@ const BUILTINS: &[(&str, UserCommandKind, &str)] = &[
     ),
     ("head", UserCommandKind::Head, head::HeadArguments::HELP),
     ("tail", UserCommandKind::Tail, tail::TailArguments::HELP),
+    (
+        "time_zone",
+        UserCommandKind::TimeZone,
+        time_zone::TimeZoneArguments::HELP,
+    ),
     ("help", UserCommandKind::Help, help::HelpArguments::HELP),
     ("tree", UserCommandKind::Tree, tree::TreeArguments::HELP),
     ("find", UserCommandKind::Find, find::FindArguments::HELP),
@@ -412,6 +419,11 @@ where
         UserCommandKind::WordCount => WordCountCommand.execute(context, options, paths).await,
         UserCommandKind::Head => HeadCommand.execute(context, options, paths).await,
         UserCommandKind::Tail => TailCommand.execute(context, options, paths).await,
+        UserCommandKind::TimeZone => {
+            time_zone::TimeZoneCommand
+                .execute(context, options, paths)
+                .await
+        }
         UserCommandKind::Touch => TouchCommand.execute(context, options, paths).await,
         UserCommandKind::Sleep => SleepCommand.execute(context, options, paths).await,
         UserCommandKind::Help => help::HelpCommand.execute(context, options, paths).await,

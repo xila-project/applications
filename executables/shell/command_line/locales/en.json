@@ -150,5 +150,20 @@
     "prompts": {
       "password": "[sudo] Password for {arg0}: "
     }
+  },
+  "time_zone": {
+    "labels": {
+      "name": "Time zone",
+      "string": "TZ string",
+      "local": "Local time"
+    },
+    "custom": "custom",
+    "unsynchronized": "not set (the clock is not synchronized)",
+    "no_names": "This build has no zone names; give a POSIX TZ string.",
+    "saved": "Time zone saved. Programs started from now on use it.",
+    "errors": {
+      "invalid": "Invalid time zone: give a POSIX TZ string, for example CET-1CEST,M3.5.0,M10.5.0/3, or a zone name listed by time_zone -l.",
+      "failed_to_set": "Cannot save the time zone: {arg0}"
+    }
   }
 }

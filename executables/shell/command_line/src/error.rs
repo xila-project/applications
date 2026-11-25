@@ -49,6 +49,9 @@ pub enum Error<'a> {
     FailedToCreateSocket(network::IoErrorKind),
     Format,
     InvalidSleepDuration,
+    /// The value is neither a valid POSIX TZ string nor a zone name of the build.
+    InvalidTimeZone,
+    FailedToSetTimeZone(virtual_file_system::IoErrorKind),
     FailedToSetPermissions(virtual_file_system::IoErrorKind),
     FailedToGetTaskUser(task::Error),
     ExitStatus(NonZeroUsize),
@@ -401,6 +404,16 @@ impl Display for Error<'_> {
             }
             Error::InvalidSleepDuration => {
                 write!(formatter, "{}", t!("sleep.errors.invalid_duration"))
+            }
+            Error::InvalidTimeZone => {
+                write!(formatter, "{}", t!("time_zone.errors.invalid"))
+            }
+            Error::FailedToSetTimeZone(error) => {
+                write!(
+                    formatter,
+                    "{}",
+                    t!("time_zone.errors.failed_to_set", arg0 = error)
+                )
             }
             Error::FailedToSetPermissions(error) => {
                 write!(

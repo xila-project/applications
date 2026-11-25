@@ -150,5 +150,20 @@
     "prompts": {
       "password": "[sudo] Passwort für {arg0}: "
     }
+  },
+  "time_zone": {
+    "labels": {
+      "name": "Zeitzone",
+      "string": "TZ-Zeichenkette",
+      "local": "Ortszeit"
+    },
+    "custom": "eigene",
+    "unsynchronized": "nicht gestellt (die Uhr ist nicht synchronisiert)",
+    "no_names": "Diese Version hat keine Zonennamen; geben Sie eine POSIX-TZ-Zeichenkette an.",
+    "saved": "Zeitzone gespeichert. Ab jetzt gestartete Programme verwenden sie.",
+    "errors": {
+      "invalid": "Ungültige Zeitzone: Geben Sie eine POSIX-TZ-Zeichenkette an, zum Beispiel CET-1CEST,M3.5.0,M10.5.0/3, oder einen Zonennamen aus time_zone -l.",
+      "failed_to_set": "Die Zeitzone kann nicht gespeichert werden: {arg0}"
+    }
   }
 }

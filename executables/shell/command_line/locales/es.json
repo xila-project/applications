@@ -150,5 +150,20 @@
     "prompts": {
       "password": "[sudo] Contraseña de {arg0}: "
     }
+  },
+  "time_zone": {
+    "labels": {
+      "name": "Zona horaria",
+      "string": "Cadena TZ",
+      "local": "Hora local"
+    },
+    "custom": "personalizada",
+    "unsynchronized": "sin ajustar (el reloj no está sincronizado)",
+    "no_names": "Esta versión no tiene nombres de zona; indique una cadena TZ POSIX.",
+    "saved": "Zona horaria guardada. Los programas que se inicien a partir de ahora la usan.",
+    "errors": {
+      "invalid": "Zona horaria no válida: indique una cadena TZ POSIX, por ejemplo CET-1CEST,M3.5.0,M10.5.0/3, o un nombre de zona de time_zone -l.",
+      "failed_to_set": "No se puede guardar la zona horaria: {arg0}"
+    }
   }
 }

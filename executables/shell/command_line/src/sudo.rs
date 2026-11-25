@@ -11,7 +11,7 @@
 //!   success, and consecutive failures lock the caller out for a growing delay.
 //! - The command is a direct entry of [`SECURE_PATH`]. It runs in its own task
 //!   with the target identity and a fixed, minimal environment that does not
-//!   depend on the caller's. The Shell's own task never changes identity.
+//!   depend on the caller's; `TZ` is the system time zone of the root task. The Shell's own task never changes identity.
 //! - WebAssembly guests never run under `sudo`: Core marks the command's task
 //!   and every task it starts as running with a granted identity
 //!   (`task::Manager::is_identity_granted`), a mark nothing clears, and the
@@ -531,7 +531,7 @@ impl Shell {
         } else {
             "/"
         };
-        let environment = Vec::from([
+        let mut environment = Vec::from([
             EnvironmentVariable::new("User", target_name),
             EnvironmentVariable::new("HOME", &target_home),
             EnvironmentVariable::new("Host", SUDO_HOST),
@@ -539,6 +539,18 @@ impl Shell {
             EnvironmentVariable::new("Paths", SECURE_PATH),
             EnvironmentVariable::new(SUDO_USER_VARIABLE, &caller_name),
         ]);
+        // The system time zone, from the root task: the caller's `TZ` is not
+        // used, like the rest of the caller's environment.
+        if let Ok(time_zone) = context
+            .task_manager
+            .get_environment_variable(
+                xila::task::Manager::ROOT_TASK_IDENTIFIER,
+                xila::local_time::ENVIRONMENT_VARIABLE,
+            )
+            .await
+        {
+            environment.push(time_zone);
+        }
 
         let standard = self
             .standard

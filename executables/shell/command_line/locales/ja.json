@@ -150,5 +150,20 @@
     "prompts": {
       "password": "[sudo] {arg0} のパスワード: "
     }
+  },
+  "time_zone": {
+    "labels": {
+      "name": "タイムゾーン",
+      "string": "TZ 文字列",
+      "local": "現地時刻"
+    },
+    "custom": "カスタム",
+    "unsynchronized": "未設定 (時計が同期されていません)",
+    "no_names": "このビルドにはゾーン名がありません。POSIX TZ 文字列を指定してください。",
+    "saved": "タイムゾーンを保存しました。今後起動するプログラムに適用されます。",
+    "errors": {
+      "invalid": "無効なタイムゾーンです。POSIX TZ 文字列 (例: CET-1CEST,M3.5.0,M10.5.0/3) か、time_zone -l に表示されるゾーン名を指定してください。",
+      "failed_to_set": "タイムゾーンを保存できません: {arg0}"
+    }
   }
 }
