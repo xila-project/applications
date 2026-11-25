@@ -1,0 +1,32 @@
+{
+  "age": {
+    "hours": "{count} h",
+    "minutes": "{count} min",
+    "seconds": "{count} s"
+  },
+  "controls": {
+    "toggle": "Toggle",
+    "turn_on": "Turn on"
+  },
+  "errors": {
+    "configuration": "The configuration file is incomplete or invalid",
+    "http": "Home Assistant error {status}",
+    "invalid_response": "Unexpected answer from Home Assistant",
+    "missing_token": "No token: add one to the token file",
+    "network": "No network connection",
+    "not_found": "Entity not found (404)",
+    "storage": "The configuration could not be read",
+    "timeout": "Home Assistant did not answer in time",
+    "too_large": "The answer is too large",
+    "unauthorized": "Home Assistant refused the token (401 or 403)"
+  },
+  "header": {
+    "loading": "Loading...",
+    "title": "Home Assistant",
+    "updated": "Updated {age} ago"
+  },
+  "main": {
+    "no_entities": "No entities to show: add some to configuration.json.",
+    "not_configured": "No configuration: write configuration.json and a token file."
+  }
+}

@@ -158,7 +158,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: [calculator, clock, weather, pixel_painter, text_editor, synth, digits, dashboard]
+        app: [calculator, clock, weather, pixel_painter, text_editor, synth, digits, dashboard, home_assistant]
     env:
       SIGN_WITH_SECRET: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     steps:
@@ -271,10 +271,12 @@ jobs:
         run: |
           set -euo pipefail
           jq -c '.[]' <<< "$RELEASES" | while read -r release; do
-            crate="$(jq -r .package_name <<< "$release")"
             tag="$(jq -r .tag <<< "$release")"
             version="$(jq -r .version <<< "$release")"
-            name="${crate#xila-}"
+            # The tag carries the package name, so a package whose name keeps
+            # an underscore (xila.home_assistant) resolves to the built file.
+            name="${tag%-v*}"
+            name="${name#xila.}"
             archive="$BUNDLES/package-${name//-/_}/xila.$name-$version-wasm32-wasip1.xpk"
             for file in "$archive" "$archive.sha256" "$archive.pub"; do
               test -f "$file" || { echo "::error::missing $file for $tag"; exit 1; }

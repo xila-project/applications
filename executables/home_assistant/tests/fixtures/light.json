@@ -1,0 +1,20 @@
+{
+  "entity_id": "light.living_room",
+  "state": "on",
+  "attributes": {
+    "friendly_name": "Living room",
+    "supported_color_modes": ["hs"],
+    "color_mode": "hs",
+    "hs_color": [36.0, 70.0],
+    "brightness": 200,
+    "supported_features": 44,
+    "icon": "mdi:sofa"
+  },
+  "last_changed": "2026-11-25T10:00:00.000000+00:00",
+  "last_updated": "2026-11-25T10:00:00.000000+00:00",
+  "context": {
+    "id": "01KJ6V0Z0T8Y4W2Q3M9X1B7C5D",
+    "parent_id": null,
+    "user_id": "9f8e7d6c5b4a3210fedcba9876543210"
+  }
+}

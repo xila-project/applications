@@ -1,0 +1,32 @@
+{
+  "age": {
+    "hours": "{count}時間",
+    "minutes": "{count}分",
+    "seconds": "{count}秒"
+  },
+  "controls": {
+    "toggle": "切り替え",
+    "turn_on": "オンにする"
+  },
+  "errors": {
+    "configuration": "設定ファイルが不完全または無効です",
+    "http": "Home Assistantエラー {status}",
+    "invalid_response": "Home Assistantから予期しない応答がありました",
+    "missing_token": "トークンがありません: tokenファイルに追加してください",
+    "network": "ネットワークに接続していません",
+    "not_found": "エンティティが見つかりません (404)",
+    "storage": "設定を読み込めませんでした",
+    "timeout": "Home Assistantから応答が時間内にありませんでした",
+    "too_large": "応答が大きすぎます",
+    "unauthorized": "Home Assistantがトークンを拒否しました (401 または 403)"
+  },
+  "header": {
+    "loading": "読み込み中...",
+    "title": "Home Assistant",
+    "updated": "{age}前に更新"
+  },
+  "main": {
+    "no_entities": "表示するエンティティがありません: configuration.jsonに追加してください。",
+    "not_configured": "設定がありません: configuration.jsonとtokenファイルを作成してください。"
+  }
+}

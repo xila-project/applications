@@ -1,0 +1,32 @@
+{
+  "age": {
+    "hours": "{count} h",
+    "minutes": "{count} min",
+    "seconds": "{count} s"
+  },
+  "controls": {
+    "toggle": "Alternar",
+    "turn_on": "Ligar"
+  },
+  "errors": {
+    "configuration": "O arquivo de configuração está incompleto ou inválido",
+    "http": "Erro do Home Assistant {status}",
+    "invalid_response": "Resposta inesperada do Home Assistant",
+    "missing_token": "Sem token: adicione um no arquivo token",
+    "network": "Sem conexão de rede",
+    "not_found": "Entidade não encontrada (404)",
+    "storage": "Não foi possível ler a configuração",
+    "timeout": "O Home Assistant não respondeu a tempo",
+    "too_large": "A resposta é muito grande",
+    "unauthorized": "O Home Assistant recusou o token (401 ou 403)"
+  },
+  "header": {
+    "loading": "Carregando...",
+    "title": "Home Assistant",
+    "updated": "Atualizado há {age}"
+  },
+  "main": {
+    "no_entities": "Nenhuma entidade para mostrar: adicione algumas a configuration.json.",
+    "not_configured": "Sem configuração: escreva configuration.json e um arquivo token."
+  }
+}

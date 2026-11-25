@@ -74,3 +74,10 @@ release = true
 git_release_enable = true
 git_tag_name = "xila.dashboard-v{{ version }}"
 git_release_name = "xila.dashboard v{{ version }}"
+
+[[package]]
+name = "xila-home-assistant"
+release = true
+git_release_enable = true
+git_tag_name = "xila.home_assistant-v{{ version }}"
+git_release_name = "xila.home_assistant v{{ version }}"

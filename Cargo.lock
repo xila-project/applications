@@ -2436,6 +2436,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "xila-home-assistant"
+version = "0.1.0"
+dependencies = [
+ "embedded-i18n",
+ "miniserde",
+ "serde",
+ "serde_json",
+ "xila-wasm",
+]
+
+[[package]]
 name = "xila-io-error"
 version = "0.1.0"
 source = "git+https://github.com/xila-project/core?branch=main#492b15434687f405426b753074f1cb37b246a858"

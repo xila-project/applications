@@ -1,0 +1,15 @@
+{
+  "entity_id": "scene.movie_night",
+  "state": "scening",
+  "attributes": {
+    "friendly_name": "Movie night",
+    "icon": "mdi:movie-open"
+  },
+  "last_changed": "2026-11-25T20:30:00.000000+00:00",
+  "last_updated": "2026-11-25T20:30:00.000000+00:00",
+  "context": {
+    "id": "01KJ6V0Z0T8Y4W2Q3M9X1B7C5G",
+    "parent_id": null,
+    "user_id": null
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "entity_id": "input_boolean.guest_mode",
+  "state": "on",
+  "attributes": {
+    "friendly_name": "Guest mode",
+    "icon": "mdi:account-multiple"
+  },
+  "last_changed": "2026-11-25T08:00:00.000000+00:00",
+  "last_updated": "2026-11-25T08:00:00.000000+00:00",
+  "context": {
+    "id": "01KJ6V0Z0T8Y4W2Q3M9X1B7C5F",
+    "parent_id": null,
+    "user_id": null
+  }
+}

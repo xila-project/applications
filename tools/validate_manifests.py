@@ -11,7 +11,9 @@ import tomllib
 import unicodedata
 
 ROOT = Path(__file__).resolve().parent.parent
-APPS = ("calculator", "clock", "weather", "pixel_painter", "text_editor", "synth", "digits", "dashboard")
+APPS = ("calculator", "clock", "weather", "pixel_painter", "text_editor", "synth", "digits", "dashboard", "home_assistant")
+# Package names use dashes, except xila.home_assistant, which keeps its underscore.
+PACKAGE_NAMES = {"home_assistant": "xila.home_assistant"}
 SCHEMA = "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
 SOURCE_PREFIX = "https://github.com/xila-project/applications/tree/main/executables/"
 SHORTCUT_SCHEMA = "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json"
@@ -119,7 +121,7 @@ def validate_application(root: Path, application: str, sync: bool = False) -> No
     format_version = metadata.get("format_version")
     if type(format_version) is not int or format_version != 2 or metadata.get("$schema") != SCHEMA:
         raise SystemExit(f"unexpected developer manifest version/schema for {application}")
-    expected = (f"xila.{application.replace('_', '-')}", cargo["package"]["version"], "wasm32-wasip1")
+    expected = (PACKAGE_NAMES.get(application, f"xila.{application.replace('_', '-')}"), cargo["package"]["version"], "wasm32-wasip1")
     actual = tuple(metadata.get(key) for key in ("name", "version", "target"))
     if actual != expected:
         raise SystemExit(f"invalid package identity/version/target for {application}")

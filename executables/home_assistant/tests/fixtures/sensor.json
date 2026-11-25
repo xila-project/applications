@@ -1,0 +1,18 @@
+{
+  "entity_id": "sensor.outdoor_temperature",
+  "state": "21.5",
+  "attributes": {
+    "friendly_name": "Outdoor temperature",
+    "unit_of_measurement": "°C",
+    "device_class": "temperature",
+    "state_class": "measurement",
+    "icon": "mdi:thermometer"
+  },
+  "last_changed": "2026-11-25T10:05:00.000000+00:00",
+  "last_updated": "2026-11-25T10:05:00.000000+00:00",
+  "context": {
+    "id": "01KJ6V0Z0T8Y4W2Q3M9X1B7C5J",
+    "parent_id": null,
+    "user_id": null
+  }
+}
