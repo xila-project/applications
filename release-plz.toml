@@ -81,3 +81,10 @@ release = true
 git_release_enable = true
 git_tag_name = "xila.home-assistant-v{{ version }}"
 git_release_name = "xila.home-assistant v{{ version }}"
+
+[[package]]
+name = "xila-shortcuts"
+release = true
+git_release_enable = true
+git_tag_name = "xila.shortcuts-v{{ version }}"
+git_release_name = "xila.shortcuts v{{ version }}"

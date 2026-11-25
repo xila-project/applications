@@ -1,0 +1,59 @@
+{
+  "buttons": {
+    "copy": "Kopieren",
+    "lock": "Bildschirm sperren",
+    "mute_microphone": "Mikrofon stummschalten",
+    "paste": "Einfügen",
+    "screenshot": "Bildschirmfoto",
+    "screenshot_full": "Vollständiges Bildschirmfoto",
+    "show_desktop": "Desktop anzeigen",
+    "switch_window": "Fenster wechseln",
+    "undo": "Rückgängig"
+  },
+  "errors": {
+    "busy": "Das Gerät ist beschäftigt",
+    "configuration": "Die Einstellungsdatei ist ungültig",
+    "configuration_replaced": "Die ungültige Einstellungsdatei wird durch die aktuellen Einstellungen ersetzt",
+    "invalid_status": "Das Gerät hat einen ungültigen Status gesendet",
+    "io": "Das Emulationsgerät ist fehlgeschlagen",
+    "missing": "Dieses Xila hat kein Emulationsgerät",
+    "not_connected": "Kein Computer ist verbunden",
+    "profile_empty": "Das Profil {profile} hat keine Schaltflächen",
+    "profiles": "Die Profildatei ist ungültig",
+    "profiles_ignored": "{count} Schaltflächen mit ungültiger Tastenkombination ignoriert; die erste ist {id} im Profil {profile}",
+    "storage": "Die Konfiguration konnte nicht gelesen werden",
+    "too_large": "Die Konfigurationsdatei ist zu groß"
+  },
+  "header": {
+    "title": "Kurzbefehle"
+  },
+  "mouse": {
+    "left_click": "Linksklick",
+    "pad_hint": "Ziehen Sie auf dem Pad, um den Zeiger zu bewegen",
+    "right_click": "Rechtsklick",
+    "scroll_hint": "Ziehen Sie auf dem Streifen, um zu scrollen"
+  },
+  "settings": {
+    "azerty": "AZERTY",
+    "computer": "Computer",
+    "gnome": "Linux (GNOME)",
+    "keyboard_layout": "Tastaturlayout",
+    "macos": "macOS",
+    "mouse_pad": "Touchpad anzeigen",
+    "qwerty": "QWERTY",
+    "qwertz": "QWERTZ",
+    "windows": "Windows"
+  },
+  "status": {
+    "caps_lock": "Feststelltaste",
+    "connected": "Verbunden",
+    "no_device": "Kein Emulationsgerät auf diesem Xila: Verbinden Sie es mit einem Computer",
+    "not_connected": "Nicht verbunden"
+  },
+  "tabs": {
+    "media": "Medien",
+    "mouse": "Maus",
+    "settings": "Einstellungen",
+    "shortcuts": "Kurzbefehle"
+  }
+}

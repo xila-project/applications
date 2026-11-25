@@ -1,0 +1,44 @@
+[package]
+name = "xila-shortcuts"
+version = "0.1.0"
+edition = "2024"
+rust-version.workspace = true
+license.workspace = true
+build = "../wasm_guest_build.rs"
+description = "Turns the device into a remote for the computer it is connected to."
+
+[build-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dependencies]
+embedded-i18n = { workspace = true }
+miniserde = { workspace = true }
+
+[dev-dependencies]
+device = { workspace = true }
+file_system = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm = { workspace = true, default-features = false, features = [
+  "guest",
+  "graphics",
+  "memory_32",
+] }
+
+[[test]]
+name = "build_test"
+path = "tests/build_test.rs"
+
+[[bin]]
+name = "shortcuts"
+path = "src/main.rs"
+
+[lib]
+name = "shortcuts"
+
+[package.metadata.i18n]
+load-path = "locales"
+default-locale = "en"
+fallback = ["en"]
+strict = true

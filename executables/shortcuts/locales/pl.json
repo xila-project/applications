@@ -1,0 +1,59 @@
+{
+  "buttons": {
+    "copy": "Kopiuj",
+    "lock": "Zablokuj ekran",
+    "mute_microphone": "Wycisz mikrofon",
+    "paste": "Wklej",
+    "screenshot": "Zrzut ekranu",
+    "screenshot_full": "Pełny zrzut ekranu",
+    "show_desktop": "Pokaż pulpit",
+    "switch_window": "Przełącz okno",
+    "undo": "Cofnij"
+  },
+  "errors": {
+    "busy": "Urządzenie jest zajęte",
+    "configuration": "Plik ustawień jest nieprawidłowy",
+    "configuration_replaced": "Nieprawidłowy plik ustawień jest zastępowany bieżącymi ustawieniami",
+    "invalid_status": "Urządzenie odpowiedziało nieprawidłowym stanem",
+    "io": "Urządzenie emulacji nie powiodło się",
+    "missing": "To Xila nie ma urządzenia emulacji",
+    "not_connected": "Nie połączono z żadnym komputerem",
+    "profile_empty": "Profil {profile} nie ma przycisków",
+    "profiles": "Plik profili jest nieprawidłowy",
+    "profiles_ignored": "Zignorowano {count} przycisków z nieprawidłowym skrótem; pierwszy to {id} w profilu {profile}",
+    "storage": "Nie można odczytać konfiguracji",
+    "too_large": "Plik konfiguracji jest za duży"
+  },
+  "header": {
+    "title": "Skróty"
+  },
+  "mouse": {
+    "left_click": "Lewy przycisk",
+    "pad_hint": "Przeciągnij po panelu, aby przesunąć kursor",
+    "right_click": "Prawy przycisk",
+    "scroll_hint": "Przeciągnij po pasku, aby przewijać"
+  },
+  "settings": {
+    "azerty": "AZERTY",
+    "computer": "Komputer",
+    "gnome": "Linux (GNOME)",
+    "keyboard_layout": "Układ klawiatury",
+    "macos": "macOS",
+    "mouse_pad": "Pokaż panel dotykowy",
+    "qwerty": "QWERTY",
+    "qwertz": "QWERTZ",
+    "windows": "Windows"
+  },
+  "status": {
+    "caps_lock": "Caps Lock",
+    "connected": "Połączono",
+    "no_device": "Brak urządzenia emulacji na tym Xila: podłącz je do komputera",
+    "not_connected": "Nie połączono"
+  },
+  "tabs": {
+    "media": "Media",
+    "mouse": "Mysz",
+    "settings": "Ustawienia",
+    "shortcuts": "Skróty"
+  }
+}

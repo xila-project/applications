@@ -205,6 +205,11 @@ const guestUiTests = [
     file: "executables/wasm/tests/text_editor.rs",
     calls: /\blocalization::text\(\s*"text_editor"\s*,\s*"([^"]+)"/g,
   },
+  {
+    application: "shortcuts",
+    file: "executables/wasm/tests/shortcuts.rs",
+    calls: /\btext\(\s*"([^"]+)"\s*\)/g,
+  },
 ];
 for (const { application, file, calls } of guestUiTests) {
   const sourcePath = path.join(APPLICATIONS_ROOT, file);

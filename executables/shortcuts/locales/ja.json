@@ -1,0 +1,59 @@
+{
+  "buttons": {
+    "copy": "コピー",
+    "lock": "画面をロック",
+    "mute_microphone": "マイクをミュート",
+    "paste": "貼り付け",
+    "screenshot": "スクリーンショット",
+    "screenshot_full": "全画面スクリーンショット",
+    "show_desktop": "デスクトップを表示",
+    "switch_window": "ウィンドウを切り替え",
+    "undo": "元に戻す"
+  },
+  "errors": {
+    "busy": "デバイスがビジーです",
+    "configuration": "設定ファイルが無効です",
+    "configuration_replaced": "無効な設定ファイルは現在の設定で置き換えられました",
+    "invalid_status": "デバイスが無効なステータスを返しました",
+    "io": "エミュレーションデバイスが失敗しました",
+    "missing": "この Xila にはエミュレーションデバイスがありません",
+    "not_connected": "コンピューターに接続されていません",
+    "profile_empty": "{profile} プロファイルにはボタンがありません",
+    "profiles": "プロファイルファイルが無効です",
+    "profiles_ignored": "ショートカットが無効なため {count} 個のボタンを無視しました。先頭は {profile} プロファイルの {id} です",
+    "storage": "設定を読み込めませんでした",
+    "too_large": "設定ファイルが大きすぎます"
+  },
+  "header": {
+    "title": "ショートカット"
+  },
+  "mouse": {
+    "left_click": "左クリック",
+    "pad_hint": "パッドをドラッグしてポインターを動かします",
+    "right_click": "右クリック",
+    "scroll_hint": "ストリップをドラッグしてスクロールします"
+  },
+  "settings": {
+    "azerty": "AZERTY",
+    "computer": "コンピューター",
+    "gnome": "Linux (GNOME)",
+    "keyboard_layout": "キーボードレイアウト",
+    "macos": "macOS",
+    "mouse_pad": "マウスパッドを表示",
+    "qwerty": "QWERTY",
+    "qwertz": "QWERTZ",
+    "windows": "Windows"
+  },
+  "status": {
+    "caps_lock": "Caps Lock",
+    "connected": "接続済み",
+    "no_device": "この Xila にエミュレーションデバイスがありません。コンピューターに接続してください",
+    "not_connected": "未接続"
+  },
+  "tabs": {
+    "media": "メディア",
+    "mouse": "マウス",
+    "settings": "設定",
+    "shortcuts": "ショートカット"
+  }
+}

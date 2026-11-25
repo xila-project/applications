@@ -1,0 +1,59 @@
+{
+  "buttons": {
+    "copy": "Copiar",
+    "lock": "Bloquear pantalla",
+    "mute_microphone": "Silenciar micrófono",
+    "paste": "Pegar",
+    "screenshot": "Captura de pantalla",
+    "screenshot_full": "Captura de pantalla completa",
+    "show_desktop": "Mostrar escritorio",
+    "switch_window": "Cambiar de ventana",
+    "undo": "Deshacer"
+  },
+  "errors": {
+    "busy": "El dispositivo está ocupado",
+    "configuration": "El archivo de ajustes no es válido",
+    "configuration_replaced": "El archivo de ajustes no válido se reemplaza por los ajustes actuales",
+    "invalid_status": "El dispositivo respondió con un estado no válido",
+    "io": "El dispositivo de emulación falló",
+    "missing": "Este Xila no tiene dispositivo de emulación",
+    "not_connected": "No hay ningún equipo conectado",
+    "profile_empty": "El perfil {profile} no tiene botones",
+    "profiles": "El archivo de perfiles no es válido",
+    "profiles_ignored": "Se ignoraron {count} botones con un atajo no válido; el primero es {id} en el perfil {profile}",
+    "storage": "No se pudo leer la configuración",
+    "too_large": "El archivo de configuración es demasiado grande"
+  },
+  "header": {
+    "title": "Atajos"
+  },
+  "mouse": {
+    "left_click": "Clic izquierdo",
+    "pad_hint": "Arrastre en el panel para mover el puntero",
+    "right_click": "Clic derecho",
+    "scroll_hint": "Arrastre en la banda para desplazarse"
+  },
+  "settings": {
+    "azerty": "AZERTY",
+    "computer": "Ordenador",
+    "gnome": "Linux (GNOME)",
+    "keyboard_layout": "Distribución del teclado",
+    "macos": "macOS",
+    "mouse_pad": "Mostrar el panel táctil",
+    "qwerty": "QWERTY",
+    "qwertz": "QWERTZ",
+    "windows": "Windows"
+  },
+  "status": {
+    "caps_lock": "Bloq Mayús",
+    "connected": "Conectado",
+    "no_device": "Este Xila no tiene dispositivo de emulación: conéctelo a un equipo",
+    "not_connected": "No conectado"
+  },
+  "tabs": {
+    "media": "Medios",
+    "mouse": "Ratón",
+    "settings": "Ajustes",
+    "shortcuts": "Atajos"
+  }
+}

@@ -62,6 +62,7 @@ command_line_shell = { workspace = true }
 executable = { workspace = true, features = ["building"] }
 testing = { workspace = true }
 audio = { workspace = true }
+device = { workspace = true }
 wat = "1"
 serde_json = "1"
 critical-section = { workspace = true, features = ["std"] }

@@ -1,0 +1,59 @@
+{
+  "buttons": {
+    "copy": "复制",
+    "lock": "锁定屏幕",
+    "mute_microphone": "静音麦克风",
+    "paste": "粘贴",
+    "screenshot": "截图",
+    "screenshot_full": "全屏截图",
+    "show_desktop": "显示桌面",
+    "switch_window": "切换窗口",
+    "undo": "撤销"
+  },
+  "errors": {
+    "busy": "设备忙",
+    "configuration": "设置文件无效",
+    "configuration_replaced": "无效的设置文件已被当前设置替换",
+    "invalid_status": "设备返回了无效状态",
+    "io": "模拟设备失败",
+    "missing": "此 Xila 没有模拟设备",
+    "not_connected": "未连接任何计算机",
+    "profile_empty": "{profile} 配置文件没有按钮",
+    "profiles": "配置文件无效",
+    "profiles_ignored": "已忽略 {count} 个快捷键无效的按钮；第一个是 {profile} 配置文件中的 {id}",
+    "storage": "无法读取配置",
+    "too_large": "配置文件过大"
+  },
+  "header": {
+    "title": "快捷键"
+  },
+  "mouse": {
+    "left_click": "左键",
+    "pad_hint": "在触摸板上拖动以移动指针",
+    "right_click": "右键",
+    "scroll_hint": "在滚动条上拖动以滚动"
+  },
+  "settings": {
+    "azerty": "AZERTY",
+    "computer": "计算机",
+    "gnome": "Linux (GNOME)",
+    "keyboard_layout": "键盘布局",
+    "macos": "macOS",
+    "mouse_pad": "显示触摸板",
+    "qwerty": "QWERTY",
+    "qwertz": "QWERTZ",
+    "windows": "Windows"
+  },
+  "status": {
+    "caps_lock": "大写锁定",
+    "connected": "已连接",
+    "no_device": "此 Xila 没有模拟设备：请将其连接到计算机",
+    "not_connected": "未连接"
+  },
+  "tabs": {
+    "media": "媒体",
+    "mouse": "鼠标",
+    "settings": "设置",
+    "shortcuts": "快捷键"
+  }
+}

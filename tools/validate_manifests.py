@@ -11,7 +11,7 @@ import tomllib
 import unicodedata
 
 ROOT = Path(__file__).resolve().parent.parent
-APPS = ("calculator", "clock", "weather", "pixel_painter", "text_editor", "synth", "digits", "dashboard", "home_assistant")
+APPS = ("calculator", "clock", "weather", "pixel_painter", "text_editor", "synth", "digits", "dashboard", "home_assistant", "shortcuts")
 SCHEMA = "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
 SOURCE_PREFIX = "https://github.com/xila-project/applications/tree/main/executables/"
 SHORTCUT_SCHEMA = "https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json"
