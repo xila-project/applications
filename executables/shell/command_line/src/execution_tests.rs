@@ -1217,7 +1217,12 @@ async fn rename_checks_parent_paths_relative_to_the_mounted_filesystem() {
     )
     .unwrap();
     let source_path = xila::file_system::Path::from_str("/source");
-    xila::file_system::FileSystemOperations::create_file(&file_system, source_path).unwrap();
+    xila::file_system::FileSystemOperations::create_file(
+        &file_system,
+        source_path,
+        &xila::file_system::Attributes::new(),
+    )
+    .unwrap();
     xila::file_system::FileSystemOperations::set_attributes(
         &file_system,
         source_path,
