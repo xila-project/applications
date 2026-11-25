@@ -1,0 +1,56 @@
+{
+  "buttons": {
+    "copy": "Copiar",
+    "lock": "Bloquear tela",
+    "mute_microphone": "Silenciar microfone",
+    "paste": "Colar",
+    "screenshot": "Captura de tela",
+    "screenshot_full": "Captura de tela inteira",
+    "show_desktop": "Mostrar área de trabalho",
+    "switch_window": "Alternar janela",
+    "undo": "Desfazer"
+  },
+  "errors": {
+    "busy": "O dispositivo está ocupado",
+    "configuration": "O arquivo de configurações é inválido",
+    "invalid_status": "O dispositivo respondeu com um status inválido",
+    "io": "O dispositivo de emulação falhou",
+    "missing": "Este Xila não tem dispositivo de emulação",
+    "not_connected": "Nenhum computador está conectado",
+    "profiles": "O arquivo de perfis é inválido",
+    "storage": "Não foi possível ler a configuração",
+    "too_large": "O arquivo de configuração é muito grande"
+  },
+  "header": {
+    "title": "Atalhos"
+  },
+  "mouse": {
+    "left_click": "Clique esquerdo",
+    "pad_hint": "Arraste no painel para mover o ponteiro",
+    "right_click": "Clique direito",
+    "scroll_hint": "Arraste na faixa para rolar"
+  },
+  "settings": {
+    "azerty": "AZERTY",
+    "computer": "Computador",
+    "gnome": "Linux (GNOME)",
+    "keyboard_layout": "Layout do teclado",
+    "macos": "macOS",
+    "mouse_pad": "Mostrar o touchpad",
+    "qwerty": "QWERTY",
+    "qwertz": "QWERTZ",
+    "windows": "Windows"
+  },
+  "status": {
+    "caps_lock": "Caps Lock",
+    "connected": "Conectado",
+    "no_device": "Sem dispositivo de emulação neste Xila: conecte-o a um computador",
+    "not_connected": "Não conectado"
+  },
+  "tabs": {
+    "media": "Mídia",
+    "mouse": "Mouse",
+    "settings": "Configurações",
+    "shortcuts": "Atalhos"
+  }
+}

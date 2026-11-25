@@ -76,6 +76,7 @@ clock = { package = "xila-clock", path = "executables/clock" }
 synth = { package = "xila-synth", path = "executables/synth" }
 dashboard = { package = "xila-dashboard", path = "executables/dashboard" }
 home_assistant = { package = "xila-home-assistant", path = "executables/home_assistant" }
+shortcuts = { package = "xila-shortcuts", path = "executables/shortcuts" }
 
 # - External crates
 embedded-hal = { version = "1", default-features = false }
@@ -126,6 +127,7 @@ members = [
   "executables/weather",
   "executables/dashboard",
   "executables/home_assistant",
+  "executables/shortcuts",
   "executables/shell/command_line",
   "executables/shell/graphical",
 ]

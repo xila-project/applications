@@ -1,0 +1,56 @@
+{
+  "buttons": {
+    "copy": "Copia",
+    "lock": "Blocca schermo",
+    "mute_microphone": "Disattiva microfono",
+    "paste": "Incolla",
+    "screenshot": "Screenshot",
+    "screenshot_full": "Screenshot intero",
+    "show_desktop": "Mostra desktop",
+    "switch_window": "Cambia finestra",
+    "undo": "Annulla"
+  },
+  "errors": {
+    "busy": "Il dispositivo è occupato",
+    "configuration": "Il file delle impostazioni non è valido",
+    "invalid_status": "Il dispositivo ha risposto con uno stato non valido",
+    "io": "Il dispositivo di emulazione non è riuscito",
+    "missing": "Questo Xila non ha un dispositivo di emulazione",
+    "not_connected": "Nessun computer è connesso",
+    "profiles": "Il file dei profili non è valido",
+    "storage": "Impossibile leggere la configurazione",
+    "too_large": "Il file di configurazione è troppo grande"
+  },
+  "header": {
+    "title": "Scorciatoie"
+  },
+  "mouse": {
+    "left_click": "Clic sinistro",
+    "pad_hint": "Trascina sul pad per muovere il puntatore",
+    "right_click": "Clic destro",
+    "scroll_hint": "Trascina sulla striscia per scorrere"
+  },
+  "settings": {
+    "azerty": "AZERTY",
+    "computer": "Computer",
+    "gnome": "Linux (GNOME)",
+    "keyboard_layout": "Layout della tastiera",
+    "macos": "macOS",
+    "mouse_pad": "Mostra il touchpad",
+    "qwerty": "QWERTY",
+    "qwertz": "QWERTZ",
+    "windows": "Windows"
+  },
+  "status": {
+    "caps_lock": "Blocco maiuscole",
+    "connected": "Connesso",
+    "no_device": "Nessun dispositivo di emulazione su questo Xila: collegalo a un computer",
+    "not_connected": "Non connesso"
+  },
+  "tabs": {
+    "media": "Media",
+    "mouse": "Mouse",
+    "settings": "Impostazioni",
+    "shortcuts": "Scorciatoie"
+  }
+}

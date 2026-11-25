@@ -1,0 +1,56 @@
+{
+  "buttons": {
+    "copy": "Copier",
+    "lock": "Verrouiller l’écran",
+    "mute_microphone": "Couper le microphone",
+    "paste": "Coller",
+    "screenshot": "Capture d’écran",
+    "screenshot_full": "Capture d’écran complète",
+    "show_desktop": "Afficher le bureau",
+    "switch_window": "Changer de fenêtre",
+    "undo": "Annuler"
+  },
+  "errors": {
+    "busy": "L’appareil est occupé",
+    "configuration": "Le fichier de paramètres est invalide",
+    "invalid_status": "L’appareil a répondu un état invalide",
+    "io": "L’appareil d’émulation a échoué",
+    "missing": "L’appareil d’émulation n’existe pas sur ce Xila",
+    "not_connected": "Aucun ordinateur n’est connecté",
+    "profiles": "Le fichier de profils est invalide",
+    "storage": "La configuration n’a pas pu être lue",
+    "too_large": "Le fichier de configuration est trop volumineux"
+  },
+  "header": {
+    "title": "Raccourcis"
+  },
+  "mouse": {
+    "left_click": "Clic gauche",
+    "pad_hint": "Glissez sur le pavé pour déplacer le pointeur",
+    "right_click": "Clic droit",
+    "scroll_hint": "Glissez sur la bande pour faire défiler"
+  },
+  "settings": {
+    "azerty": "AZERTY",
+    "computer": "Ordinateur",
+    "gnome": "Linux (GNOME)",
+    "keyboard_layout": "Disposition du clavier",
+    "macos": "macOS",
+    "mouse_pad": "Afficher le pavé tactile",
+    "qwerty": "QWERTY",
+    "qwertz": "QWERTZ",
+    "windows": "Windows"
+  },
+  "status": {
+    "caps_lock": "Verr. maj.",
+    "connected": "Connecté",
+    "no_device": "Aucun appareil d’émulation sur ce Xila : connectez-le à un ordinateur",
+    "not_connected": "Non connecté"
+  },
+  "tabs": {
+    "media": "Média",
+    "mouse": "Souris",
+    "settings": "Réglages",
+    "shortcuts": "Raccourcis"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "format_version": 2,
+  "name": "xila.shortcuts",
+  "version": "0.1.0",
+  "target": "wasm32-wasip1",
+  "xila_version": "0.1",
+  "capabilities": [],
+  "application": {
+    "entrypoint": "executables/shortcuts.wasm",
+    "display_name": "Shortcuts",
+    "icon": "",
+    "show_in_launcher": true
+  },
+  "metadata": {
+    "summary": "Turns the device into a remote for the computer it is connected to.",
+    "license": "Apache-2.0",
+    "source": "https://github.com/xila-project/applications/tree/main/executables/shortcuts"
+  },
+  "$schema": "https://raw.githubusercontent.com/xila-project/package_manager/main/schemas/developer-manifest.schema.json"
+}

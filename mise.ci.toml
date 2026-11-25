@@ -66,7 +66,7 @@ fi
 
 [tasks."ci:clippy-guest"]
 extends = "ci:rust-wasi"
-run = "cargo clippy --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits -p xila-dashboard -p xila-home-assistant -- -D warnings"
+run = "cargo clippy --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits -p xila-dashboard -p xila-home-assistant -p xila-shortcuts -- -D warnings"
 
 [tasks."ci:clippy-host"]
 extends = "ci:rust-wasi"
@@ -76,7 +76,7 @@ run = "cargo clippy --locked -p xila-c-demo -p xila-activity -p xila-debug-appli
 extends = "ci:rust-wasi"
 run = """
 set -eu
-cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits -p xila-dashboard -p xila-home-assistant
+cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits -p xila-dashboard -p xila-home-assistant -p xila-shortcuts
 """
 
 [tasks."ci:localization-group"]

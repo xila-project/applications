@@ -18,7 +18,7 @@ pub fn text(application: &str, key: &str) -> String {
     };
     assert!(matches!(
         application,
-        "clock" | "dashboard" | "pixel_painter" | "text_editor" | "home_assistant"
+        "clock" | "dashboard" | "pixel_painter" | "text_editor" | "home_assistant" | "shortcuts"
     ));
     let root = std::env::var_os("XILA_APPLICATIONS_MANIFEST")
         .map(std::path::PathBuf::from)
