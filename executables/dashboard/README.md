@@ -69,8 +69,8 @@ is no configuration yet. They hold:
   manual panels). **Test connection** runs one query (the first panel, else
   `vector(1)`) and shows its value or the error.
 - **Token:** a field that starts visible while it is empty and hides behind a
-  mask once it holds a token, with a show and hide button and a hint, so a
-  typed token is not displayed by default. A saved token is never shown
+  mask once it holds a token, with a show and hide button and a hint while it
+  is hidden, so a set token is not displayed. A saved token is never shown
   again: the settings show "Token set" with a **Replace** action.
 - **Panels:** the imported panels with their visibility switch, **Reload
   dashboard** and **Convert to manual**; or the manual panels with **Edit**,

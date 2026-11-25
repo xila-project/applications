@@ -69,7 +69,7 @@
     "token": "Langlebiges Zugriffstoken",
     "token_help_create": "Token in Home Assistant anlegen: Profil, dann Sicherheit, dann Langlebige Zugriffstoken.",
     "token_help_terminal": "Oder über das Xila-Terminal: echo '<token>' > /users/<user>/applications/xila.home-assistant/configuration/token",
-    "token_hint": "Das Token ist ausgeblendet. Zum Eingeben oder Ändern auf Anzeigen drücken.",
+    "token_hint": "Drücken Sie auf Anzeigen, um ihn einzugeben oder zu ändern.",
     "too_many_entities": "Höchstens {count} Entitäten werden angezeigt: entfernen Sie zuerst eine",
     "up": "Hoch",
     "url": "Server-URL",

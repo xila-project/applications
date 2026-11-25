@@ -69,7 +69,7 @@
     "token": "Token de acceso de larga duración",
     "token_help_create": "Crea el token en Home Assistant: Perfil, luego Seguridad, luego Tokens de acceso de larga duración.",
     "token_help_terminal": "O desde el terminal de Xila: echo '<token>' > /users/<user>/applications/xila.home-assistant/configuration/token",
-    "token_hint": "El token está oculto. Pulsa Mostrar para introducirlo o cambiarlo.",
+    "token_hint": "Pulsa Mostrar para introducirlo o cambiarlo.",
     "too_many_entities": "Se muestran como máximo {count} entidades: elimine una primero",
     "up": "Subir",
     "url": "URL del servidor",

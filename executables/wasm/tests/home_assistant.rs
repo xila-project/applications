@@ -10,7 +10,9 @@
 //!
 //! It checks that a first start opens the settings when there is no
 //! configuration, and again when there is a configuration but no token, and
-//! that Cancel then leaves the main screen with its cards. In the settings it
+//! that Cancel then leaves the main screen with its cards. With an empty
+//! token file, the auto-opened settings show the token field visible and
+//! empty: a token typed there is saved and sent as the bearer token. In the settings it
 //! imports a token from a file of the scripted file system and checks the
 //! exact errors of an invalid, an empty and a missing file, then saves and
 //! sees the cards with the imported token. It answers a tap on a toggle with
@@ -745,6 +747,47 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     wait_label(manager, "Home Assistant error 500").await;
     wait_idle(manager).await;
     close_and_join(manager, second).await;
+
+    // An empty token file opens the settings by themselves, with the token
+    // field visible and empty: a token typed there is saved and used.
+    write_file(
+        virtual_file_system,
+        task,
+        &format!("{directory}/token"),
+        b"",
+    )
+    .await;
+    let before = home_assistant.requests.lock().unwrap().len();
+    let typed = launch(standard.duplicate().await.unwrap()).await.unwrap();
+    wait_label(manager, &text("settings.title")).await;
+    wait_settings_ready(manager).await;
+    // The field starts visible: the toggle reads Hide, not Show.
+    wait_label(manager, &text("settings.hide")).await;
+    wait_field_text(manager, &text("settings.token"), "").await;
+    type_into(manager, &text("settings.token"), "typed-token").await;
+    wait_field_text(manager, &text("settings.token"), "typed-token").await;
+    tap(manager, &text("settings.save")).await;
+    wait_label(manager, "Living room").await;
+    wait_requests(home_assistant, before + 4).await;
+    wait_idle(manager).await;
+    assert_eq!(
+        read_file(virtual_file_system, task, &format!("{directory}/token"))
+            .await
+            .expect("token file"),
+        b"typed-token"
+    );
+    {
+        let requests = home_assistant.requests.lock().unwrap();
+        for request in &requests[before..] {
+            let request = String::from_utf8(request.clone()).unwrap();
+            assert!(request.starts_with("GET /api/states/"), "{request}");
+            assert!(
+                request.contains("\r\nAuthorization: Bearer typed-token\r\n"),
+                "{request}"
+            );
+        }
+    }
+    close_and_join(manager, typed).await;
 
     // A refused token shows the 401 error, with one request only.
     write_file(

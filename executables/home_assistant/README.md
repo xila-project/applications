@@ -127,9 +127,9 @@ error.
 Only the WT32-SC01 Plus has a microSD slot. The card must hold LittleFS: a
 FAT card is not mounted. The firmware probes the card once, at boot, and
 mounts it at `/media/sd_card`, so insert the card before starting the
-device. To format a card with LittleFS, create the file
-`/configuration/system/format_sd_card` holding the text `erase` and reboot
-(see xila-project/platforms#219). Then put the token in
+device. The card must be formatted as LittleFS by Xila; see the board
+documentation in xila-project/platforms for how to format it. Then put the
+token in
 `/media/sd_card/home_assistant_token.txt` on the card, for example from a
 computer, and use **Import from file** in the settings with that path.
 

@@ -88,6 +88,8 @@ pub struct Settings {
     /// the masked text.
     token: String,
     token_visible: bool,
+    /// Hint under the token field, shown while the field is hidden.
+    token_hint: *mut Object,
     import_field: *mut Object,
     entities_section: *mut Object,
     entities_content: *mut Object,
@@ -186,7 +188,7 @@ impl Settings {
             object_set_flex_grow(token_field, 1)?;
             let (token_toggle, token_toggle_label) =
                 labelled_button(token_row, t!("settings.show"), OUTLINE)?;
-            caption(root, t!("settings.token_hint"))?;
+            let token_hint = caption(root, t!("settings.token_hint"))?;
             caption(root, t!("settings.import_path"))?;
             let import_field = field(root, DEFAULT_IMPORT_PATH, 256)?;
             let import_row = flex(root, FlexFlow::Row)?;
@@ -199,6 +201,7 @@ impl Settings {
             caption(root, t!("settings.entity_id"))?;
             let manual_field = field(root, "", 64)?;
 
+            let token = token.unwrap_or("");
             let mut settings = Self {
                 window,
                 root: root_page,
@@ -208,8 +211,10 @@ impl Settings {
                 refresh,
                 token_field,
                 token_toggle_label,
-                token: String::from(token.unwrap_or("")),
-                token_visible: false,
+                token: String::from(token),
+                // An empty token starts visible, so it can be typed directly.
+                token_visible: token.is_empty(),
+                token_hint,
                 import_field,
                 entities_section,
                 entities_content,
@@ -223,6 +228,13 @@ impl Settings {
                 Action::Import,
             ));
             settings.update_token_field()?;
+            let caption = if settings.token_visible {
+                t!("settings.hide")
+            } else {
+                t!("settings.show")
+            };
+            set_text(settings.token_toggle_label, caption)?;
+            set_hidden(settings.token_hint, settings.token_visible)?;
             settings.build_entities()?;
             Ok(settings)
         }
@@ -402,8 +414,12 @@ impl Settings {
         match result {
             Ok(token) => {
                 self.token = token;
+                // An imported token is masked like a saved one.
+                self.token_visible = false;
                 unsafe {
                     self.update_token_field()?;
+                    set_text(self.token_toggle_label, t!("settings.show"))?;
+                    set_hidden(self.token_hint, false)?;
                     self.show_message(t!("settings.imported"), SUCCESS_COLOR)
                 }
             }
@@ -674,6 +690,8 @@ impl Settings {
                     let identifier = identifier.clone();
                     let checked = is_checked(target)?;
                     if checked && !self.toggle_picker_entity(&identifier, checked) {
+                        // The draft did not change: the switch goes back off.
+                        set_checked(target, false)?;
                         let text = t!(
                             "settings.too_many_entities",
                             count = MAXIMUM_ENTITIES as u64
@@ -707,6 +725,7 @@ impl Settings {
                         t!("settings.show")
                     };
                     set_text(self.token_toggle_label, caption)?;
+                    set_hidden(self.token_hint, self.token_visible)?;
                 }
                 Action::Import => self.import_token()?,
                 Action::AddManual => {
@@ -716,7 +735,7 @@ impl Settings {
                         && self.draft.entities.len() < MAXIMUM_ENTITIES
                     {
                         self.draft.entities.push(text);
-                        set_field(self.manual_field, "")?;
+                        set_field_bounded(self.manual_field, "", 64)?;
                         self.build_entities()?;
                     } else {
                         self.show_message(invalid_message(Invalid::Entity), ERROR_COLOR)?;
