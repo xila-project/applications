@@ -9,14 +9,15 @@
     "turn_on": "Turn on"
   },
   "errors": {
-    "admin_needed": "The area picker needs an administrator account",
+    "admin_needed": "Home Assistant refused the request: check the token and that it belongs to an administrator",
     "configuration": "The configuration file is incomplete or invalid",
     "forbidden": "Home Assistant refused the request (403)",
     "http": "Home Assistant error {status}",
     "import_empty": "The file holds no token",
     "import_invalid": "The token holds characters a header cannot carry",
     "import_missing": "The file does not exist",
-    "import_too_long": "The token is too long (at most 512 bytes)",
+    "import_read": "The file could not be read",
+    "import_too_long": "The token is too long (at most {count} bytes)",
     "invalid_response": "Unexpected answer from Home Assistant",
     "missing_token": "No token: add one in the settings or import it from a file",
     "network": "No network connection",
@@ -69,6 +70,7 @@
     "token_help_create": "Create the token in Home Assistant: Profile, then Security, then Long-Lived Access Tokens.",
     "token_help_terminal": "Or from the Xila terminal: echo '<token>' > /users/<user>/applications/xila.home-assistant/configuration/token",
     "token_hint": "The token is hidden. Press Show to enter or change it.",
+    "too_many_entities": "At most {count} entities show: remove one first",
     "up": "Up",
     "url": "Server URL",
     "without_area": "Entities without an area"

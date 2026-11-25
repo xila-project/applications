@@ -9,14 +9,15 @@
     "turn_on": "オンにする"
   },
   "errors": {
-    "admin_needed": "エリアピッカーには管理者アカウントが必要です",
+    "admin_needed": "Home Assistant がリクエストを拒否しました。トークンと、それが管理者アカウントのものかを確認してください",
     "configuration": "設定ファイルが不完全または無効です",
     "forbidden": "Home Assistant がリクエストを拒否しました (403)",
     "http": "Home Assistantエラー {status}",
     "import_empty": "ファイルにトークンがありません",
     "import_invalid": "トークンにヘッダーに含められない文字が含まれています",
     "import_missing": "ファイルが存在しません",
-    "import_too_long": "トークンが長すぎます（最大512バイト）",
+    "import_read": "ファイルを読み取れませんでした",
+    "import_too_long": "トークンが長すぎます（最大 {count} バイト）",
     "invalid_response": "Home Assistantから予期しない応答がありました",
     "missing_token": "トークンがありません：設定で追加するか、ファイルからインポートしてください",
     "network": "ネットワークに接続していません",
@@ -69,6 +70,7 @@
     "token_help_create": "Home Assistant でトークンを作成：プロフィール、セキュリティ、長期アクセストークンの順に選択します。",
     "token_help_terminal": "または Xila ターミナルから: echo '<token>' > /users/<user>/applications/xila.home-assistant/configuration/token",
     "token_hint": "トークンは非表示になっています。表示を押して入力または変更してください。",
+    "too_many_entities": "表示できるのは最大 {count} 個のエンティティです。先に 1 つ削除してください",
     "up": "上へ",
     "url": "サーバーの URL",
     "without_area": "エリアなしのエンティティ"

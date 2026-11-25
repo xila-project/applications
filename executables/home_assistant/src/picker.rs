@@ -17,6 +17,8 @@ use std::{format, string::String, vec::Vec};
 pub const SEPARATOR: char = '|';
 /// Most entries read from one template answer.
 pub const MAXIMUM_ENTRIES: usize = 256;
+/// The loop index at which a bounded template marks a truncated list.
+pub const MAXIMUM_ENTRIES_PLUS_ONE: usize = MAXIMUM_ENTRIES + 1;
 /// Largest template answer read.
 pub const MAXIMUM_TEMPLATE_ANSWER_LENGTH: usize = 64 * 1024;
 /// Longest line kept, so a runaway answer does not fill memory.
@@ -62,11 +64,13 @@ pub fn area_entities_template(area_id: &str) -> Result<String> {
 }
 
 /// Template listing the supported entities that no area holds, one per
-/// line. The loop stops the output at [`MAXIMUM_ENTRIES`] rows and marks a
-/// truncated list, so a huge installation cannot flood the answer.
+/// line. The loop emits a row only while the index is at most
+/// [`MAXIMUM_ENTRIES`], and marks a truncated list at the next index, so a
+/// huge installation cannot flood the answer with rows the application
+/// would refuse anyway.
 pub fn no_area_entities_template() -> String {
     format!(
-        "{{% set in_areas = areas() | map('area_entities') | sum(start=[]) %}}{{% for state in states if state.entity_id.split('.')[0] in {SUPPORTED_DOMAINS} and state.entity_id not in in_areas %}}{{{{ state.entity_id }}}}{SEPARATOR}{{{{ (state_attr(state.entity_id, 'friendly_name') or state.entity_id){SANITIZE_NAME} }}}}\n{{% if loop.index == {MAXIMUM_ENTRIES} %}}@@truncated@@\n{{% endif %}}{{% endfor %}}"
+        "{{% set in_areas = areas() | map('area_entities') | sum(start=[]) %}}{{% for state in states if state.entity_id.split('.')[0] in {SUPPORTED_DOMAINS} and state.entity_id not in in_areas %}}{{% if loop.index <= {MAXIMUM_ENTRIES} %}}{{{{ state.entity_id }}}}{SEPARATOR}{{{{ (state_attr(state.entity_id, 'friendly_name') or state.entity_id){SANITIZE_NAME} }}}}\n{{% endif %}}{{% if loop.index == {MAXIMUM_ENTRIES_PLUS_ONE} %}}@@truncated@@\n{{% endif %}}{{% endfor %}}"
     )
 }
 
@@ -90,7 +94,8 @@ const TRUNCATED_MARKER: &str = "@@truncated@@";
 
 /// Parses a picker answer: one `identifier|name` per line. Lines that do not
 /// hold a supported identifier are skipped, duplicates collapse, and the
-/// list stops at [`MAXIMUM_ENTRIES`]. `entities_only` decides whether the
+/// list stops at [`MAXIMUM_ENTRIES`] with `truncated` set when the answer
+/// held more rows. `entities_only` decides whether the
 /// identifier is kept: areas hold any identifier, entities only the domains
 /// the application shows. A line longer than the limit is cut at a character
 /// boundary, so it can never panic on a multi-byte character.
@@ -103,6 +108,8 @@ pub fn parse_entries(text: &str, entities_only: bool) -> Answer {
             continue;
         }
         if entries.len() >= MAXIMUM_ENTRIES {
+            // The answer holds more rows than the limit: the list is cut.
+            truncated = true;
             break;
         }
         let line = if line.len() > MAXIMUM_LINE_LENGTH {
@@ -158,8 +165,11 @@ mod tests {
         assert!(area_entities_template("Living Room").is_err());
         let no_area = no_area_entities_template();
         assert!(no_area.contains("not in in_areas"));
-        // The "no area" loop is bounded and marks a truncated list.
-        assert!(no_area.contains("{% if loop.index == 256 %}@@truncated@@\n{% endif %}"));
+        // The "no area" loop emits a row only up to the limit, and marks a
+        // truncated list at the next index.
+        assert!(no_area.contains("{% if loop.index <= 256 %}"));
+        assert!(no_area.contains("{% if loop.index == 257 %}@@truncated@@\n{% endif %}"));
+        assert!(!no_area.contains("{% if loop.index == 256 %}@@truncated@@"));
         assert_eq!(
             template_body("{{ 1 + 1 }}"),
             "{\"template\":\"{{ 1 + 1 }}\"}"
@@ -212,12 +222,22 @@ mod tests {
         let answer = parse_entries("switch.pump|\n", true);
         assert_eq!(answer.entries.len(), 1);
         assert_eq!(answer.entries[0].name, "");
-        // The list is bounded.
+        // The list is bounded, and a cut list is reported as truncated.
         let many = (0..500)
             .map(|index| format!("sensor.s{index}|S{index}"))
             .collect::<Vec<_>>()
             .join("\n");
-        assert_eq!(parse_entries(&many, true).entries.len(), MAXIMUM_ENTRIES);
+        let answer = parse_entries(&many, true);
+        assert_eq!(answer.entries.len(), MAXIMUM_ENTRIES);
+        assert!(answer.truncated);
+        // An answer that stops exactly at the limit is not truncated.
+        let exact = (0..MAXIMUM_ENTRIES)
+            .map(|index| format!("sensor.s{index}|S{index}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let answer = parse_entries(&exact, true);
+        assert_eq!(answer.entries.len(), MAXIMUM_ENTRIES);
+        assert!(!answer.truncated);
         // A long line is cut at a character boundary, not inside one.
         let mut long = String::from("sensor.long|");
         long.push_str(&"é".repeat(300));

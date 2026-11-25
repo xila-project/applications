@@ -9,14 +9,15 @@
     "turn_on": "打开"
   },
   "errors": {
-    "admin_needed": "区域选择器需要管理员账户",
+    "admin_needed": "Home Assistant 拒绝了请求：请检查令牌，并确认该令牌属于管理员账户",
     "configuration": "配置文件不完整或无效",
     "forbidden": "Home Assistant 拒绝了该请求 (403)",
     "http": "Home Assistant错误 {status}",
     "import_empty": "文件中没有令牌",
     "import_invalid": "令牌包含标头无法携带的字符",
     "import_missing": "文件不存在",
-    "import_too_long": "令牌过长（最多 512 字节）",
+    "import_read": "无法读取文件",
+    "import_too_long": "令牌过长（最多 {count} 字节）",
     "invalid_response": "来自Home Assistant的意外响应",
     "missing_token": "没有令牌：请在设置中添加，或从文件导入",
     "network": "无网络连接",
@@ -69,6 +70,7 @@
     "token_help_create": "在 Home Assistant 中创建令牌：个人资料，然后安全，然后长期访问令牌。",
     "token_help_terminal": "或在 Xila 终端中：echo '<token>' > /users/<user>/applications/xila.home-assistant/configuration/token",
     "token_hint": "令牌已隐藏。按“显示”可输入或修改。",
+    "too_many_entities": "最多显示 {count} 个实体：请先移除一个",
     "up": "上移",
     "url": "服务器 URL",
     "without_area": "无区域的实体"

@@ -65,6 +65,9 @@ struct Picker {
     /// The page body the list is built in.
     parent: *mut Object,
     content: *mut Object,
+    /// The message line of the picker page: while the picker is open, the
+    /// settings page is hidden, so messages go here.
+    message: *mut Object,
     /// The last areas answer, when the area list shows.
     areas: Vec<Entry>,
     /// Switches of the entity rows showing, with the entity identifier.
@@ -219,7 +222,7 @@ impl Settings {
                 button(import_row, t!("settings.import"), OUTLINE)?,
                 Action::Import,
             ));
-            settings.refresh_token_shown()?;
+            settings.update_token_field()?;
             settings.build_entities()?;
             Ok(settings)
         }
@@ -289,10 +292,16 @@ impl Settings {
     }
 
     unsafe fn show_message(&self, text: &str, color: u32) -> wasm::Result<()> {
+        // While the picker is open, its page covers the settings: the message
+        // goes to the picker page, not to the hidden settings one.
+        let message = match &self.picker {
+            Some(picker) => picker.message,
+            None => self.message,
+        };
         unsafe {
-            set_text(self.message, text)?;
-            object_set_text_color(self.message, color, 0)?;
-            set_hidden(self.message, text.is_empty())?;
+            set_text(message, text)?;
+            object_set_text_color(message, color, 0)?;
+            set_hidden(message, text.is_empty())?;
         }
         Ok(())
     }
@@ -322,7 +331,7 @@ impl Settings {
 
     /// Shows the token field as the secret while it is visible, as the mask
     /// while it is hidden.
-    unsafe fn refresh_token_shown(&self) -> wasm::Result<()> {
+    unsafe fn update_token_field(&self) -> wasm::Result<()> {
         let shown = if self.token_visible {
             self.token.clone()
         } else if self.token.is_empty() {
@@ -334,13 +343,18 @@ impl Settings {
     }
 
     /// The token of the token field, checked: the picker and the save both
-    /// need a token the header can carry.
-    fn token(&self) -> core::result::Result<String, Error> {
+    /// need a token the header can carry. While the field is visible, its
+    /// text is read back, so a change event drained after a blocking call
+    /// does not lose an edit.
+    unsafe fn token(&mut self) -> wasm::Result<core::result::Result<String, Error>> {
+        if self.token_visible {
+            self.token = unsafe { field_text(self.token_field)? };
+        }
         let token = self.token.trim();
         if token.is_empty() {
-            return Err(Error::MissingToken);
+            return Ok(Err(Error::MissingToken));
         }
-        validate_token(token).map(|()| String::from(token))
+        Ok(validate_token(token).map(|()| String::from(token)))
     }
 
     /// Shows a message and lets the display catch up before a blocking call.
@@ -389,7 +403,7 @@ impl Settings {
             Ok(token) => {
                 self.token = token;
                 unsafe {
-                    self.refresh_token_shown()?;
+                    self.update_token_field()?;
                     self.show_message(t!("settings.imported"), SUCCESS_COLOR)
                 }
             }
@@ -403,7 +417,7 @@ impl Settings {
             Ok(endpoint) => endpoint,
             Err(message) => return unsafe { self.show_message(&message, ERROR_COLOR) },
         };
-        let token = match self.token() {
+        let token = match unsafe { self.token()? } {
             Ok(token) => token,
             Err(error) => return unsafe { self.show_message(&error_message(&error), ERROR_COLOR) },
         };
@@ -413,7 +427,7 @@ impl Settings {
             let Page {
                 root: picker_root,
                 bar,
-                message: _,
+                message: picker_message,
                 body: parent,
             } = page(self.window, t!("settings.picker_title"))?;
             self.actions.push((
@@ -426,6 +440,7 @@ impl Settings {
                 root: picker_root,
                 parent,
                 content,
+                message: picker_message,
                 areas: Vec::new(),
                 switches: Vec::new(),
             });
@@ -439,7 +454,9 @@ impl Settings {
                     if let Some(picker) = &mut self.picker {
                         picker.areas = answer.entries;
                     }
-                    self.build_picker_areas(answer.truncated)
+                    self.build_picker_areas(answer.truncated)?;
+                    // The list replaced the loading line.
+                    self.show_message("", MUTED_COLOR)
                 }
                 Err(error) => {
                     let text = error_message(&error);
@@ -501,7 +518,7 @@ impl Settings {
             Ok(endpoint) => endpoint,
             Err(message) => return unsafe { self.show_message(&message, ERROR_COLOR) },
         };
-        let token = match self.token() {
+        let token = match unsafe { self.token()? } {
             Ok(token) => token,
             Err(error) => return unsafe { self.show_message(&error_message(&error), ERROR_COLOR) },
         };
@@ -544,6 +561,8 @@ impl Settings {
                 set_checked(switch, checked)?;
                 picker.switches.push((switch, entry.identifier.clone()));
             }
+            // The list replaced the loading line.
+            self.show_message("", MUTED_COLOR)?;
         }
         Ok(())
     }
@@ -564,11 +583,12 @@ impl Settings {
         Ok(())
     }
 
-    /// Adds or removes an entity of the picker in the draft.
-    fn toggle_picker_entity(&mut self, identifier: &str, checked: bool) {
+    /// Adds or removes an entity of the picker in the draft; returns whether
+    /// the draft changed. Adding past the entity limit changes nothing.
+    fn toggle_picker_entity(&mut self, identifier: &str, checked: bool) -> bool {
         if checked {
             if self.draft.entities.len() >= MAXIMUM_ENTITIES {
-                return;
+                return false;
             }
             if !self
                 .draft
@@ -577,10 +597,12 @@ impl Settings {
                 .any(|entity| entity == identifier)
             {
                 self.draft.entities.push(String::from(identifier));
+                return true;
             }
         } else {
             self.draft.entities.retain(|entity| entity != identifier);
         }
+        true
     }
 
     /// Saves the draft: the configuration file and the token file, each
@@ -595,18 +617,20 @@ impl Settings {
                 self.show_message(&error_message(&Error::Storage), ERROR_COLOR)?;
                 return Ok(Outcome::Stay);
             };
-            let token = match self.token() {
+            let token = match self.token()? {
                 Ok(token) => token,
                 Err(error) => {
                     self.show_message(&error_message(&error), ERROR_COLOR)?;
                     return Ok(Outcome::Stay);
                 }
             };
-            if let Err(error) = storage.save_token(&token) {
+            // The configuration is written first, the token second: a failed
+            // token write leaves the previous token file in place.
+            if let Err(error) = storage.save(&self.draft) {
                 self.show_message(&error_message(&error), ERROR_COLOR)?;
                 return Ok(Outcome::Stay);
             }
-            if let Err(error) = storage.save(&self.draft) {
+            if let Err(error) = storage.save_token(&token) {
                 self.show_message(&error_message(&error), ERROR_COLOR)?;
                 return Ok(Outcome::Stay);
             }
@@ -638,7 +662,7 @@ impl Settings {
                             String::from(SECRET_MASK)
                         };
                         if field_text(self.token_field)? != shown {
-                            self.refresh_token_shown()?;
+                            self.update_token_field()?;
                         }
                     }
                     return Ok(Outcome::Stay);
@@ -649,7 +673,14 @@ impl Settings {
                 {
                     let identifier = identifier.clone();
                     let checked = is_checked(target)?;
-                    self.toggle_picker_entity(&identifier, checked);
+                    if checked && !self.toggle_picker_entity(&identifier, checked) {
+                        let text = t!(
+                            "settings.too_many_entities",
+                            count = MAXIMUM_ENTITIES as u64
+                        )
+                        .to_string();
+                        self.show_message(&text, ERROR_COLOR)?;
+                    }
                 }
                 return Ok(Outcome::Stay);
             }
@@ -669,7 +700,7 @@ impl Settings {
                 Action::Cancel => return Ok(Outcome::Close),
                 Action::ToggleToken => {
                     self.token_visible = !self.token_visible;
-                    self.refresh_token_shown()?;
+                    self.update_token_field()?;
                     let caption = if self.token_visible {
                         t!("settings.hide")
                     } else {

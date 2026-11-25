@@ -190,9 +190,13 @@ impl Interface {
         self.show_notice()?;
         // The settings open by themselves when the configuration or the
         // token is missing, even though the missing token is also a start
-        // error: it shows once, in the settings.
+        // error: it shows once, in the settings. The cards are built anyway,
+        // so the main screen is usable after Cancel.
         let needs_setup = self.configuration.is_none() || self.token.is_none();
         if needs_setup {
+            if self.configuration.is_some() {
+                self.rebuild()?;
+            }
             return self.open_settings();
         }
         if self.configuration.is_none() {

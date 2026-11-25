@@ -20,6 +20,8 @@ pub enum Error {
     AdminNeeded,
     /// The import file does not exist.
     ImportMissing,
+    /// The import file exists but could not be read.
+    ImportRead,
     /// The import file holds no token.
     ImportEmpty,
     /// The imported token holds characters a header cannot carry.

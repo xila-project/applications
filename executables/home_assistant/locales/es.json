@@ -9,14 +9,15 @@
     "turn_on": "Encender"
   },
   "errors": {
-    "admin_needed": "El selector de áreas necesita una cuenta de administrador",
+    "admin_needed": "Home Assistant rechazó la solicitud: comprueba el token y que pertenezca a un administrador",
     "configuration": "El archivo de configuración está incompleto o no es válido",
     "forbidden": "Home Assistant rechazó la solicitud (403)",
     "http": "Error de Home Assistant {status}",
     "import_empty": "El archivo no contiene ningún token",
     "import_invalid": "El token contiene caracteres que una cabecera no puede llevar",
     "import_missing": "El archivo no existe",
-    "import_too_long": "El token es demasiado largo (512 bytes como máximo)",
+    "import_read": "No se pudo leer el archivo",
+    "import_too_long": "El token es demasiado largo (como máximo {count} bytes)",
     "invalid_response": "Respuesta inesperada de Home Assistant",
     "missing_token": "Sin token: añade uno en los ajustes o impórtalo desde un archivo",
     "network": "Sin conexión de red",
@@ -69,6 +70,7 @@
     "token_help_create": "Crea el token en Home Assistant: Perfil, luego Seguridad, luego Tokens de acceso de larga duración.",
     "token_help_terminal": "O desde el terminal de Xila: echo '<token>' > /users/<user>/applications/xila.home-assistant/configuration/token",
     "token_hint": "El token está oculto. Pulsa Mostrar para introducirlo o cambiarlo.",
+    "too_many_entities": "Se muestran como máximo {count} entidades: elimine una primero",
     "up": "Subir",
     "url": "URL del servidor",
     "without_area": "Entidades sin área"

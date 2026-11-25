@@ -9,14 +9,15 @@
     "turn_on": "Einschalten"
   },
   "errors": {
-    "admin_needed": "Die Bereichsauswahl braucht ein Administratorkonto",
+    "admin_needed": "Home Assistant hat die Anfrage abgelehnt: Token und Administrator-Rechte prüfen",
     "configuration": "Die Konfigurationsdatei ist unvollständig oder ungültig",
     "forbidden": "Home Assistant hat die Anfrage abgelehnt (403)",
     "http": "Home-Assistant-Fehler {status}",
     "import_empty": "Die Datei enthält kein Token",
     "import_invalid": "Das Token enthält Zeichen, die ein Header nicht übertragen kann",
     "import_missing": "Die Datei existiert nicht",
-    "import_too_long": "Das Token ist zu lang (höchstens 512 Bytes)",
+    "import_read": "Die Datei konnte nicht gelesen werden",
+    "import_too_long": "Das Token ist zu lang (höchstens {count} Bytes)",
     "invalid_response": "Unerwartete Antwort von Home Assistant",
     "missing_token": "Kein Token: in den Einstellungen eines hinzufügen oder aus einer Datei importieren",
     "network": "Keine Netzwerkverbindung",
@@ -69,6 +70,7 @@
     "token_help_create": "Token in Home Assistant anlegen: Profil, dann Sicherheit, dann Langlebige Zugriffstoken.",
     "token_help_terminal": "Oder über das Xila-Terminal: echo '<token>' > /users/<user>/applications/xila.home-assistant/configuration/token",
     "token_hint": "Das Token ist ausgeblendet. Zum Eingeben oder Ändern auf Anzeigen drücken.",
+    "too_many_entities": "Höchstens {count} Entitäten werden angezeigt: entfernen Sie zuerst eine",
     "up": "Hoch",
     "url": "Server-URL",
     "without_area": "Entitäten ohne Bereich"

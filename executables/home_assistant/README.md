@@ -51,11 +51,10 @@ holds:
   with a Show button to reveal it (the token is never logged), an "Import
   from file" action, and a help text. The import reads the first non-empty
   line of a file the user points at (by default
-  `/media/sd_card/home_assistant_token.txt`, the SD card mount of the boards
-  that have one, such as the WT32-SC01 Plus), trims it, checks it with the
-  same rules as the token file, and stores it. The source file is only read,
-  never changed. A missing, empty, invalid or too long file shows its own
-  error;
+  `/media/sd_card/home_assistant_token.txt`, the SD card mount), trims it,
+  checks it with the same rules as the token file, and stores it. The source
+  file is only read, never changed. A missing, empty, unreadable, invalid or
+  too long file shows its own error;
 - **Entities:** the ordered list of entity identifiers, with buttons to add
   an identifier by hand, remove an entry, and move an entry up or down. An
   "add from the server" button opens a picker that lists the areas of the
@@ -122,6 +121,17 @@ The fields are:
 To revoke it later, delete it under **Profile -> Security -> Long-Lived
 Access Tokens**; the application then gets 401 answers and shows the token
 error.
+
+### Reading the token from an SD card
+
+Only the WT32-SC01 Plus has a microSD slot. The card must hold LittleFS: a
+FAT card is not mounted. The firmware probes the card once, at boot, and
+mounts it at `/media/sd_card`, so insert the card before starting the
+device. To format a card with LittleFS, create the file
+`/configuration/system/format_sd_card` holding the text `erase` and reboot
+(see xila-project/platforms#219). Then put the token in
+`/media/sd_card/home_assistant_token.txt` on the card, for example from a
+computer, and use **Import from file** in the settings with that path.
 
 ### Writing the files over the serial shell
 

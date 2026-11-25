@@ -139,21 +139,23 @@ impl Storage {
     }
 
     /// Reads a token from a file the user points at, such as one on an SD
-    /// card: the first non-empty line, trimmed of spaces and its line end.
-    /// The source file is only read, never changed. The token passes the
-    /// same rules as the token file, and each refusal says which rule broke.
+    /// card: the first non-empty line, trimmed of spaces, its line end and a
+    /// leading byte order mark. The source file is only read, never changed.
+    /// The token passes the same rules as the token file, and each refusal
+    /// says which rule broke.
     pub fn read_token_file(path: &str) -> Result<String> {
         let file = fs::File::open(path).map_err(|error| match error.kind() {
             io::ErrorKind::NotFound => Error::ImportMissing,
-            _ => Error::Storage,
+            _ => Error::ImportRead,
         })?;
         let mut bytes = Vec::new();
         file.take(MAXIMUM_IMPORT_SIZE)
             .read_to_end(&mut bytes)
-            .map_err(|_| Error::Storage)?;
+            .map_err(|_| Error::ImportRead)?;
         // The read may stop in the middle of a character at the limit; the
         // first line is before it, so a lossy tail does not matter.
         let text = String::from_utf8_lossy(&bytes);
+        let text = text.strip_prefix('\u{FEFF}').unwrap_or(&text);
         let line = text.lines().map(str::trim).find(|line| !line.is_empty());
         match line {
             None => Err(Error::ImportEmpty),
@@ -288,6 +290,12 @@ mod tests {
         assert_eq!(
             fs::read_to_string(&file).unwrap(),
             "\n  glsa_token  \r\nsecond line\n"
+        );
+        // A leading byte order mark is trimmed.
+        fs::write(&file, "\u{FEFF}glsa_token\n").unwrap();
+        assert_eq!(
+            Storage::read_token_file(file.to_str().unwrap()).unwrap(),
+            "glsa_token"
         );
         for (contents, expected) in [
             ("two words\n", Error::ImportInvalid),

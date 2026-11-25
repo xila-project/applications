@@ -9,14 +9,15 @@
     "turn_on": "Activer"
   },
   "errors": {
-    "admin_needed": "Le sélecteur de zones exige un compte administrateur",
+    "admin_needed": "Home Assistant a refusé la requête : vérifiez le jeton et qu’il appartient à un administrateur",
     "configuration": "Le fichier de configuration est incomplet ou invalide",
     "forbidden": "Home Assistant a refusé la requête (403)",
     "http": "Erreur Home Assistant {status}",
     "import_empty": "Le fichier ne contient aucun jeton",
     "import_invalid": "Le jeton contient des caractères qu’un en-tête ne peut pas transmettre",
     "import_missing": "Le fichier n’existe pas",
-    "import_too_long": "Le jeton est trop long (512 octets maximum)",
+    "import_read": "Le fichier n’a pas pu être lu",
+    "import_too_long": "Le jeton est trop long (au plus {count} octets)",
     "invalid_response": "Réponse inattendue de Home Assistant",
     "missing_token": "Aucun jeton : ajoutez-en un dans les réglages ou importez-le depuis un fichier",
     "network": "Pas de connexion réseau",
@@ -67,8 +68,9 @@
     "title": "Réglages",
     "token": "Jeton d’accès longue durée",
     "token_help_create": "Créez le jeton dans Home Assistant : Profil, puis Sécurité, puis Jetons d’accès longue durée.",
-    "token_help_terminal": "Ou depuis le terminal Xila : echo <token> > /users/<user>/applications/xila.home-assistant/configuration/token",
+    "token_help_terminal": "Ou depuis le terminal Xila : `echo '<token>' > /users/<user>/applications/xila.home-assistant/configuration/token`",
     "token_hint": "Le jeton est masqué. Appuyez sur Afficher pour le saisir ou le modifier.",
+    "too_many_entities": "Au plus {count} entités sont affichées : supprimez-en une d’abord",
     "up": "Monter",
     "url": "URL du serveur",
     "without_area": "Entités sans zone"

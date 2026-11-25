@@ -64,38 +64,15 @@ impl Endpoint {
     }
 
     /// The request bytes for `path`, below the base path, with the bearer
-    /// `token` and a JSON `body`.
+    /// `token` and an optional JSON `body`.
     pub fn request(&self, method: &str, path: &str, token: &str, body: Option<&[u8]>) -> Vec<u8> {
-        self.request_head(
-            method,
-            path,
-            Some(token),
-            body.map(|_| "application/json"),
-            body,
-        )
-    }
-
-    /// The request bytes for `path`, below the base path, with an optional
-    /// bearer token and an optional body with its content type.
-    pub fn request_head(
-        &self,
-        method: &str,
-        path: &str,
-        token: Option<&str>,
-        content_type: Option<&str>,
-        body: Option<&[u8]>,
-    ) -> Vec<u8> {
         let mut head = format!(
-            "{method} {}{path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nUser-Agent: {USER_AGENT}\r\n",
+            "{method} {}{path} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\nAccept: application/json\r\nAccept-Encoding: identity\r\nUser-Agent: {USER_AGENT}\r\nAuthorization: Bearer {token}\r\n",
             self.base_path, self.host
         );
-        if let Some(token) = token {
-            head.push_str(&format!("Authorization: Bearer {token}\r\n"));
-        }
         if let Some(body) = body {
-            let content_type = content_type.unwrap_or("application/json");
             head.push_str(&format!(
-                "Content-Type: {content_type}\r\nContent-Length: {}\r\n",
+                "Content-Type: application/json\r\nContent-Length: {}\r\n",
                 body.len()
             ));
         }
@@ -105,19 +82,6 @@ impl Endpoint {
             request.extend_from_slice(body);
         }
         request
-    }
-
-    /// The request bytes for an `application/x-www-form-urlencoded` body on
-    /// `path`, without an authorization header: the authentication endpoints
-    /// take no token.
-    pub fn request_form(&self, method: &str, path: &str, body: &str) -> Vec<u8> {
-        self.request_head(
-            method,
-            path,
-            None,
-            Some("application/x-www-form-urlencoded"),
-            Some(body.as_bytes()),
-        )
     }
 }
 

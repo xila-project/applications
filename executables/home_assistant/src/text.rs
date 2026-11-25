@@ -2,6 +2,7 @@
 
 use crate::configuration::Invalid;
 use crate::error::Error;
+use crate::storage::MAXIMUM_TOKEN_LENGTH;
 use embedded_i18n::t;
 use std::string::{String, ToString};
 
@@ -16,9 +17,14 @@ pub fn error_message(error: &Error) -> String {
         Error::NotFound => String::from(t!("errors.not_found")),
         Error::AdminNeeded => String::from(t!("errors.admin_needed")),
         Error::ImportMissing => String::from(t!("errors.import_missing")),
+        Error::ImportRead => String::from(t!("errors.import_read")),
         Error::ImportEmpty => String::from(t!("errors.import_empty")),
         Error::ImportInvalid => String::from(t!("errors.import_invalid")),
-        Error::ImportTooLong => String::from(t!("errors.import_too_long")),
+        Error::ImportTooLong => t!(
+            "errors.import_too_long",
+            count = MAXIMUM_TOKEN_LENGTH as u64
+        )
+        .to_string(),
         Error::Http(status) => t!("errors.http", status = status).to_string(),
         Error::InvalidResponse => String::from(t!("errors.invalid_response")),
         Error::TooLarge => String::from(t!("errors.too_large")),
@@ -69,7 +75,7 @@ mod tests {
         );
         assert_eq!(
             error_message(&Error::AdminNeeded),
-            "The area picker needs an administrator account"
+            "Home Assistant refused the request: check the token and that it belongs to an administrator"
         );
         assert_eq!(
             error_message(&Error::ImportMissing),
@@ -86,6 +92,10 @@ mod tests {
         assert_eq!(
             error_message(&Error::ImportTooLong),
             "The token is too long (at most 512 bytes)"
+        );
+        assert_eq!(
+            error_message(&Error::ImportRead),
+            "The file could not be read"
         );
         assert_eq!(age(42), "42 s");
         assert_eq!(age(600), "10 min");
