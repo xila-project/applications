@@ -12,22 +12,17 @@ pub fn error_message(error: &Error) -> String {
         Error::Network => String::from(t!("errors.network")),
         Error::Timeout => String::from(t!("errors.timeout")),
         Error::Unauthorized => String::from(t!("errors.unauthorized")),
-        Error::Revoked => String::from(t!("errors.revoked")),
+        Error::Forbidden => String::from(t!("errors.forbidden")),
         Error::NotFound => String::from(t!("errors.not_found")),
+        Error::AdminNeeded => String::from(t!("errors.admin_needed")),
+        Error::ImportMissing => String::from(t!("errors.import_missing")),
+        Error::ImportEmpty => String::from(t!("errors.import_empty")),
+        Error::ImportInvalid => String::from(t!("errors.import_invalid")),
+        Error::ImportTooLong => String::from(t!("errors.import_too_long")),
         Error::Http(status) => t!("errors.http", status = status).to_string(),
         Error::InvalidResponse => String::from(t!("errors.invalid_response")),
         Error::TooLarge => String::from(t!("errors.too_large")),
         Error::Storage => String::from(t!("errors.storage")),
-    }
-}
-
-/// A refused answer of the login flow: the known reasons get their own text,
-/// any other reason is shown as it came.
-pub fn login_error(reason: &str) -> String {
-    match reason {
-        "invalid_auth" => String::from(t!("settings.reason.invalid_auth")),
-        "invalid_code" => String::from(t!("settings.reason.invalid_code")),
-        other => t!("settings.login_failed", reason = other).to_string(),
     }
 }
 
@@ -52,34 +47,6 @@ pub fn age(seconds: u64) -> String {
     }
 }
 
-/// Character shown for each hidden token character.
-pub const MASK: char = '*';
-
-/// Mask of `count` characters.
-pub fn mask(count: usize) -> String {
-    core::iter::repeat_n(MASK, count).collect()
-}
-
-/// Applies an edit of a masked field to the secret it hides. The field shows
-/// one mask character per secret character, so each mask character stands for
-/// the next character of the secret, and any other character is new text,
-/// wherever it was typed. Characters deleted are taken from the end: the
-/// field cannot tell which of its mask characters went.
-pub fn apply_masked_edit(secret: &mut String, shown: &str) {
-    let mut old = secret.chars();
-    let mut edited = String::new();
-    for character in shown.chars() {
-        if character == MASK {
-            if let Some(kept) = old.next() {
-                edited.push(kept);
-            }
-        } else {
-            edited.push(character);
-        }
-    }
-    *secret = edited;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,20 +55,38 @@ mod tests {
     fn messages_come_from_the_catalog() {
         assert_eq!(
             error_message(&Error::Unauthorized),
-            "Home Assistant refused the token (401 or 403)"
+            "Home Assistant refused the token (401)"
         );
-        assert_eq!(error_message(&Error::NotFound), "Entity not found (404)");
+        assert_eq!(
+            error_message(&Error::Forbidden),
+            "Home Assistant refused the request (403)"
+        );
+        assert_eq!(error_message(&Error::NotFound), "Not found (404)");
         assert_eq!(error_message(&Error::Http(502)), "Home Assistant error 502");
         assert_eq!(
             error_message(&Error::MissingToken),
-            "No credentials: sign in or add a token in the settings"
+            "No token: add one in the settings or import it from a file"
         );
         assert_eq!(
-            error_message(&Error::Revoked),
-            "Signed out: the device was revoked in Home Assistant"
+            error_message(&Error::AdminNeeded),
+            "The area picker needs an administrator account"
         );
-        assert_eq!(login_error("invalid_auth"), "Wrong username or password");
-        assert_eq!(login_error("weird"), "Sign-in failed: weird");
+        assert_eq!(
+            error_message(&Error::ImportMissing),
+            "The file does not exist"
+        );
+        assert_eq!(
+            error_message(&Error::ImportEmpty),
+            "The file holds no token"
+        );
+        assert_eq!(
+            error_message(&Error::ImportInvalid),
+            "The token holds characters a header cannot carry"
+        );
+        assert_eq!(
+            error_message(&Error::ImportTooLong),
+            "The token is too long (at most 512 bytes)"
+        );
         assert_eq!(age(42), "42 s");
         assert_eq!(age(600), "10 min");
         assert_eq!(age(7_300), "2 h");
@@ -113,22 +98,5 @@ mod tests {
             invalid_message(Invalid::Entity),
             "An entity identifier holds a domain and an object identifier, such as light.living_room"
         );
-    }
-
-    #[test]
-    fn masked_edits_append_and_delete_at_the_end() {
-        let mut token = String::new();
-        apply_masked_edit(&mut token, "a");
-        apply_masked_edit(&mut token, "*b");
-        apply_masked_edit(&mut token, "**cd");
-        assert_eq!(token, "abcd");
-        assert_eq!(mask(token.chars().count()), "****");
-        apply_masked_edit(&mut token, "***");
-        assert_eq!(token, "abc");
-        apply_masked_edit(&mut token, "");
-        assert_eq!(token, "");
-        // A pasted value replaces the whole field.
-        apply_masked_edit(&mut token, "glsa_pasted");
-        assert_eq!(token, "glsa_pasted");
     }
 }

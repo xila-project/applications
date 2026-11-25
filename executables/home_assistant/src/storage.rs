@@ -1,13 +1,10 @@
-//! Configuration, credentials and token files.
+//! Configuration and token files.
 //!
 //! All live in the application's private configuration directory, which the
 //! WebAssembly runner creates for each user with owner-only permissions and
-//! passes in `XILA_APPLICATION_CONFIGURATION`. The credentials never sit in
-//! the configuration file: the refresh token of a sign-in stays in its own
-//! file, a long-lived access token in another, and neither is ever logged or
-//! shown.
+//! passes in `XILA_APPLICATION_CONFIGURATION`. The access token never sits in
+//! the configuration file: it stays in its own file, and is never logged.
 
-use crate::auth::Credentials;
 use crate::configuration::Configuration;
 use crate::error::{Error, Result};
 use std::{
@@ -20,13 +17,12 @@ use std::{
 
 pub const CONFIGURATION_FILE: &str = "configuration.json";
 pub const TOKEN_FILE: &str = "token";
-pub const CREDENTIALS_FILE: &str = "credentials.json";
 /// Largest configuration file read.
 const MAXIMUM_CONFIGURATION_SIZE: u64 = 16 * 1024;
-/// Largest credentials file read.
-const MAXIMUM_CREDENTIALS_SIZE: u64 = 4 * 1024;
 /// Largest token accepted.
 pub const MAXIMUM_TOKEN_LENGTH: usize = 512;
+/// Largest import file read: only its first non-empty line is used.
+const MAXIMUM_IMPORT_SIZE: u64 = 4 * 1024;
 
 /// A token is sent in a header or a request body: printable ASCII only, so
 /// that no character can end the line or break the body.
@@ -34,6 +30,22 @@ pub fn is_valid_token(token: &str) -> bool {
     !token.is_empty()
         && token.len() <= MAXIMUM_TOKEN_LENGTH
         && token.bytes().all(|byte| byte.is_ascii_graphic())
+}
+
+/// Checks a token before it is stored or sent: not empty, at most
+/// [`MAXIMUM_TOKEN_LENGTH`] bytes, printable ASCII only. Each refusal says
+/// which rule broke.
+pub fn validate_token(token: &str) -> Result<()> {
+    if token.is_empty() {
+        return Err(Error::MissingToken);
+    }
+    if token.len() > MAXIMUM_TOKEN_LENGTH {
+        return Err(Error::ImportTooLong);
+    }
+    if !is_valid_token(token) {
+        return Err(Error::ImportInvalid);
+    }
+    Ok(())
 }
 
 pub struct Storage {
@@ -113,53 +125,39 @@ impl Storage {
 
     pub fn save_token(&self, token: &str) -> Result<()> {
         let token = token.trim();
-        if !is_valid_token(token) {
-            return Err(Error::MissingToken);
-        }
+        validate_token(token)?;
         self.write(TOKEN_FILE, token.as_bytes())
     }
 
-    /// The credentials of a sign-in, or `None` when there are none.
-    pub fn credentials(&self) -> Result<Option<Credentials>> {
-        let path = self.directory.join(CREDENTIALS_FILE);
-        match fs::metadata(&path) {
-            Ok(metadata) if metadata.len() > MAXIMUM_CREDENTIALS_SIZE => {
-                return Err(Error::TooLarge);
-            }
-            Ok(_) => (),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(_) => return Err(Error::Storage),
-        }
-        let text = fs::read_to_string(path).map_err(|_| Error::Storage)?;
-        Credentials::parse(&text).map(Some)
-    }
-
-    /// Writes the credentials atomically; the refresh token passes the same
-    /// validation as a long-lived token.
-    pub fn save_credentials(&self, credentials: &Credentials) -> Result<()> {
-        let json = credentials.to_json();
-        if json.len() as u64 > MAXIMUM_CREDENTIALS_SIZE {
-            return Err(Error::TooLarge);
-        }
-        self.write(CREDENTIALS_FILE, json.as_bytes())
-    }
-
-    /// Deletes the credentials file, for a sign-out or a switch to a
-    /// long-lived token.
-    pub fn remove_credentials(&self) -> Result<()> {
-        match fs::remove_file(self.directory.join(CREDENTIALS_FILE)) {
-            Ok(()) => Ok(()),
-            Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-            Err(_) => Err(Error::Storage),
-        }
-    }
-
-    /// Deletes the token file, for a sign-out or a switch to a sign-in.
+    /// Deletes the token file.
     pub fn remove_token(&self) -> Result<()> {
         match fs::remove_file(self.directory.join(TOKEN_FILE)) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
             Err(_) => Err(Error::Storage),
+        }
+    }
+
+    /// Reads a token from a file the user points at, such as one on an SD
+    /// card: the first non-empty line, trimmed of spaces and its line end.
+    /// The source file is only read, never changed. The token passes the
+    /// same rules as the token file, and each refusal says which rule broke.
+    pub fn read_token_file(path: &str) -> Result<String> {
+        let file = fs::File::open(path).map_err(|error| match error.kind() {
+            io::ErrorKind::NotFound => Error::ImportMissing,
+            _ => Error::Storage,
+        })?;
+        let mut bytes = Vec::new();
+        file.take(MAXIMUM_IMPORT_SIZE)
+            .read_to_end(&mut bytes)
+            .map_err(|_| Error::Storage)?;
+        // The read may stop in the middle of a character at the limit; the
+        // first line is before it, so a lossy tail does not matter.
+        let text = String::from_utf8_lossy(&bytes);
+        let line = text.lines().map(str::trim).find(|line| !line.is_empty());
+        match line {
+            None => Err(Error::ImportEmpty),
+            Some(line) => validate_token(line).map(|()| String::from(line)),
         }
     }
 
@@ -226,11 +224,11 @@ mod tests {
         assert!(!path.join(".configuration.json.new").exists());
 
         assert_eq!(storage.save_token("  "), Err(Error::MissingToken));
-        assert_eq!(storage.save_token("two words"), Err(Error::MissingToken));
-        assert_eq!(storage.save_token("héllo"), Err(Error::MissingToken));
+        assert_eq!(storage.save_token("two words"), Err(Error::ImportInvalid));
+        assert_eq!(storage.save_token("héllo"), Err(Error::ImportInvalid));
         assert_eq!(
             storage.save_token(&"a".repeat(MAXIMUM_TOKEN_LENGTH + 1)),
-            Err(Error::MissingToken)
+            Err(Error::ImportTooLong)
         );
         // A token file written by hand is checked as well: it must not carry
         // a header line of its own.
@@ -246,23 +244,6 @@ mod tests {
         fs::write(path.join(CONFIGURATION_FILE), "{").unwrap();
         assert_eq!(storage.load(), Err(Error::Configuration));
 
-        // The credentials file holds the refresh token and the user name.
-        assert_eq!(storage.credentials(), Ok(None));
-        let credentials = Credentials::new("refresh-1", Some(String::from("Alice"))).unwrap();
-        storage.save_credentials(&credentials).unwrap();
-        assert_eq!(storage.credentials().unwrap().as_ref(), Some(&credentials));
-        assert!(!path.join(".credentials.json.new").exists());
-        fs::write(
-            path.join(CREDENTIALS_FILE),
-            "{\"refresh_token\":\"bad token\"}",
-        )
-        .unwrap();
-        assert_eq!(storage.credentials(), Err(Error::MissingToken));
-        fs::write(path.join(CREDENTIALS_FILE), "not json").unwrap();
-        assert_eq!(storage.credentials(), Err(Error::Configuration));
-        storage.remove_credentials().unwrap();
-        assert_eq!(storage.credentials(), Ok(None));
-        storage.remove_credentials().unwrap();
         storage.remove_token().unwrap();
         assert_eq!(storage.token(), Ok(None));
         storage.remove_token().unwrap();
@@ -279,6 +260,50 @@ mod tests {
             fs::read_to_string(path.join(CONFIGURATION_FILE)).unwrap(),
             "{"
         );
+        fs::remove_dir_all(path).unwrap();
+    }
+
+    #[test]
+    fn reads_a_token_from_an_import_file() {
+        let path = directory("import");
+        let file = path.join("token.txt");
+        fs::create_dir_all(&path).unwrap();
+
+        assert_eq!(
+            Storage::read_token_file(path.join("missing.txt").to_str().unwrap()),
+            Err(Error::ImportMissing)
+        );
+        fs::write(&file, "\n  \n").unwrap();
+        assert_eq!(
+            Storage::read_token_file(file.to_str().unwrap()),
+            Err(Error::ImportEmpty)
+        );
+        // The first non-empty line, trimmed of spaces and its line end.
+        fs::write(&file, "\n  glsa_token  \r\nsecond line\n").unwrap();
+        assert_eq!(
+            Storage::read_token_file(file.to_str().unwrap()).unwrap(),
+            "glsa_token"
+        );
+        // The source file is not changed.
+        assert_eq!(
+            fs::read_to_string(&file).unwrap(),
+            "\n  glsa_token  \r\nsecond line\n"
+        );
+        for (contents, expected) in [
+            ("two words\n", Error::ImportInvalid),
+            ("tab\tbed\n", Error::ImportInvalid),
+            ("héllo\n", Error::ImportInvalid),
+            (
+                &format!("{}\n", "a".repeat(MAXIMUM_TOKEN_LENGTH + 1)),
+                Error::ImportTooLong,
+            ),
+        ] {
+            fs::write(&file, contents).unwrap();
+            assert_eq!(
+                Storage::read_token_file(file.to_str().unwrap()),
+                Err(expected)
+            );
+        }
         fs::remove_dir_all(path).unwrap();
     }
 }

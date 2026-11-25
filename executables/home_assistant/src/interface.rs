@@ -1,8 +1,8 @@
 //! Main screen: a header with the title, the time since the last refresh, the
 //! errors and the settings button, then a grid of entity cards. Each card
 //! shows one configured entity and the controls its domain has. The settings
-//! screen opens over it, automatically when the configuration or the
-//! credentials are missing.
+//! screen opens over it, automatically when the configuration or the token
+//! is missing.
 
 use core::ptr::null_mut;
 use std::{
@@ -13,7 +13,6 @@ use std::{
 use embedded_i18n::t;
 use home_assistant::{
     api,
-    auth::Session,
     configuration::{self, Configuration, Invalid, domain_of},
     error::Error,
     net::{Endpoint, device::Devices},
@@ -58,7 +57,9 @@ pub struct Interface {
     /// The parsed configuration that failed validation, kept as the draft of
     /// the settings when they open at start.
     setup_draft: Option<Configuration>,
-    session: Session,
+    /// The long-lived access token of the token file.
+    token: Option<String>,
+    header: *mut Object,
     title: *mut Object,
     status: *mut Object,
     refresh_button: *mut Object,
@@ -124,7 +125,8 @@ impl Interface {
                 storage: Storage::from_environment(),
                 configuration: None,
                 setup_draft: None,
-                session: Session::default(),
+                token: None,
+                header,
                 title,
                 status,
                 refresh_button,
@@ -161,7 +163,7 @@ impl Interface {
     }
 
     /// Reads the files, builds the cards and shows the first states; opens the
-    /// settings when the configuration or the credentials are missing.
+    /// settings when the configuration or the token is missing.
     fn start(&mut self) -> wasm::Result<()> {
         match &self.storage {
             None => self.startup_error = Some(Error::Storage),
@@ -170,11 +172,11 @@ impl Interface {
                     Ok(configuration) => self.configuration = configuration,
                     Err(error) => self.startup_error = Some(error),
                 }
-                let (session, session_error) = Session::load(storage);
-                self.session = session;
-                // A configuration error shows first when both fail.
-                if session_error.is_some() && self.startup_error.is_none() {
-                    self.startup_error = session_error;
+                match storage.token() {
+                    Ok(token) => self.token = token,
+                    // A configuration error shows first when both fail.
+                    Err(error) if self.startup_error.is_none() => self.startup_error = Some(error),
+                    Err(_) => (),
                 }
             }
         }
@@ -186,8 +188,11 @@ impl Interface {
             self.configuration = None;
         }
         self.show_notice()?;
-        let needs_setup = self.configuration.is_none() || !self.session.has_credentials();
-        if needs_setup && self.startup_error.is_none() {
+        // The settings open by themselves when the configuration or the
+        // token is missing, even though the missing token is also a start
+        // error: it shows once, in the settings.
+        let needs_setup = self.configuration.is_none() || self.token.is_none();
+        if needs_setup {
             return self.open_settings();
         }
         if self.configuration.is_none() {
@@ -199,26 +204,41 @@ impl Interface {
 
     fn open_settings(&mut self) -> wasm::Result<()> {
         let draft = self.configuration.as_ref().or(self.setup_draft.as_ref());
-        let settings = unsafe { Settings::open(self.window, draft, &self.session)? };
+        let token = self.token.as_deref();
+        let settings = unsafe { Settings::open(self.window, draft, token)? };
+        // The settings fill the window: the header, the notice and the card
+        // grid hide while they are open.
+        unsafe {
+            set_hidden(self.header, true)?;
+            set_hidden(self.notice, true)?;
+            set_hidden(self.grid, true)?;
+        }
         self.settings = Some(settings);
         Ok(())
     }
 
     fn close_settings(&mut self) -> wasm::Result<()> {
         if let Some(settings) = self.settings.take() {
-            unsafe { settings.close()? };
+            unsafe {
+                settings.close()?;
+                set_hidden(self.header, false)?;
+                set_hidden(self.notice, false)?;
+                set_hidden(self.grid, false)?;
+            }
         }
         Ok(())
     }
 
-    /// Applies a configuration saved by the settings, and the account files
-    /// written with it.
+    /// Applies a configuration saved by the settings, and reloads the token
+    /// file written with it.
     fn apply_saved(&mut self, configuration: Configuration) -> wasm::Result<()> {
         if let Some(storage) = &self.storage {
-            let (session, session_error) = Session::load(storage);
-            self.session = session;
-            if session_error.is_some() && self.startup_error.is_none() {
-                self.startup_error = session_error;
+            match storage.token() {
+                Ok(token) => {
+                    self.token = token;
+                    self.startup_error = None;
+                }
+                Err(error) => self.startup_error = Some(error),
             }
         }
         self.configuration = Some(configuration);
@@ -230,40 +250,6 @@ impl Interface {
         self.rebuild()?;
         self.show_notice()?;
         self.refresh()
-    }
-
-    /// An access token for the next requests, refreshing it when the session
-    /// needs one. A revoked refresh token forgets the credentials and opens
-    /// the settings.
-    fn access_token(&mut self) -> Option<String> {
-        let Some(configuration) = &self.configuration else {
-            return None;
-        };
-        let endpoint = match Endpoint::parse(&configuration.url) {
-            Ok(endpoint) => endpoint,
-            Err(error) => {
-                self.error = Some(error);
-                return None;
-            }
-        };
-        match self
-            .session
-            .access_token(&mut Devices, &endpoint, Instant::now())
-        {
-            Ok(token) => Some(token),
-            Err(error) => {
-                if error == Error::Revoked {
-                    if let Some(storage) = &self.storage {
-                        let _ = storage.remove_credentials();
-                    }
-                    self.session.clear();
-                    self.startup_error = Some(Error::Revoked);
-                    let _ = self.open_settings();
-                }
-                self.error = Some(error);
-                None
-            }
-        }
     }
 
     /// Shows `text` in the status line right away, before a blocking call.
@@ -420,7 +406,8 @@ impl Interface {
             return Ok(());
         }
         self.show_busy(t!("header.loading"))?;
-        let Some(token) = self.access_token() else {
+        let Some(token) = self.token.clone() else {
+            self.error = Some(Error::MissingToken);
             self.finish_refresh(period);
             return Ok(());
         };
@@ -525,7 +512,8 @@ impl Interface {
         };
         self.show_busy(t!("header.loading"))?;
         self.action_error = None;
-        let Some(token) = self.access_token() else {
+        let Some(token) = self.token.clone() else {
+            self.action_error = Some(Error::MissingToken);
             return Ok(());
         };
         let body = service::service_body(&entity_id);
@@ -593,7 +581,7 @@ impl Interface {
         if let Some(settings) = &mut self.settings {
             let mut context = Context {
                 storage: self.storage.as_ref(),
-                session: &mut self.session,
+                close_requested: &mut self.close_requested,
             };
             match unsafe { settings.handle(code, target, &mut context)? } {
                 Outcome::Stay => (),

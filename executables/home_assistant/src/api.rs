@@ -68,6 +68,10 @@ pub fn render_template<C: Connector>(
     drop(request);
     drop(body);
     let (status, mut response) = read_response(transport)?;
+    if status == 401 {
+        // The template endpoint needs an administrator account.
+        return Err(Error::AdminNeeded);
+    }
     if status != 200 {
         return Err(status_error(status));
     }
@@ -92,7 +96,7 @@ pub fn refresh_states<C: Connector>(
         let result = fetch_state(connector, &endpoint, token, entity_id);
         let fatal = matches!(
             &result,
-            Err(Error::Network | Error::Timeout | Error::Unauthorized)
+            Err(Error::Network | Error::Timeout | Error::Unauthorized | Error::Forbidden)
         );
         results.push(result);
         if fatal {
@@ -181,7 +185,7 @@ mod tests {
     fn state_errors_map_to_user_states() {
         for (response, expected) in [
             ("HTTP/1.1 401 Unauthorized\r\n\r\n{}", Error::Unauthorized),
-            ("HTTP/1.1 403 Forbidden\r\n\r\n{}", Error::Unauthorized),
+            ("HTTP/1.1 403 Forbidden\r\n\r\n{}", Error::Forbidden),
             ("HTTP/1.1 404 Not Found\r\n\r\n{}", Error::NotFound),
             (
                 "HTTP/1.1 500 Internal Server Error\r\n\r\n",
@@ -330,12 +334,21 @@ mod tests {
         assert!(request.starts_with("POST /api/template HTTP/1.1\r\n"));
         assert!(request.contains("\r\nAuthorization: Bearer secret\r\n"));
         assert!(request.contains("\r\nContent-Type: application/json\r\n"));
-        assert!(request.ends_with("\r\n\r\n{\"template\":\"{% for area in areas() %}{{ area }}|{{ area_name(area) }}\\n{% endfor %}\"}"));
-        // A failure status maps to its error, a huge answer to TooLarge.
+        assert!(
+            request.contains("{% for area in areas() %}{{ area }}|{{ (area_name(area) or area)")
+        );
+        assert!(request.contains("replace('|', ' ')"));
+        // A refused token on the template endpoint means a non-administrator
+        // account; a failure status maps to its error, a huge answer to TooLarge.
+        let mut connector = recorder(&["HTTP/1.1 401 Unauthorized\r\n\r\n{}"]);
+        assert_eq!(
+            render_template(&mut connector, &endpoint(), "t", "x"),
+            Err(Error::AdminNeeded)
+        );
         let mut connector = recorder(&["HTTP/1.1 403 Forbidden\r\n\r\n{}"]);
         assert_eq!(
             render_template(&mut connector, &endpoint(), "t", "x"),
-            Err(Error::Unauthorized)
+            Err(Error::Forbidden)
         );
         let huge = format!("HTTP/1.1 200 OK\r\n\r\n{}", "a".repeat(100_000));
         let mut connector = recorder(&[&huge]);

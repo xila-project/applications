@@ -5,20 +5,21 @@
     not(feature = "memory_64")
 ))]
 //! Runs the real Home Assistant guest against a scripted HTTP device that
-//! answers like a small Home Assistant server: entity states, service calls,
-//! the login flow, the token endpoint and the template endpoint.
+//! answers like a small Home Assistant server: entity states, service calls
+//! and the template endpoint.
 //!
 //! It checks that a first start opens the settings when there is no
-//! configuration, that with a configuration and a long-lived token it reads
-//! the entity states, answers a tap on a toggle with a service call followed
-//! by a refresh, and shows the error states of a failed service call, a
-//! refused token and a missing entity. It then signs in with a username and
-//! password through the scripted login flow, picks an entity from the server
-//! through the template endpoint, saves, and shows the cards, renewing the
-//! access token through the refresh token when it expires. A revoked refresh
-//! token opens the settings again, signed out. With a slow device, it checks
-//! that a tap made during a refresh is ignored, and that a close request made
-//! during a refresh still exits the application.
+//! configuration, and again when there is a configuration but no token. In
+//! the settings it imports a token from a file of the scripted file system
+//! and checks the exact errors of an invalid, an empty and a missing file,
+//! then saves and sees the cards with the imported token. It answers a tap on
+//! a toggle with a service call followed by a refresh, and shows the error
+//! states of a failed service call, a refused token and a missing entity.
+//! With a token that is not an administrator account, the area picker shows
+//! its error. The token field shows a mask until Show is pressed, and an
+//! edit made while it is hidden is discarded. With a slow device, it checks
+//! that a tap made during a refresh is ignored, and that a close request
+//! made during a refresh still exits the application.
 
 #[path = "support/applications.rs"]
 mod applications;
@@ -57,24 +58,18 @@ const SERVICE_ERROR: &str =
     "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\n\r\n{}";
 const UNAUTHORIZED: &str = "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\n\r\n{}";
 const MISSING: &str = "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\n\r\n{}";
-const FORM_INIT: &str = r#"{"flow_id":"f1","handler":["homeassistant",null],"type":"form","step_id":"init","data_schema":[],"errors":{}}"#;
-const FORM_MFA: &str = r#"{"flow_id":"f1","handler":["homeassistant",null],"type":"form","step_id":"mfa","errors":{}}"#;
-const FORM_INVALID_AUTH: &str =
-    r#"{"flow_id":"f1","type":"form","step_id":"init","errors":{"base":"invalid_auth"}}"#;
-const CREATE_ENTRY: &str = r#"{"flow_id":"f1","handler":["homeassistant",null],"type":"create_entry","version":1,"title":"Alice","result":"auth-code-1"}"#;
-const INVALID_GRANT: &str = "HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\n\r\n{\"error\":\"invalid_grant\"}";
-const REVOKED_OK: &str = "HTTP/1.1 200 OK\r\n\r\n";
 const AREAS_ANSWER: &str = "living_room|Living room\nkitchen|Kitchen\n";
 const LIVING_ROOM_ANSWER: &str = "light.living_room|Living room\nswitch.pump|Pump\n";
 const NO_AREA_ANSWER: &str = "sensor.stray|Stray sensor\n";
+/// What the token field shows while the token is hidden.
+const SECRET_MASK: &str = "********";
 
 /// Answers every request according to its path and token, like a small Home
 /// Assistant server, and keeps the requests. The first service call
-/// succeeds, the next ones fail with 500, and the token `bad-token` is
-/// refused with 401. The login flow answers `f1`; the token endpoint issues
-/// `access-1`, `access-2`, ... with the configured `expires_in`, and refuses
-/// the refresh token `revoked` with 400. Every answer can be delayed, so the
-/// guest is caught inside a refresh.
+/// succeeds, the next ones fail with 500. The token `bad-token` is refused
+/// with 401, and `user-token` is refused on the template endpoint only, like
+/// a non-administrator account. Every answer can be delayed, so the guest is
+/// caught inside a refresh.
 struct ScriptedHomeAssistant {
     requests: Mutex<Vec<Vec<u8>>>,
     pending: Mutex<Vec<u8>>,
@@ -82,32 +77,9 @@ struct ScriptedHomeAssistant {
     /// The answer waiting to be served, with its earliest serve time.
     queued: Mutex<Option<(Vec<u8>, std::time::Instant)>>,
     delay: Mutex<Duration>,
-    /// How many access tokens were issued.
-    access_tokens: Mutex<usize>,
-    /// The `expires_in` answered by the token endpoint.
-    token_expires_in: Mutex<u32>,
 }
 
 impl ScriptedHomeAssistant {
-    fn token_answer(&self, with_refresh_token: bool) -> Vec<u8> {
-        let count = {
-            let mut tokens = self.access_tokens.lock().unwrap();
-            *tokens += 1;
-            *tokens
-        };
-        let expires_in = *self.token_expires_in.lock().unwrap();
-        let body = if with_refresh_token {
-            std::format!(
-                "{{\"access_token\":\"access-{count}\",\"expires_in\":{expires_in},\"refresh_token\":\"refresh-1\",\"token_type\":\"Bearer\"}}"
-            )
-        } else {
-            std::format!(
-                "{{\"access_token\":\"access-{count}\",\"expires_in\":{expires_in},\"token_type\":\"Bearer\"}}"
-            )
-        };
-        response("HTTP/1.1 200 OK", &body)
-    }
-
     fn template_answer(&self, request: &[u8]) -> Vec<u8> {
         let text = String::from_utf8_lossy(request);
         let answer = if text.contains("area_entities('living_room')") {
@@ -125,37 +97,13 @@ impl ScriptedHomeAssistant {
         let line = text.lines().next().unwrap_or("");
         if text.contains("Bearer bad-token") {
             UNAUTHORIZED.as_bytes().to_vec()
-        } else if line.starts_with("POST /auth/login_flow/f1 ") {
-            if text.contains("\"code\":") {
-                if text.contains("123456") {
-                    response("HTTP/1.1 200 OK", CREATE_ENTRY)
-                } else {
-                    response(
-                        "HTTP/1.1 200 OK",
-                        r#"{"flow_id":"f1","type":"form","step_id":"mfa","errors":{"base":"invalid_code"}}"#,
-                    )
-                }
-            } else if text.contains("\"password\":\"wrong\"") {
-                response("HTTP/1.1 200 OK", FORM_INVALID_AUTH)
-            } else if text.contains("\"password\":\"mfa\"") {
-                response("HTTP/1.1 200 OK", FORM_MFA)
-            } else {
-                response("HTTP/1.1 200 OK", CREATE_ENTRY)
-            }
-        } else if line.starts_with("POST /auth/login_flow ") {
-            response("HTTP/1.1 200 OK", FORM_INIT)
-        } else if line.starts_with("POST /auth/token ") {
-            if text.contains("grant_type=authorization_code") {
-                self.token_answer(true)
-            } else if text.contains("refresh_token=revoked") {
-                INVALID_GRANT.as_bytes().to_vec()
-            } else {
-                self.token_answer(false)
-            }
-        } else if line.starts_with("POST /auth/revoke ") {
-            REVOKED_OK.as_bytes().to_vec()
         } else if line.starts_with("POST /api/template ") {
-            self.template_answer(request)
+            if text.contains("Bearer user-token") {
+                // The template endpoint needs an administrator account.
+                UNAUTHORIZED.as_bytes().to_vec()
+            } else {
+                self.template_answer(request)
+            }
         } else if line.starts_with("POST /api/services/") {
             if service_call == 0 {
                 SERVICE.as_bytes().to_vec()
@@ -265,7 +213,24 @@ unsafe fn find_button(root: *mut lvgl::lv_obj_t, caption: &str) -> *mut lvgl::lv
     }
 }
 
-/// First text field that follows the caption label `caption` in its parent.
+/// First text field in the subtree of `object`.
+unsafe fn find_textarea(object: *mut lvgl::lv_obj_t) -> *mut lvgl::lv_obj_t {
+    unsafe {
+        if lvgl::lv_obj_has_class(object, &lvgl::lv_textarea_class) {
+            return object;
+        }
+        for index in 0..lvgl::lv_obj_get_child_count(object) {
+            let found = find_textarea(lvgl::lv_obj_get_child(object, index as i32));
+            if !found.is_null() {
+                return found;
+            }
+        }
+        core::ptr::null_mut()
+    }
+}
+
+/// First text field that follows the caption label `caption`, in its parent
+/// or in the subtree of a following sibling (a row holding the field).
 unsafe fn find_field(root: *mut lvgl::lv_obj_t, caption: &str) -> *mut lvgl::lv_obj_t {
     unsafe {
         if lvgl::lv_obj_has_class(root, &lvgl::lv_label_class)
@@ -277,9 +242,9 @@ unsafe fn find_field(root: *mut lvgl::lv_obj_t, caption: &str) -> *mut lvgl::lv_
                 .find(|index| lvgl::lv_obj_get_child(parent, *index as i32) == root)
                 .unwrap_or(0);
             for index in own + 1..count {
-                let child = lvgl::lv_obj_get_child(parent, index as i32);
-                if lvgl::lv_obj_has_class(child, &lvgl::lv_textarea_class) {
-                    return child;
+                let found = find_textarea(lvgl::lv_obj_get_child(parent, index as i32));
+                if !found.is_null() {
+                    return found;
                 }
             }
         }
@@ -315,6 +280,26 @@ unsafe fn find_switch(root: *mut lvgl::lv_obj_t, row_text: &str) -> *mut lvgl::l
             }
         }
         core::ptr::null_mut()
+    }
+}
+
+/// Sets the switch of the row labelled `row_text` and reports the change.
+async fn set_switch(manager: &Manager, row_text: &str, checked: bool) {
+    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let _lock = manager.synchronous_lock();
+    unsafe {
+        let switch = find_switch(root, row_text);
+        assert!(!switch.is_null(), "no switch in row {row_text:?}");
+        if checked {
+            lvgl::lv_obj_add_state(switch, lvgl::LV_STATE_CHECKED);
+        } else {
+            lvgl::lv_obj_remove_state(switch, lvgl::LV_STATE_CHECKED);
+        }
+        lvgl::lv_obj_send_event(
+            switch,
+            lvgl::lv_event_code_t_LV_EVENT_VALUE_CHANGED,
+            core::ptr::null_mut(),
+        );
     }
 }
 
@@ -368,6 +353,39 @@ async fn wait_requests(server: &ScriptedHomeAssistant, count: usize) {
     );
 }
 
+/// The text of the field that follows the caption `caption`.
+async fn field_text(manager: &Manager, caption: &str) -> String {
+    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let _lock = manager.synchronous_lock();
+    unsafe {
+        let field = find_field(root, caption);
+        assert!(!field.is_null(), "no field after caption {caption:?}");
+        CStr::from_ptr(lvgl::lv_textarea_get_text(field))
+            .to_string_lossy()
+            .into_owned()
+    }
+}
+
+/// Waits until the field that follows the caption `caption` holds `expected`.
+async fn wait_field_text(manager: &Manager, caption: &str, expected: &str) {
+    for _ in 0..1000 {
+        if manager.get_window_count().await.unwrap() != 0
+            && field_text(manager, caption).await == expected
+        {
+            return;
+        }
+        xila::task::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("the field after {caption:?} did not show {expected:?}");
+}
+
+/// Waits until the guest finished building the settings screen. The guest
+/// yields between host calls while it builds, so a label of the first widget
+/// alone is not enough: wait for the add buttons, built last.
+async fn wait_settings_ready(manager: &Manager) {
+    wait_label(manager, &text("settings.add_from_server")).await;
+}
+
 /// Taps the button whose caption is `caption`.
 async fn tap(manager: &Manager, caption: &str) {
     let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
@@ -383,37 +401,22 @@ async fn tap(manager: &Manager, caption: &str) {
     }
 }
 
-/// Types `value` into the field that follows the caption `caption`.
+/// Types `value` into the field that follows the caption `caption`. The
+/// maximum length is lifted while the text is set, so that LVGL does not send
+/// one insert event per character and fill the host event queue.
 async fn type_into(manager: &Manager, caption: &str, value: &str) {
     let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let field = find_field(root, caption);
         assert!(!field.is_null(), "no field after caption {caption:?}");
+        let maximum = lvgl::lv_textarea_get_max_length(field);
+        lvgl::lv_textarea_set_max_length(field, 0);
         let text = CString::new(value).unwrap();
         lvgl::lv_textarea_set_text(field, text.as_ptr());
+        lvgl::lv_textarea_set_max_length(field, maximum);
         lvgl::lv_obj_send_event(
             field,
-            lvgl::lv_event_code_t_LV_EVENT_VALUE_CHANGED,
-            core::ptr::null_mut(),
-        );
-    }
-}
-
-/// Sets the switch of the row labelled `row_text` and reports the change.
-async fn set_switch(manager: &Manager, row_text: &str, checked: bool) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
-    let _lock = manager.synchronous_lock();
-    unsafe {
-        let switch = find_switch(root, row_text);
-        assert!(!switch.is_null(), "no switch in row {row_text:?}");
-        if checked {
-            lvgl::lv_obj_add_state(switch, lvgl::LV_STATE_CHECKED);
-        } else {
-            lvgl::lv_obj_remove_state(switch, lvgl::LV_STATE_CHECKED);
-        }
-        lvgl::lv_obj_send_event(
-            switch,
             lvgl::lv_event_code_t_LV_EVENT_VALUE_CHANGED,
             core::ptr::null_mut(),
         );
@@ -445,6 +448,8 @@ async fn send_close(manager: &Manager) {
     manager.send_window_close_request(root).await.unwrap();
 }
 
+/// Waits for the guest to exit. The host sends the close request only once,
+/// so no resend here: a dropped one would be a bug.
 async fn wait_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
     let mut join = core::pin::pin!(handle.join());
     for _ in 0..100 {
@@ -455,18 +460,14 @@ async fn wait_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
             assert_eq!(manager.get_window_count().await.unwrap(), 0);
             return;
         }
-        // A burst of window events can fill the host queue and drop the
-        // close request, which the host sends only once: send it again
-        // until the guest exits.
-        if manager.get_window_count().await.unwrap() != 0 {
-            send_close(manager).await;
-        }
         xila::task::sleep(Duration::from_millis(100)).await;
     }
     panic!("Home Assistant did not exit");
 }
 
+/// Sends one close request and waits for the exit.
 async fn close_and_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
+    send_close(manager).await;
     wait_join(manager, handle).await;
 }
 
@@ -501,8 +502,6 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
             service_calls: Mutex::new(0),
             queued: Mutex::new(None),
             delay: Mutex::new(Duration::ZERO),
-            access_tokens: Mutex::new(0),
-            token_expires_in: Mutex::new(1800),
         }));
     virtual_file_system
         .create_directory(task, &"/devices/network")
@@ -531,6 +530,12 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
         .set_user(task, administrator)
         .await
         .unwrap();
+    // Where the scripted SD-card-like token files live, owned by the
+    // administrator the guest runs as.
+    virtual_file_system
+        .create_directory(task, &"/users/administrator/import")
+        .await
+        .ok();
     let launch = |standard| {
         xila::executable::execute(
             context,
@@ -581,8 +586,9 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     wait_label(manager, &text("main.not_configured")).await;
     close_and_join(manager, first).await;
 
-    // The runner created the private directory; write the two files. The
-    // last entity does not exist on the server, to show the 404 state.
+    // The runner created the private directory; write the configuration
+    // file. The last entity does not exist on the server, to show the 404
+    // state. Without a token, the settings open again by themselves.
     write_file(
         virtual_file_system,
         task,
@@ -590,17 +596,78 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
         configuration,
     )
     .await;
+    let second = launch(standard.duplicate().await.unwrap()).await.unwrap();
+    wait_label(manager, &text("settings.title")).await;
+    wait_settings_ready(manager).await;
+
+    // Import a token from a file of the scripted file system. The invalid,
+    // the empty and the missing files each show their own error.
     write_file(
         virtual_file_system,
         task,
-        &format!("{directory}/token"),
-        b"test-token\n",
+        "/users/administrator/import/bad.txt",
+        b"two words\n",
     )
     .await;
+    write_file(
+        virtual_file_system,
+        task,
+        "/users/administrator/import/empty.txt",
+        b"\n",
+    )
+    .await;
+    write_file(
+        virtual_file_system,
+        task,
+        "/users/administrator/import/token.txt",
+        b"imported-token\n",
+    )
+    .await;
+    let import_path = text("settings.import_path");
+    let import = text("settings.import");
+    type_into(manager, &import_path, "/users/administrator/import/bad.txt").await;
+    tap(manager, &import).await;
+    wait_label(manager, &text("errors.import_invalid")).await;
+    type_into(
+        manager,
+        &import_path,
+        "/users/administrator/import/empty.txt",
+    )
+    .await;
+    tap(manager, &import).await;
+    wait_label(manager, &text("errors.import_empty")).await;
+    type_into(
+        manager,
+        &import_path,
+        "/users/administrator/import/absent.txt",
+    )
+    .await;
+    tap(manager, &import).await;
+    wait_label(manager, &text("errors.import_missing")).await;
+    type_into(
+        manager,
+        &import_path,
+        "/users/administrator/import/token.txt",
+    )
+    .await;
+    tap(manager, &import).await;
+    wait_label(manager, &text("settings.imported")).await;
+    // The imported token is hidden behind the mask, and the source file is
+    // unchanged.
+    wait_field_text(manager, &text("settings.token"), SECRET_MASK).await;
+    assert_eq!(
+        read_file(
+            virtual_file_system,
+            task,
+            "/users/administrator/import/token.txt"
+        )
+        .await
+        .unwrap(),
+        b"imported-token\n"
+    );
 
-    let second = launch(standard.duplicate().await.unwrap()).await.unwrap();
-    // Each configured entity shows its friendly name and its value; the
-    // missing one shows its 404 error on its card.
+    // Save: the configuration and the token are written, and the cards show.
+    tap(manager, &text("settings.save")).await;
     wait_label(manager, "Living room").await;
     wait_label(manager, "on").await;
     wait_label(manager, "Outdoor temperature").await;
@@ -611,10 +678,15 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     wait_label(manager, &text("controls.toggle")).await;
     wait_label(manager, &text("errors.not_found")).await;
     assert_media_glyphs(manager).await;
-    // One state request per entity for the first refresh.
+    // One state request per entity for the first refresh, with the imported
+    // token in the header.
     wait_requests(home_assistant, 4).await;
     wait_idle(manager).await;
     {
+        let token_file = read_file(virtual_file_system, task, &format!("{directory}/token"))
+            .await
+            .expect("token file");
+        assert_eq!(token_file, b"imported-token");
         let requests = home_assistant.requests.lock().unwrap();
         for (request, path) in requests.iter().zip([
             "GET /api/states/light.living_room ",
@@ -625,11 +697,12 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
             let request = String::from_utf8(request.clone()).unwrap();
             assert!(request.starts_with(path), "{request}");
             assert!(request.contains("\r\nHost: homeassistant.local:8123\r\n"));
-            assert!(request.contains("\r\nAuthorization: Bearer test-token\r\n"));
+            assert!(request.contains("\r\nAuthorization: Bearer imported-token\r\n"));
         }
     }
 
     // A tap on the toggle calls the service, then refreshes the states.
+    wait_idle(manager).await;
     tap(manager, &text("controls.toggle")).await;
     wait_requests(home_assistant, 9).await;
     wait_idle(manager).await;
@@ -640,7 +713,7 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
             post.starts_with("POST /api/services/light/toggle HTTP/1.1\r\n"),
             "{post}"
         );
-        assert!(post.contains("\r\nAuthorization: Bearer test-token\r\n"));
+        assert!(post.contains("\r\nAuthorization: Bearer imported-token\r\n"));
         assert!(
             post.ends_with("\r\n\r\n{\"entity_id\":\"light.living_room\"}"),
             "{post}"
@@ -651,6 +724,7 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     }
 
     // A service call that fails with 500 shows its error after the refresh.
+    wait_idle(manager).await;
     tap(manager, &text("controls.toggle")).await;
     wait_requests(home_assistant, 14).await;
     wait_label(manager, "Home Assistant error 500").await;
@@ -704,111 +778,55 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
         }
     }
     // A close request during the next refresh is kept, not drained.
+    wait_idle(manager).await;
     tap(manager, "\u{F021}").await;
     wait_requests(home_assistant, before + 5).await;
+    send_close(manager).await;
     wait_join(manager, fourth).await;
     *home_assistant.delay.lock().unwrap() = Duration::ZERO;
 
-    // Sign in with a username and password: the settings open by themselves
-    // when there are no credentials. The token endpoint answers a short
-    // `expires_in`, so the first requests renew the access token.
-    *home_assistant.token_expires_in.lock().unwrap() = 30;
+    // The settings from the header: the saved token is hidden behind the
+    // mask until Show is pressed, and an edit made while it is hidden is
+    // discarded. The area picker lists the areas of the server, then the
+    // entities of one area, and saving adds the chosen entity.
     write_file(
         virtual_file_system,
         task,
         &format!("{directory}/token"),
-        b" \n",
+        b"test-token\n",
     )
     .await;
     let before = home_assistant.requests.lock().unwrap().len();
     let fifth = launch(standard.duplicate().await.unwrap()).await.unwrap();
-    wait_label(manager, &text("settings.title")).await;
-    wait_label(manager, &text("settings.not_signed_in")).await;
-    // A wrong password shows the form error.
-    tap(manager, &text("settings.sign_in")).await;
-    wait_label(manager, &text("settings.username")).await;
-    type_into(manager, &text("settings.username"), "alice").await;
-    type_into(manager, &text("settings.password"), "wrong").await;
-    tap(manager, &text("settings.sign_in")).await;
-    wait_label(manager, &text("settings.reason.invalid_auth")).await;
-    // The right password signs in.
-    type_into(manager, &text("settings.password"), "s3cret").await;
-    tap(manager, &text("settings.sign_in")).await;
-    wait_label(manager, "Signed in as Alice").await;
+    wait_label(manager, "Living room").await;
+    wait_requests(home_assistant, before + 4).await;
     wait_idle(manager).await;
-    {
-        let requests = home_assistant.requests.lock().unwrap();
-        let start = String::from_utf8(requests[before].clone()).unwrap();
-        assert!(
-            start.starts_with("POST /auth/login_flow HTTP/1.1\r\n"),
-            "{start}"
-        );
-        assert!(!start.contains("Authorization:"), "{start}");
-        assert!(start.contains("\r\nContent-Type: application/json\r\n"));
-        assert!(
-            start.ends_with(
-                "\r\n\r\n{\"client_id\":\"https://xila.dev/applications/home-assistant/\",\"handler\":[\"homeassistant\",null],\"redirect_uri\":\"https://xila.dev/applications/home-assistant/\"}"
-            ),
-            "{start}"
-        );
-        let submit = String::from_utf8(requests[before + 1].clone()).unwrap();
-        assert!(
-            submit.starts_with("POST /auth/login_flow/f1 HTTP/1.1\r\n"),
-            "{submit}"
-        );
-        assert!(!submit.contains("Authorization:"), "{submit}");
-        assert!(
-            submit.ends_with("\r\n\r\n{\"client_id\":\"https://xila.dev/applications/home-assistant/\",\"username\":\"alice\",\"password\":\"wrong\"}"),
-            "{submit}"
-        );
-        let submit = String::from_utf8(requests[before + 2].clone()).unwrap();
-        assert!(
-            submit.ends_with("\"username\":\"alice\",\"password\":\"s3cret\"}"),
-            "{submit}"
-        );
-        let token = String::from_utf8(requests[before + 3].clone()).unwrap();
-        assert!(
-            token.starts_with("POST /auth/token HTTP/1.1\r\n"),
-            "{token}"
-        );
-        assert!(!token.contains("Authorization:"), "{token}");
-        assert!(token.contains("\r\nContent-Type: application/x-www-form-urlencoded\r\n"));
-        assert!(
-            token.ends_with("\r\n\r\ngrant_type=authorization_code&code=auth-code-1&client_id=https%3A%2F%2Fxila.dev%2Fapplications%2Fhome-assistant%2F"),
-            "{token}"
-        );
-    }
-    *home_assistant.token_expires_in.lock().unwrap() = 1800;
-
-    // Pick an entity from the server: areas first, then the entities of the
-    // area, each queried through the template endpoint with the access token.
+    tap(manager, "\u{F013}").await;
+    wait_label(manager, &text("settings.title")).await;
+    wait_settings_ready(manager).await;
+    // The saved token is hidden behind the mask.
+    wait_field_text(manager, &text("settings.token"), SECRET_MASK).await;
+    // An edit made while the field is hidden is discarded.
+    type_into(manager, &text("settings.token"), "hacked").await;
+    wait_field_text(manager, &text("settings.token"), SECRET_MASK).await;
+    // Show reveals the saved token, not the discarded edit.
+    tap(manager, &text("settings.show")).await;
+    wait_field_text(manager, &text("settings.token"), "test-token").await;
+    tap(manager, &text("settings.hide")).await;
+    wait_field_text(manager, &text("settings.token"), SECRET_MASK).await;
+    // The area picker asks the template endpoint with the token.
     tap(manager, &text("settings.add_from_server")).await;
     wait_label(manager, &text("settings.picker_title")).await;
-    // The access token from the sign-in expires within the margin, so the
-    // first request renews it through the refresh token, then asks for the
-    // areas with the new access token.
     wait_requests(home_assistant, before + 5).await;
     wait_label(manager, "Living room (living_room)").await;
     {
         let requests = home_assistant.requests.lock().unwrap();
-        let refresh = String::from_utf8(requests[before + 4].clone()).unwrap();
-        assert!(
-            refresh.starts_with("POST /auth/token HTTP/1.1\r\n"),
-            "{refresh}"
-        );
-        assert!(
-            refresh.ends_with("\r\n\r\ngrant_type=refresh_token&refresh_token=refresh-1&client_id=https%3A%2F%2Fxila.dev%2Fapplications%2Fhome-assistant%2F"),
-            "{refresh}"
-        );
-        let template = String::from_utf8(requests[before + 5].clone()).unwrap();
+        let template = String::from_utf8(requests[before + 4].clone()).unwrap();
         assert!(
             template.starts_with("POST /api/template HTTP/1.1\r\n"),
             "{template}"
         );
-        assert!(
-            template.contains("\r\nAuthorization: Bearer access-2\r\n"),
-            "{template}"
-        );
+        assert!(template.contains("\r\nAuthorization: Bearer test-token\r\n"));
         assert!(template.contains("{% for area in areas() %}"), "{template}");
     }
     tap(manager, "Living room (living_room)").await;
@@ -816,133 +834,66 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     wait_requests(home_assistant, before + 6).await;
     {
         let requests = home_assistant.requests.lock().unwrap();
-        let template = String::from_utf8(requests[before + 6].clone()).unwrap();
+        let template = String::from_utf8(requests[before + 5].clone()).unwrap();
         assert!(
             template.contains("area_entities('living_room')"),
             "{template}"
         );
-        assert!(
-            template.contains("\r\nAuthorization: Bearer access-2\r\n"),
-            "{template}"
-        );
+        assert!(template.contains("\r\nAuthorization: Bearer test-token\r\n"));
     }
     set_switch(manager, "Pump (switch.pump)", true).await;
     tap(manager, &text("settings.back")).await;
     wait_label(manager, "switch.pump").await;
-
-    // Save: the configuration and the credentials are written, the token file
-    // is removed, and the cards show. The session is reloaded from the files,
-    // so it has no access token in memory yet: the first refresh renews it
-    // through the refresh token, then reads the states with it.
     tap(manager, &text("settings.save")).await;
-    wait_label(manager, "Living room").await;
     wait_label(manager, "Garden pump").await;
-    wait_requests(home_assistant, before + 8 + 5).await;
+    wait_requests(home_assistant, before + 6 + 5).await;
     wait_idle(manager).await;
     {
         let requests = home_assistant.requests.lock().unwrap();
-        let refresh = String::from_utf8(requests[before + 7].clone()).unwrap();
-        assert!(
-            refresh.starts_with("POST /auth/token HTTP/1.1\r\n"),
-            "{refresh}"
-        );
-        assert!(
-            refresh.ends_with("\r\n\r\ngrant_type=refresh_token&refresh_token=refresh-1&client_id=https%3A%2F%2Fxila.dev%2Fapplications%2Fhome-assistant%2F"),
-            "{refresh}"
-        );
-        for request in &requests[before + 8..before + 13] {
+        for request in &requests[before + 6..before + 11] {
             let request = String::from_utf8(request.clone()).unwrap();
             assert!(request.starts_with("GET /api/states/"), "{request}");
-            assert!(
-                request.contains("\r\nAuthorization: Bearer access-3\r\n"),
-                "{request}"
-            );
+            assert!(request.contains("\r\nAuthorization: Bearer test-token\r\n"));
         }
-        assert!(requests[before + 8].starts_with(b"GET /api/states/light.living_room "));
-        assert!(requests[before + 12].starts_with(b"GET /api/states/switch.pump "));
-    }
-    // The credentials file holds the refresh token and the name; the token
-    // file is gone. Neither holds the password.
-    {
-        let credentials = read_file(
-            virtual_file_system,
-            task,
-            &format!("{directory}/credentials.json"),
-        )
-        .await
-        .expect("credentials file");
-        let credentials = String::from_utf8(credentials).unwrap();
-        assert!(
-            credentials.contains("\"refresh_token\":\"refresh-1\""),
-            "{credentials}"
-        );
-        assert!(credentials.contains("\"name\":\"Alice\""), "{credentials}");
-        assert!(!credentials.contains("s3cret"), "{credentials}");
-        assert!(
-            read_file(virtual_file_system, task, &format!("{directory}/token"))
-                .await
-                .is_none(),
-            "the token file is removed"
-        );
-    }
-
-    // A manual refresh reads the states again with the same access token.
-    tap(manager, "\u{F021}").await;
-    wait_requests(home_assistant, before + 13 + 5).await;
-    wait_idle(manager).await;
-    {
-        let requests = home_assistant.requests.lock().unwrap();
-        for request in &requests[before + 13..before + 18] {
-            let request = String::from_utf8(request.clone()).unwrap();
-            assert!(request.starts_with("GET /api/states/"), "{request}");
-            assert!(
-                request.contains("\r\nAuthorization: Bearer access-3\r\n"),
-                "{request}"
-            );
-        }
+        assert!(requests[before + 10].starts_with(b"GET /api/states/switch.pump "));
     }
     close_and_join(manager, fifth).await;
 
-    // A revoked refresh token: the refresh fails with 400, the credentials
-    // are forgotten and the settings open, signed out, with one request only.
+    // A token that is not an administrator account: the cards show, and the
+    // area picker gets a 401 on the template endpoint.
     write_file(
         virtual_file_system,
         task,
-        &format!("{directory}/credentials.json"),
-        br#"{"refresh_token":"revoked","name":"Alice"}"#,
+        &format!("{directory}/token"),
+        b"user-token\n",
     )
     .await;
     let before = home_assistant.requests.lock().unwrap().len();
     let sixth = launch(standard).await.unwrap();
-    wait_label(manager, &text("settings.title")).await;
-    wait_label(manager, &text("settings.not_signed_in")).await;
-    wait_requests(home_assistant, before + 1).await;
+    wait_label(manager, "Living room").await;
+    wait_requests(home_assistant, before + 5).await;
+    wait_idle(manager).await;
     {
         let requests = home_assistant.requests.lock().unwrap();
-        assert_eq!(
-            requests.len() - before,
-            1,
-            "one request, not one per entity"
-        );
-        let refresh = String::from_utf8(requests[before].clone()).unwrap();
-        assert!(
-            refresh.starts_with("POST /auth/token HTTP/1.1\r\n"),
-            "{refresh}"
-        );
-        assert!(
-            refresh.contains("grant_type=refresh_token&refresh_token=revoked"),
-            "{refresh}"
-        );
+        assert!(requests[before].starts_with(b"GET /api/states/light.living_room "));
+        let request = String::from_utf8(requests[before].clone()).unwrap();
+        assert!(request.contains("\r\nAuthorization: Bearer user-token\r\n"));
     }
-    assert!(
-        read_file(
-            virtual_file_system,
-            task,
-            &format!("{directory}/credentials.json")
-        )
-        .await
-        .is_none(),
-        "the credentials file is removed after the revocation"
-    );
+    tap(manager, "\u{F013}").await;
+    wait_label(manager, &text("settings.title")).await;
+    wait_settings_ready(manager).await;
+    tap(manager, &text("settings.add_from_server")).await;
+    wait_label(manager, &text("settings.picker_title")).await;
+    wait_label(manager, &text("errors.admin_needed")).await;
+    wait_requests(home_assistant, before + 6).await;
+    {
+        let requests = home_assistant.requests.lock().unwrap();
+        let template = String::from_utf8(requests[before + 5].clone()).unwrap();
+        assert!(
+            template.starts_with("POST /api/template HTTP/1.1\r\n"),
+            "{template}"
+        );
+        assert!(template.contains("\r\nAuthorization: Bearer user-token\r\n"));
+    }
     close_and_join(manager, sixth).await;
 }

@@ -33,10 +33,15 @@ pub struct Entry {
 const SUPPORTED_DOMAINS: &str =
     "['light','switch','input_boolean','scene','script','sensor','binary_sensor','media_player']";
 
+/// Sanitizes a name for one output line: a missing name falls back to the
+/// identifier, and the separator and line ends become spaces, so a name can
+/// never add rows or split a line.
+const SANITIZE_NAME: &str = " | replace('|', ' ') | replace('\\n', ' ') | replace('\\r', ' ')";
+
 /// Template listing the areas, one per line: `area_id|area name`.
 pub fn areas_template() -> String {
     format!(
-        "{{% for area in areas() %}}{{{{ area }}}}{SEPARATOR}{{{{ area_name(area) }}}}\n{{% endfor %}}"
+        "{{% for area in areas() %}}{{{{ area }}}}{SEPARATOR}{{{{ (area_name(area) or area){SANITIZE_NAME} }}}}\n{{% endfor %}}"
     )
 }
 
@@ -52,14 +57,16 @@ pub fn area_entities_template(area_id: &str) -> Result<String> {
         return Err(Error::InvalidResponse);
     }
     Ok(format!(
-        "{{% for entity in area_entities('{area_id}') if entity.split('.')[0] in {SUPPORTED_DOMAINS} %}}{{{{ entity }}}}{SEPARATOR}{{{{ state_attr(entity, 'friendly_name') }}}}\n{{% endfor %}}"
+        "{{% for entity in area_entities('{area_id}') if entity.split('.')[0] in {SUPPORTED_DOMAINS} %}}{{{{ entity }}}}{SEPARATOR}{{{{ (state_attr(entity, 'friendly_name') or entity){SANITIZE_NAME} }}}}\n{{% endfor %}}"
     ))
 }
 
-/// Template listing the supported entities that no area holds, one per line.
+/// Template listing the supported entities that no area holds, one per
+/// line. The loop stops the output at [`MAXIMUM_ENTRIES`] rows and marks a
+/// truncated list, so a huge installation cannot flood the answer.
 pub fn no_area_entities_template() -> String {
     format!(
-        "{{% set in_areas = areas() | map('area_entities') | sum(start=[]) %}}{{% for state in states if state.entity_id.split('.')[0] in {SUPPORTED_DOMAINS} and state.entity_id not in in_areas %}}{{{{ state.entity_id }}}}{SEPARATOR}{{{{ state_attr(state.entity_id, 'friendly_name') }}}}\n{{% endfor %}}"
+        "{{% set in_areas = areas() | map('area_entities') | sum(start=[]) %}}{{% for state in states if state.entity_id.split('.')[0] in {SUPPORTED_DOMAINS} and state.entity_id not in in_areas %}}{{{{ state.entity_id }}}}{SEPARATOR}{{{{ (state_attr(state.entity_id, 'friendly_name') or state.entity_id){SANITIZE_NAME} }}}}\n{{% if loop.index == {MAXIMUM_ENTRIES} %}}@@truncated@@\n{{% endif %}}{{% endfor %}}"
     )
 }
 
@@ -71,19 +78,39 @@ pub fn template_body(template: &str) -> String {
     body
 }
 
+/// One picker answer: the entries and whether the server truncated the list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Answer {
+    pub entries: Vec<Entry>,
+    pub truncated: bool,
+}
+
+/// Marker line a bounded template emits when it stopped early.
+const TRUNCATED_MARKER: &str = "@@truncated@@";
+
 /// Parses a picker answer: one `identifier|name` per line. Lines that do not
 /// hold a supported identifier are skipped, duplicates collapse, and the
-/// list stops at [`MAXIMUM_ENTRIES`]. `supported` decides whether the
+/// list stops at [`MAXIMUM_ENTRIES`]. `entities_only` decides whether the
 /// identifier is kept: areas hold any identifier, entities only the domains
-/// the application shows.
-pub fn parse_entries(text: &str, entities_only: bool) -> Vec<Entry> {
+/// the application shows. A line longer than the limit is cut at a character
+/// boundary, so it can never panic on a multi-byte character.
+pub fn parse_entries(text: &str, entities_only: bool) -> Answer {
     let mut entries: Vec<Entry> = Vec::new();
+    let mut truncated = false;
     for line in text.lines() {
+        if line == TRUNCATED_MARKER {
+            truncated = true;
+            continue;
+        }
         if entries.len() >= MAXIMUM_ENTRIES {
             break;
         }
         let line = if line.len() > MAXIMUM_LINE_LENGTH {
-            &line[..MAXIMUM_LINE_LENGTH]
+            let mut end = MAXIMUM_LINE_LENGTH;
+            while !line.is_char_boundary(end) {
+                end -= 1;
+            }
+            &line[..end]
         } else {
             line
         };
@@ -109,7 +136,7 @@ pub fn parse_entries(text: &str, entities_only: bool) -> Vec<Entry> {
             name: String::from(name.trim()),
         });
     }
-    entries
+    Answer { entries, truncated }
 }
 
 #[cfg(test)]
@@ -120,16 +147,19 @@ mod tests {
     fn templates_hold_one_line_per_entry() {
         assert_eq!(
             areas_template(),
-            "{% for area in areas() %}{{ area }}|{{ area_name(area) }}\n{% endfor %}"
+            "{% for area in areas() %}{{ area }}|{{ (area_name(area) or area) | replace('|', ' ') | replace('\\n', ' ') | replace('\\r', ' ') }}\n{% endfor %}"
         );
         assert_eq!(
             area_entities_template("living_room").unwrap(),
-            "{% for entity in area_entities('living_room') if entity.split('.')[0] in ['light','switch','input_boolean','scene','script','sensor','binary_sensor','media_player'] %}{{ entity }}|{{ state_attr(entity, 'friendly_name') }}\n{% endfor %}"
+            "{% for entity in area_entities('living_room') if entity.split('.')[0] in ['light','switch','input_boolean','scene','script','sensor','binary_sensor','media_player'] %}{{ entity }}|{{ (state_attr(entity, 'friendly_name') or entity) | replace('|', ' ') | replace('\\n', ' ') | replace('\\r', ' ') }}\n{% endfor %}"
         );
         assert!(area_entities_template("bad'id").is_err());
         assert!(area_entities_template("").is_err());
         assert!(area_entities_template("Living Room").is_err());
-        assert!(no_area_entities_template().contains("not in in_areas"));
+        let no_area = no_area_entities_template();
+        assert!(no_area.contains("not in in_areas"));
+        // The "no area" loop is bounded and marks a truncated list.
+        assert!(no_area.contains("{% if loop.index == 256 %}@@truncated@@\n{% endif %}"));
         assert_eq!(
             template_body("{{ 1 + 1 }}"),
             "{\"template\":\"{{ 1 + 1 }}\"}"
@@ -142,9 +172,9 @@ mod tests {
 
     #[test]
     fn parses_area_answers() {
-        let entries = parse_entries("living_room|Living room\nkitchen|Kitchen\n", false);
+        let answer = parse_entries("living_room|Living room\nkitchen|Kitchen\n", false);
         assert_eq!(
-            entries,
+            answer.entries,
             std::vec![
                 Entry {
                     identifier: String::from("living_room"),
@@ -156,32 +186,44 @@ mod tests {
                 },
             ]
         );
+        assert!(!answer.truncated);
         // A name may hold the separator: only the first one splits.
-        let entries = parse_entries("kitchen|Kitchen | open\n", false);
-        assert_eq!(entries[0].name, "Kitchen | open");
+        let answer = parse_entries("kitchen|Kitchen | open\n", false);
+        assert_eq!(answer.entries[0].name, "Kitchen | open");
         // Bad lines are skipped, duplicates collapse.
-        let entries = parse_entries("bad id|X\nkitchen|Kitchen\nkitchen|Other\n\n", false);
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].identifier, "kitchen");
+        let answer = parse_entries("bad id|X\nkitchen|Kitchen\nkitchen|Other\n\n", false);
+        assert_eq!(answer.entries.len(), 1);
+        assert_eq!(answer.entries[0].identifier, "kitchen");
+        // The truncation marker is reported.
+        let answer = parse_entries("kitchen|Kitchen\n@@truncated@@\n", false);
+        assert_eq!(answer.entries.len(), 1);
+        assert!(answer.truncated);
     }
 
     #[test]
     fn parses_entity_answers_with_supported_domains_only() {
         let text = "light.living_room|Living room\nsensor.temp|Temp\nweather.home|Home\nLight.Bad|X\nlight.living_room|Dup\n";
-        let entries = parse_entries(text, true);
-        assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].identifier, "light.living_room");
-        assert_eq!(entries[0].name, "Living room");
-        assert_eq!(entries[1].identifier, "sensor.temp");
+        let answer = parse_entries(text, true);
+        assert_eq!(answer.entries.len(), 2);
+        assert_eq!(answer.entries[0].identifier, "light.living_room");
+        assert_eq!(answer.entries[0].name, "Living room");
+        assert_eq!(answer.entries[1].identifier, "sensor.temp");
         // An empty name stays empty.
-        let entries = parse_entries("switch.pump|\n", true);
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].name, "");
+        let answer = parse_entries("switch.pump|\n", true);
+        assert_eq!(answer.entries.len(), 1);
+        assert_eq!(answer.entries[0].name, "");
         // The list is bounded.
         let many = (0..500)
             .map(|index| format!("sensor.s{index}|S{index}"))
             .collect::<Vec<_>>()
             .join("\n");
-        assert_eq!(parse_entries(&many, true).len(), MAXIMUM_ENTRIES);
+        assert_eq!(parse_entries(&many, true).entries.len(), MAXIMUM_ENTRIES);
+        // A long line is cut at a character boundary, not inside one.
+        let mut long = String::from("sensor.long|");
+        long.push_str(&"é".repeat(300));
+        let answer = parse_entries(&long, true);
+        assert_eq!(answer.entries.len(), 1);
+        assert!(answer.entries[0].name.len() <= MAXIMUM_LINE_LENGTH);
+        assert!(answer.entries[0].name.chars().all(|c| c == 'é'));
     }
 }

@@ -219,7 +219,8 @@ pub fn read_body<T: Transport>(body: &mut Body<T>, limit: usize) -> Result<Strin
 /// Errors for statuses no caller handles.
 pub fn status_error(status: u16) -> Error {
     match status {
-        401 | 403 => Error::Unauthorized,
+        401 => Error::Unauthorized,
+        403 => Error::Forbidden,
         404 => Error::NotFound,
         status => Error::Http(status),
     }
@@ -411,7 +412,7 @@ pub mod tests {
             read_response(canned(&huge, 512)),
             Err(Error::TooLarge)
         ));
-        assert_eq!(status_error(403), Error::Unauthorized);
+        assert_eq!(status_error(403), Error::Forbidden);
         assert_eq!(status_error(502), Error::Http(502));
     }
 }

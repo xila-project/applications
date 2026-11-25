@@ -1,27 +1,22 @@
-//! Settings screen: the server connection, the account (a sign-in with
-//! username and password, or a long-lived access token) and the entity list
-//! with a picker on the server. It edits a draft of the configuration and
-//! writes the same files as the serial-shell route when saved.
+//! Settings screen: the server connection, the long-lived access token (typed
+//! in a field hidden behind a mask until Show is pressed, or imported from a
+//! file such as one on an SD card) and the entity list with a picker on the
+//! server. It edits a draft of the configuration and writes the same files as
+//! the terminal route when saved.
 
 use embedded_i18n::t;
 use home_assistant::{
     api,
-    auth::{self, Credentials, FlowResult, Session},
     configuration::{
         Configuration, DEFAULT_REFRESH_SECONDS, Invalid, MAXIMUM_ENTITIES, is_valid_entity_id,
     },
     error::Error,
     net::{Endpoint, device::Devices},
     picker::{self, Entry},
-    storage::{MAXIMUM_TOKEN_LENGTH, Storage},
-    text::{apply_masked_edit, error_message, invalid_message, login_error, mask},
+    storage::{MAXIMUM_TOKEN_LENGTH, Storage, validate_token},
+    text::{error_message, invalid_message},
 };
-use std::{
-    string::String,
-    thread::sleep,
-    time::{Duration, Instant},
-    vec::Vec,
-};
+use std::{string::String, thread::sleep, time::Duration, vec::Vec};
 use wasm::*;
 
 use crate::widgets::*;
@@ -30,9 +25,15 @@ const ERROR_COLOR: u32 = 0xEF4444;
 const SUCCESS_COLOR: u32 = 0x22C55E;
 const MUTED_COLOR: u32 = 0x71717A;
 
+/// Default path of the import file: the SD card mount of the boards that have
+/// one, such as the WT32-SC01 Plus.
+const DEFAULT_IMPORT_PATH: &str = "/media/sd_card/home_assistant_token.txt";
+
 pub struct Context<'a> {
     pub storage: Option<&'a Storage>,
-    pub session: &'a mut Session,
+    /// Set when a close request is drained after a blocking call: the host
+    /// sends it only once, so the run loop must see it.
+    pub close_requested: &'a mut bool,
 }
 
 pub enum Outcome {
@@ -45,12 +46,8 @@ pub enum Outcome {
 enum Action {
     Save,
     Cancel,
-    SignIn,
-    SignOut,
-    SubmitSignIn,
-    CancelSignIn,
-    ReplaceToken,
     ToggleToken,
+    Import,
     AddManual,
     OpenPicker,
     PickerBack,
@@ -60,28 +57,6 @@ enum Action {
     RemoveEntity(usize),
     MoveUp(usize),
     MoveDown(usize),
-}
-
-/// The account being edited: a signed-in session, or a long-lived token typed
-/// in the advanced field (empty when the saved one is kept).
-struct Account {
-    signed_in: Option<Credentials>,
-    token: String,
-    token_saved: bool,
-    token_visible: bool,
-}
-
-/// The sign-in form in progress. The field objects belong to the account row
-/// and are rebuilt with it; their text is kept across rebuilds.
-struct SignIn {
-    flow_id: String,
-    two_factor: bool,
-    username: *mut Object,
-    password: *mut Object,
-    /// The password itself, hidden by the masked field. It is cleared after
-    /// each request.
-    password_text: String,
-    code: *mut Object,
 }
 
 /// The picker page over the settings.
@@ -103,15 +78,14 @@ pub struct Settings {
     message: *mut Object,
     url: *mut Object,
     refresh: *mut Object,
-    account_section: *mut Object,
-    account_content: *mut Object,
-    account: Account,
-    sign_in: Option<SignIn>,
-    token_section: *mut Object,
-    token_content: *mut Object,
     token_field: *mut Object,
-    token_toggle: *mut Object,
     token_toggle_label: *mut Object,
+    /// The token of the token field. The field itself shows [`SECRET_MASK`]
+    /// while it is hidden, so the secret is kept here, never read back from
+    /// the masked text.
+    token: String,
+    token_visible: bool,
+    import_field: *mut Object,
     entities_section: *mut Object,
     entities_content: *mut Object,
     manual_field: *mut Object,
@@ -169,12 +143,12 @@ unsafe fn page(window: *mut Object, title: &str) -> wasm::Result<Page> {
 }
 
 impl Settings {
-    /// Opens the settings over the main screen, from `configuration` or
-    /// empty fields when there is none, and the saved account.
+    /// Opens the settings over the main screen, from `configuration` or empty
+    /// fields when there is none, and the saved `token` in the token field.
     pub unsafe fn open(
         window: *mut Object,
         configuration: Option<&Configuration>,
-        session: &Session,
+        token: Option<&str>,
     ) -> wasm::Result<Self> {
         let draft = configuration.cloned().unwrap_or_else(|| Configuration {
             url: String::from("http://"),
@@ -201,14 +175,20 @@ impl Settings {
             caption(root, t!("settings.refresh"))?;
             let refresh = field(root, &draft.refresh_seconds.to_string(), 6)?;
 
-            section(root, t!("settings.account"))?;
-            let account_section = flex(root, FlexFlow::Column)?;
-            let account_content = container(account_section)?;
-
             section(root, t!("settings.advanced"))?;
             caption(root, t!("settings.token"))?;
-            let token_section = flex(root, FlexFlow::Row)?;
-            let token_content = container(token_section)?;
+            let token_row = flex(root, FlexFlow::Row)?;
+            let token_field = field(token_row, "", MAXIMUM_TOKEN_LENGTH as u32)?;
+            object_set_width(token_field, 0)?;
+            object_set_flex_grow(token_field, 1)?;
+            let (token_toggle, token_toggle_label) =
+                labelled_button(token_row, t!("settings.show"), OUTLINE)?;
+            caption(root, t!("settings.token_hint"))?;
+            caption(root, t!("settings.import_path"))?;
+            let import_field = field(root, DEFAULT_IMPORT_PATH, 256)?;
+            let import_row = flex(root, FlexFlow::Row)?;
+            paragraph(root, t!("settings.token_help_create"), FONT_SMALL)?;
+            paragraph(root, t!("settings.token_help_terminal"), FONT_SMALL)?;
 
             section(root, t!("settings.entities"))?;
             let entities_section = flex(root, FlexFlow::Column)?;
@@ -223,28 +203,23 @@ impl Settings {
                 message,
                 url,
                 refresh,
-                account_section,
-                account_content,
-                account: Account {
-                    signed_in: session.credentials.clone(),
-                    token: String::new(),
-                    token_saved: session.long_lived.is_some(),
-                    token_visible: false,
-                },
-                sign_in: None,
-                token_section,
-                token_content,
-                token_field: core::ptr::null_mut(),
-                token_toggle: core::ptr::null_mut(),
-                token_toggle_label: core::ptr::null_mut(),
+                token_field,
+                token_toggle_label,
+                token: String::from(token.unwrap_or("")),
+                token_visible: false,
+                import_field,
                 entities_section,
                 entities_content,
                 manual_field,
                 picker: None,
                 actions,
             };
-            settings.build_account()?;
-            settings.build_token(!settings.account.token_saved)?;
+            settings.actions.push((token_toggle, Action::ToggleToken));
+            settings.actions.push((
+                button(import_row, t!("settings.import"), OUTLINE)?,
+                Action::Import,
+            ));
+            settings.refresh_token_shown()?;
             settings.build_entities()?;
             Ok(settings)
         }
@@ -257,188 +232,6 @@ impl Settings {
             }
             delete(self.root)
         }
-    }
-
-    /// The line describing the account: signed in as a user, a token set, or
-    /// not signed in.
-    fn account_label(&self) -> String {
-        if let Some(credentials) = &self.account.signed_in {
-            match &credentials.name {
-                Some(name) => t!("settings.signed_in", name = name.as_str()).to_string(),
-                None => String::from(t!("settings.signed_in_no_name")),
-            }
-        } else if !self.account.token.is_empty() || self.account.token_saved {
-            String::from(t!("settings.token_set_account"))
-        } else {
-            String::from(t!("settings.not_signed_in"))
-        }
-    }
-
-    /// Account row: the state, a sign-in or sign-out button, and the sign-in
-    /// form when one is in progress. What the form holds is kept across the
-    /// rebuild.
-    unsafe fn build_account(&mut self) -> wasm::Result<()> {
-        // Read the sign-in form before it is deleted.
-        let kept = match &self.sign_in {
-            Some(sign_in) => unsafe {
-                (
-                    if sign_in.username.is_null() {
-                        String::new()
-                    } else {
-                        field_text(sign_in.username).unwrap_or_default()
-                    },
-                    sign_in.password_text.clone(),
-                    if sign_in.code.is_null() {
-                        String::new()
-                    } else {
-                        field_text(sign_in.code).unwrap_or_default()
-                    },
-                )
-            },
-            None => (String::new(), String::new(), String::new()),
-        };
-        let (two_factor, flow_id) = match &self.sign_in {
-            Some(sign_in) => (sign_in.two_factor, sign_in.flow_id.clone()),
-            None => (false, String::new()),
-        };
-        unsafe {
-            delete(self.account_content)?;
-            self.actions.retain(|(_, action)| {
-                !matches!(
-                    action,
-                    Action::SignIn | Action::SignOut | Action::SubmitSignIn | Action::CancelSignIn
-                )
-            });
-            let content = flex(self.account_section, FlexFlow::Column)?;
-            self.account_content = content;
-            let row = flex(content, FlexFlow::Row)?;
-            let text = label(row, &self.account_label(), FONT_MEDIUM)?;
-            object_set_width(text, 0)?;
-            object_set_flex_grow(text, 1)?;
-            if self.account.signed_in.is_some()
-                || self.account.token_saved
-                || !self.account.token.is_empty()
-            {
-                self.actions.push((
-                    button(row, t!("settings.sign_out"), OUTLINE)?,
-                    Action::SignOut,
-                ));
-            } else if self.sign_in.is_none() {
-                // While the sign-in form shows, its own buttons act.
-                self.actions.push((
-                    button(row, t!("settings.sign_in"), OUTLINE)?,
-                    Action::SignIn,
-                ));
-            }
-            if self.sign_in.is_some() {
-                let form = flex(content, FlexFlow::Column)?;
-                let (username, password, code) = if two_factor {
-                    paragraph(form, t!("settings.two_factor_hint"), FONT_SMALL)?;
-                    caption(form, t!("settings.code"))?;
-                    (
-                        core::ptr::null_mut(),
-                        core::ptr::null_mut(),
-                        field(form, &kept.2, 16)?,
-                    )
-                } else {
-                    caption(form, t!("settings.username"))?;
-                    let username = field(form, &kept.0, 64)?;
-                    caption(form, t!("settings.password"))?;
-                    let password = field(form, &mask(kept.1.chars().count()), 128)?;
-                    (username, password, core::ptr::null_mut())
-                };
-                let buttons = flex(form, FlexFlow::Row)?;
-                self.actions.push((
-                    button(buttons, t!("settings.cancel"), OUTLINE)?,
-                    Action::CancelSignIn,
-                ));
-                self.actions.push((
-                    button(buttons, t!("settings.sign_in"), PRIMARY)?,
-                    Action::SubmitSignIn,
-                ));
-                if let Some(sign_in) = &mut self.sign_in {
-                    sign_in.flow_id = flow_id;
-                    sign_in.two_factor = two_factor;
-                    sign_in.username = username;
-                    sign_in.password = password;
-                    sign_in.password_text = kept.1;
-                    sign_in.code = code;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    /// Token row: "Token set" with a replace action, or the masked field.
-    unsafe fn build_token(&mut self, editing: bool) -> wasm::Result<()> {
-        unsafe {
-            delete(self.token_content)?;
-            self.actions.retain(|(_, action)| {
-                !matches!(action, Action::ReplaceToken | Action::ToggleToken)
-            });
-            let content = flex(self.token_section, FlexFlow::Row)?;
-            self.token_content = content;
-            if editing {
-                caption(self.token_section, t!("settings.set_token"))?;
-                let field = field(
-                    content,
-                    &mask(self.account.token.chars().count()),
-                    MAXIMUM_TOKEN_LENGTH as u32,
-                )?;
-                object_set_width(field, 0)?;
-                object_set_flex_grow(field, 1)?;
-                let (toggle, toggle_label) =
-                    labelled_button(content, t!("settings.show"), OUTLINE)?;
-                self.token_field = field;
-                self.token_toggle = toggle;
-                self.token_toggle_label = toggle_label;
-                self.account.token_visible = false;
-                self.actions.push((toggle, Action::ToggleToken));
-            } else {
-                let text = label(content, t!("settings.token_set"), FONT_MEDIUM)?;
-                object_set_width(text, 0)?;
-                object_set_flex_grow(text, 1)?;
-                let replace = button(content, t!("settings.replace"), OUTLINE)?;
-                self.token_field = core::ptr::null_mut();
-                self.token_toggle = core::ptr::null_mut();
-                self.token_toggle_label = core::ptr::null_mut();
-                self.actions.push((replace, Action::ReplaceToken));
-            }
-        }
-        Ok(())
-    }
-
-    unsafe fn toggle_token(&mut self) -> wasm::Result<()> {
-        self.account.token_visible = !self.account.token_visible;
-        unsafe {
-            if self.account.token_visible {
-                set_field(self.token_field, &self.account.token)?;
-            } else {
-                set_field(self.token_field, &mask(self.account.token.chars().count()))?;
-            }
-            let caption = if self.account.token_visible {
-                t!("settings.hide")
-            } else {
-                t!("settings.show")
-            };
-            set_text(self.token_toggle_label, caption)?;
-        }
-        Ok(())
-    }
-
-    unsafe fn token_changed(&mut self) -> wasm::Result<()> {
-        let shown = unsafe { field_text(self.token_field)? };
-        if self.account.token_visible {
-            self.account.token = shown;
-            return Ok(());
-        }
-        let before = self.account.token.clone();
-        apply_masked_edit(&mut self.account.token, &shown);
-        let masked = mask(self.account.token.chars().count());
-        if shown != masked || before != self.account.token {
-            unsafe { set_field(self.token_field, &masked)? };
-        }
-        Ok(())
     }
 
     /// Entity list: one row per entity with reorder and remove actions, then
@@ -527,6 +320,29 @@ impl Settings {
         }
     }
 
+    /// Shows the token field as the secret while it is visible, as the mask
+    /// while it is hidden.
+    unsafe fn refresh_token_shown(&self) -> wasm::Result<()> {
+        let shown = if self.token_visible {
+            self.token.clone()
+        } else if self.token.is_empty() {
+            String::new()
+        } else {
+            String::from(SECRET_MASK)
+        };
+        unsafe { set_field_bounded(self.token_field, &shown, MAXIMUM_TOKEN_LENGTH as u32) }
+    }
+
+    /// The token of the token field, checked: the picker and the save both
+    /// need a token the header can carry.
+    fn token(&self) -> core::result::Result<String, Error> {
+        let token = self.token.trim();
+        if token.is_empty() {
+            return Err(Error::MissingToken);
+        }
+        validate_token(token).map(|()| String::from(token))
+    }
+
     /// Shows a message and lets the display catch up before a blocking call.
     unsafe fn busy(&self, text: &str) -> wasm::Result<()> {
         unsafe { self.show_message(text, MUTED_COLOR)? };
@@ -534,171 +350,48 @@ impl Settings {
         Ok(())
     }
 
-    /// Signs out: revokes the refresh token when there is one, and deletes
-    /// the stored credentials or token.
-    unsafe fn sign_out(&mut self, context: &mut Context<'_>) -> wasm::Result<()> {
-        let endpoint = unsafe { self.endpoint()? }.ok();
-        if let (Some(credentials), Some(endpoint)) = (&self.account.signed_in, endpoint) {
-            let _ = auth::revoke(&mut Devices, &endpoint, &credentials.refresh_token);
-        }
-        if let Some(storage) = context.storage {
-            if self.account.signed_in.is_some() {
-                let _ = storage.remove_credentials();
+    /// Discards the window events queued while a blocking call ran, so a tap
+    /// made during it does not start another one right away. The close
+    /// request is the exception: the host sends it only once, so it is kept
+    /// for the run loop.
+    unsafe fn drain_events(&mut self, context: &mut Context<'_>) -> wasm::Result<()> {
+        loop {
+            let mut code = EventCode::All as u32;
+            let mut target: *mut Object = core::ptr::null_mut();
+            unsafe {
+                window_pop_event(
+                    self.window,
+                    &mut code,
+                    (&mut target as *mut *mut Object).cast(),
+                )?;
             }
-            if self.account.token_saved || !self.account.token.is_empty() {
-                let _ = storage.remove_token();
+            if code == EVENT_CLOSE_REQUESTED {
+                *context.close_requested = true;
+                return Ok(());
             }
-        }
-        self.account.signed_in = None;
-        self.account.token.clear();
-        self.account.token_saved = false;
-        self.sign_in = None;
-        unsafe {
-            self.build_account()?;
-            self.build_token(true)
+            if code == EventCode::All as u32 {
+                return Ok(());
+            }
         }
     }
 
-    /// Starts the login flow when needed, then submits the step the form
-    /// shows: username and password, or a two-factor code.
-    unsafe fn submit_sign_in(&mut self, context: &mut Context<'_>) -> wasm::Result<()> {
-        let endpoint = match unsafe { self.endpoint()? } {
-            Ok(endpoint) => endpoint,
-            Err(message) => return unsafe { self.show_message(&message, ERROR_COLOR) },
+    /// Imports the token from the file of the import field into the token
+    /// field. The source file is only read.
+    unsafe fn import_token(&mut self) -> wasm::Result<()> {
+        let path = unsafe { field_text(self.import_field)? };
+        let path = path.trim();
+        let result = if path.is_empty() {
+            Err(Error::ImportMissing)
+        } else {
+            Storage::read_token_file(path)
         };
-        unsafe { self.busy(t!("settings.signing_in"))? };
-        // Start the flow once; its identifier then lives in the form.
-        if self
-            .sign_in
-            .as_ref()
-            .is_none_or(|sign_in| sign_in.flow_id.is_empty())
-        {
-            match auth::start_login_flow(&mut Devices, &endpoint) {
-                Ok(FlowResult::Form { flow_id, .. }) => {
-                    // Keep the form and what was typed in it; only the flow
-                    // identifier is new.
-                    match &mut self.sign_in {
-                        Some(sign_in) => sign_in.flow_id = flow_id,
-                        None => {
-                            self.sign_in = Some(SignIn {
-                                flow_id,
-                                two_factor: false,
-                                username: core::ptr::null_mut(),
-                                password: core::ptr::null_mut(),
-                                password_text: String::new(),
-                                code: core::ptr::null_mut(),
-                            });
-                        }
-                    }
-                    unsafe { self.build_account()? };
-                }
-                Ok(FlowResult::Abort { reason }) => {
-                    let text = match reason {
-                        Some(reason) => login_error(&reason),
-                        None => t!("settings.login_failed", reason = "abort").to_string(),
-                    };
-                    return unsafe { self.show_message(&text, ERROR_COLOR) };
-                }
-                Ok(_) => {
-                    return unsafe {
-                        self.show_message(&error_message(&Error::InvalidResponse), ERROR_COLOR)
-                    };
-                }
-                Err(error) => {
-                    return unsafe { self.show_message(&error_message(&error), ERROR_COLOR) };
-                }
-            }
-        }
-        // The step to submit, from the form fields.
-        let (flow_id, body) = match &self.sign_in {
-            Some(sign_in) if sign_in.two_factor => {
-                let code = unsafe { field_text(sign_in.code)? };
-                (sign_in.flow_id.clone(), auth::mfa_body(code.trim()))
-            }
-            Some(sign_in) => {
-                let username = unsafe { field_text(sign_in.username)? };
-                (
-                    sign_in.flow_id.clone(),
-                    auth::credentials_body(username.trim(), &sign_in.password_text),
-                )
-            }
-            None => return Ok(()),
-        };
-        let result = auth::submit_login_flow(&mut Devices, &endpoint, &flow_id, &body);
-        // The password does not stay in memory after its request.
-        if let Some(sign_in) = &mut self.sign_in {
-            sign_in.password_text.clear();
-            if !sign_in.password.is_null() {
-                unsafe { set_field(sign_in.password, "")? };
-            }
-        }
         match result {
-            Ok(FlowResult::CreateEntry { code, title }) => {
-                match auth::exchange_code(&mut Devices, &endpoint, &code) {
-                    Ok(set) => match set.refresh_token {
-                        Some(refresh_token) => match Credentials::new(&refresh_token, title) {
-                            Ok(credentials) => {
-                                // The session gets the credentials and the access token right
-                                // away, so the picker can query the server before saving.
-                                context.session.credentials = Some(credentials.clone());
-                                context.session.set_access_token(
-                                    &set.access_token,
-                                    set.expires_in,
-                                    Instant::now(),
-                                );
-                                self.account.signed_in = Some(credentials);
-                                self.account.token.clear();
-                                self.account.token_saved = false;
-                                self.sign_in = None;
-                                unsafe {
-                                    self.build_account()?;
-                                    self.build_token(false)?;
-                                    self.show_message(t!("settings.saved"), SUCCESS_COLOR)
-                                }
-                            }
-                            Err(error) => unsafe {
-                                self.show_message(&error_message(&error), ERROR_COLOR)
-                            },
-                        },
-                        None => unsafe {
-                            self.show_message(&error_message(&Error::InvalidResponse), ERROR_COLOR)
-                        },
-                    },
-                    Err(error) => unsafe { self.show_message(&error_message(&error), ERROR_COLOR) },
-                }
-            }
-            Ok(FlowResult::Form {
-                flow_id,
-                step_id,
-                errors,
-            }) => {
-                let two_factor = step_id == "mfa";
-                if let Some(sign_in) = &mut self.sign_in {
-                    sign_in.flow_id = flow_id;
-                    sign_in.two_factor = two_factor;
-                }
-                unsafe { self.build_account()? };
-                let text = if two_factor {
-                    String::from(t!("settings.two_factor_hint"))
-                } else {
-                    let reason = errors
-                        .iter()
-                        .find(|(key, _)| key == "base")
-                        .map(|(_, message)| message.as_str())
-                        .unwrap_or("invalid_auth");
-                    login_error(reason)
-                };
+            Ok(token) => {
+                self.token = token;
                 unsafe {
-                    let color = if two_factor { MUTED_COLOR } else { ERROR_COLOR };
-                    self.show_message(&text, color)
+                    self.refresh_token_shown()?;
+                    self.show_message(t!("settings.imported"), SUCCESS_COLOR)
                 }
-            }
-            Ok(FlowResult::Abort { reason }) => {
-                let text = match reason {
-                    Some(reason) => login_error(&reason),
-                    None => t!("settings.login_failed", reason = "abort").to_string(),
-                };
-                unsafe { self.show_message(&text, ERROR_COLOR) }
             }
             Err(error) => unsafe { self.show_message(&error_message(&error), ERROR_COLOR) },
         }
@@ -710,10 +403,7 @@ impl Settings {
             Ok(endpoint) => endpoint,
             Err(message) => return unsafe { self.show_message(&message, ERROR_COLOR) },
         };
-        let token = match context
-            .session
-            .access_token(&mut Devices, &endpoint, Instant::now())
-        {
+        let token = match self.token() {
             Ok(token) => token,
             Err(error) => return unsafe { self.show_message(&error_message(&error), ERROR_COLOR) },
         };
@@ -739,13 +429,17 @@ impl Settings {
                 areas: Vec::new(),
                 switches: Vec::new(),
             });
-            match api::render_template(&mut Devices, &endpoint, &token, &picker::areas_template()) {
+            self.busy(t!("settings.loading"))?;
+            let answer =
+                api::render_template(&mut Devices, &endpoint, &token, &picker::areas_template());
+            self.drain_events(context)?;
+            match answer {
                 Ok(text) => {
-                    let areas = picker::parse_entries(&text, false);
+                    let answer = picker::parse_entries(&text, false);
                     if let Some(picker) = &mut self.picker {
-                        picker.areas = areas;
+                        picker.areas = answer.entries;
                     }
-                    self.build_picker_areas()
+                    self.build_picker_areas(answer.truncated)
                 }
                 Err(error) => {
                     let text = error_message(&error);
@@ -757,7 +451,7 @@ impl Settings {
     }
 
     /// The area list of the picker.
-    unsafe fn build_picker_areas(&mut self) -> wasm::Result<()> {
+    unsafe fn build_picker_areas(&mut self, truncated: bool) -> wasm::Result<()> {
         unsafe {
             let areas = match &self.picker {
                 Some(picker) => picker.areas.clone(),
@@ -773,6 +467,9 @@ impl Settings {
                 let content = picker.content;
                 if areas.is_empty() {
                     paragraph(content, t!("settings.no_areas"), FONT_SMALL)?;
+                }
+                if truncated {
+                    paragraph(content, t!("settings.list_truncated"), FONT_SMALL)?;
                 }
                 for (index, area) in areas.iter().enumerate() {
                     let caption = if area.name.is_empty() {
@@ -804,16 +501,14 @@ impl Settings {
             Ok(endpoint) => endpoint,
             Err(message) => return unsafe { self.show_message(&message, ERROR_COLOR) },
         };
-        let token = match context
-            .session
-            .access_token(&mut Devices, &endpoint, Instant::now())
-        {
+        let token = match self.token() {
             Ok(token) => token,
             Err(error) => return unsafe { self.show_message(&error_message(&error), ERROR_COLOR) },
         };
         unsafe { self.busy(t!("settings.loading"))? };
         let answer = api::render_template(&mut Devices, &endpoint, &token, template);
-        let entries = match answer {
+        unsafe { self.drain_events(context)? };
+        let answer = match answer {
             Ok(text) => picker::parse_entries(&text, true),
             Err(error) => return unsafe { self.show_message(&error_message(&error), ERROR_COLOR) },
         };
@@ -828,10 +523,13 @@ impl Settings {
             picker.switches.clear();
             picker.content = flex(picker.parent, FlexFlow::Column)?;
             let content = picker.content;
-            if entries.is_empty() {
+            if answer.entries.is_empty() {
                 paragraph(content, t!("settings.no_entities_in_area"), FONT_SMALL)?;
             }
-            for entry in &entries {
+            if answer.truncated {
+                paragraph(content, t!("settings.list_truncated"), FONT_SMALL)?;
+            }
+            for entry in &answer.entries {
                 let row = flex(content, FlexFlow::Row)?;
                 let caption = if entry.name.is_empty() {
                     entry.identifier.clone()
@@ -885,8 +583,8 @@ impl Settings {
         }
     }
 
-    /// Saves the draft: the configuration file, and the credentials or token
-    /// file of the account, each written atomically.
+    /// Saves the draft: the configuration file and the token file, each
+    /// written atomically.
     unsafe fn save(&mut self, context: &mut Context<'_>) -> wasm::Result<Outcome> {
         unsafe {
             if let Err(invalid) = self.read_fields()?.and_then(|()| self.draft.validate()) {
@@ -897,32 +595,16 @@ impl Settings {
                 self.show_message(&error_message(&Error::Storage), ERROR_COLOR)?;
                 return Ok(Outcome::Stay);
             };
-            if self.account.signed_in.is_none()
-                && self.account.token.is_empty()
-                && !self.account.token_saved
-            {
-                self.show_message(t!("errors.missing_token"), ERROR_COLOR)?;
-                return Ok(Outcome::Stay);
-            }
-            if let Some(credentials) = &self.account.signed_in {
-                if let Err(error) = storage.save_credentials(credentials) {
+            let token = match self.token() {
+                Ok(token) => token,
+                Err(error) => {
                     self.show_message(&error_message(&error), ERROR_COLOR)?;
                     return Ok(Outcome::Stay);
                 }
-                let _ = storage.remove_token();
-            } else if !self.account.token.is_empty() {
-                if let Err(error) = storage.save_token(&self.account.token) {
-                    let text = match error {
-                        Error::MissingToken => String::from(t!("errors.missing_token")),
-                        error => error_message(&error),
-                    };
-                    self.show_message(&text, ERROR_COLOR)?;
-                    return Ok(Outcome::Stay);
-                }
-                let _ = storage.remove_credentials();
-            } else {
-                // The saved token is kept: only the credentials file goes.
-                let _ = storage.remove_credentials();
+            };
+            if let Err(error) = storage.save_token(&token) {
+                self.show_message(&error_message(&error), ERROR_COLOR)?;
+                return Ok(Outcome::Stay);
             }
             if let Err(error) = storage.save(&self.draft) {
                 self.show_message(&error_message(&error), ERROR_COLOR)?;
@@ -941,17 +623,27 @@ impl Settings {
     ) -> wasm::Result<Outcome> {
         unsafe {
             if code == EventCode::ValueChanged as u32 {
-                if !self.token_field.is_null() && target == self.token_field {
-                    self.token_changed()?;
-                } else if let Some(sign_in) = &self.sign_in
-                    && !sign_in.password.is_null()
-                    && target == sign_in.password
-                {
-                    let shown = field_text(target)?;
-                    let sign_in = self.sign_in.as_mut().unwrap();
-                    apply_masked_edit(&mut sign_in.password_text, &shown);
-                    set_field(target, &mask(sign_in.password_text.chars().count()))?;
-                } else if let Some(picker) = &self.picker
+                if target == self.token_field {
+                    if self.token_visible {
+                        self.token = field_text(self.token_field)?;
+                    } else {
+                        // Hidden, the field shows the mask: an edit cannot be
+                        // told apart from the mask, so it is discarded and the
+                        // mask shown again. Setting the same text again would
+                        // send another change event, so only reset when the
+                        // text differs.
+                        let shown = if self.token.is_empty() {
+                            String::new()
+                        } else {
+                            String::from(SECRET_MASK)
+                        };
+                        if field_text(self.token_field)? != shown {
+                            self.refresh_token_shown()?;
+                        }
+                    }
+                    return Ok(Outcome::Stay);
+                }
+                if let Some(picker) = &self.picker
                     && let Some((_, identifier)) =
                         picker.switches.iter().find(|(switch, _)| *switch == target)
                 {
@@ -975,25 +667,17 @@ impl Settings {
             match action {
                 Action::Save => return self.save(context),
                 Action::Cancel => return Ok(Outcome::Close),
-                Action::SignIn => {
-                    self.sign_in = Some(SignIn {
-                        flow_id: String::new(),
-                        two_factor: false,
-                        username: core::ptr::null_mut(),
-                        password: core::ptr::null_mut(),
-                        password_text: String::new(),
-                        code: core::ptr::null_mut(),
-                    });
-                    self.build_account()?;
+                Action::ToggleToken => {
+                    self.token_visible = !self.token_visible;
+                    self.refresh_token_shown()?;
+                    let caption = if self.token_visible {
+                        t!("settings.hide")
+                    } else {
+                        t!("settings.show")
+                    };
+                    set_text(self.token_toggle_label, caption)?;
                 }
-                Action::SubmitSignIn => self.submit_sign_in(context)?,
-                Action::CancelSignIn => {
-                    self.sign_in = None;
-                    self.build_account()?;
-                }
-                Action::SignOut => self.sign_out(context)?,
-                Action::ReplaceToken => self.build_token(true)?,
-                Action::ToggleToken => self.toggle_token()?,
+                Action::Import => self.import_token()?,
                 Action::AddManual => {
                     let text = field_text(self.manual_field)?.trim().to_string();
                     if is_valid_entity_id(&text)
@@ -1046,6 +730,9 @@ impl Settings {
                     self.build_entities()?;
                 }
             }
+            // A blocking call may have queued taps: discard them, but keep a
+            // close request for the run loop.
+            self.drain_events(context)?;
         }
         Ok(Outcome::Stay)
     }
