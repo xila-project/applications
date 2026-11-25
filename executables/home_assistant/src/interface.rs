@@ -548,6 +548,16 @@ impl Interface {
                     break;
                 }
                 self.handle(code, target)?;
+                // A handler can drain a close request after its refresh:
+                // handle no more events after it.
+                if self.close_requested {
+                    break;
+                }
+            }
+            // Do not start a refresh, which can block until the network
+            // timeout, once the window must close.
+            if self.close_requested {
+                continue;
             }
             if self.next_refresh.is_some_and(|next| Instant::now() >= next) {
                 self.refresh()?;
