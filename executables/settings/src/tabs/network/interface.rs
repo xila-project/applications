@@ -92,6 +92,7 @@ impl InterfacePanel {
                     let ip = file
                         .as_synchronous_file_mut()
                         .control(GET_IP_ADDRESS, &index)?;
+                    let ip = xila::network::IpCidr::try_from(ip)?;
                     format_buffer.clear();
                     write!(format_buffer, "{}\0", ip).ok();
 
@@ -108,6 +109,7 @@ impl InterfacePanel {
 
                 for index in 0..route_count {
                     let route = file.as_synchronous_file_mut().control(GET_ROUTE, &index)?;
+                    let route = xila::network::Route::try_from(route)?;
                     format_buffer.clear();
                     write!(format_buffer, "{} via {}\0", route.cidr, route.via_router).ok();
                     lvgl::lv_list_add_button(list, null_mut(), format_buffer.as_ptr() as _);
@@ -125,6 +127,7 @@ impl InterfacePanel {
                     let dns = file
                         .as_synchronous_file_mut()
                         .control(GET_DNS_SERVER, &index)?;
+                    let dns = xila::network::IpAddress::try_from(dns)?;
                     format_buffer.clear();
                     write!(format_buffer, "{}\0", dns).ok();
                     lvgl::lv_list_add_button(list, null_mut(), format_buffer.as_ptr() as _);
@@ -371,10 +374,10 @@ impl InterfacePanel {
         let _general_tab = Self::create_general_tab(general_tab, &mut file).await?;
 
         let wifi =
-            if file
-                .as_synchronous_file_mut()
-                .control(xila::network::GET_KIND, &())?
-                == xila::network::InterfaceKind::WiFi
+            if xila::network::InterfaceKind::try_from(
+                file.as_synchronous_file_mut()
+                    .control(xila::network::GET_KIND, &())?,
+            )? == xila::network::InterfaceKind::WiFi
             {
                 match file
                     .as_synchronous_file_mut()

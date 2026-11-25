@@ -64,6 +64,7 @@ async fn show_routes_interface<C: CommandContext>(
             .as_synchronous_file_mut()
             .control(GET_ROUTE, &index)
             .map_err(Error::FailedToOpenFile)?;
+        let route = xila::network::Route::try_from(route).map_err(Error::FailedToOpenFile)?;
         context
             .write_out_fmt(format_args!(
                 "{} via {} device {}\n",
@@ -114,6 +115,7 @@ async fn show_address_interface<C: CommandContext>(
             .as_synchronous_file_mut()
             .control(GET_IP_ADDRESS, &index)
             .map_err(Error::FailedToOpenFile)?;
+        let address = xila::network::IpCidr::try_from(address).map_err(Error::FailedToOpenFile)?;
         context
             .write_out_fmt(format_args!("   {} \n", address))
             .await?;
@@ -150,12 +152,16 @@ async fn show_address<C: CommandContext>(
             Err(IoErrorKind::Unsupported) => continue,
             Err(error) => return Err(Error::FailedToOpenFile(error)),
         };
+        let state = bool::try_from(state)
+            .map_err(|_| Error::FailedToOpenFile(IoErrorKind::InvalidArgument))?;
         let state = if state { "Enabled" } else { "Disabled" };
 
         let status = file
             .control(xila::network::IS_LINK_UP, &())
             .await
             .map_err(Error::FailedToOpenFile)?;
+        let status = bool::try_from(status)
+            .map_err(|_| Error::FailedToOpenFile(IoErrorKind::InvalidArgument))?;
         let status: &str = if status { "Up" } else { "Down" };
 
         let hardware_address = file
