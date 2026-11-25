@@ -46,15 +46,17 @@ impl NetworkTab {
             .as_synchronous_file_mut()
             .control(network::GET_KIND, &())
         {
-            Ok(kind) => file
-                .as_synchronous_file_mut()
-                .control(network::IS_LINK_UP, &())
-                .map(|up| {
-                    Some((
-                        InterfaceKind::try_from(kind).ok()?,
-                        bool::try_from(up).ok()?,
-                    ))
-                }),
+            Ok(kind) => {
+                // Unknown payload bytes are invalid, as in the shell commands.
+                let kind = InterfaceKind::try_from(kind)
+                    .map_err(|_| xila::virtual_file_system::IoErrorKind::InvalidArgument)?;
+                let up = file
+                    .as_synchronous_file_mut()
+                    .control(network::IS_LINK_UP, &())?;
+                let up = bool::try_from(up)
+                    .map_err(|_| xila::virtual_file_system::IoErrorKind::InvalidArgument)?;
+                Ok(Some((kind, up)))
+            }
             // Protocol clients share this directory but are not interfaces.
             Err(xila::virtual_file_system::IoErrorKind::Unsupported) => Ok(None),
             Err(error) => Err(error),
