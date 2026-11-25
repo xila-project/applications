@@ -87,12 +87,68 @@
     }
   },
   "general": {
-    "status": {
-      "coming_soon": "一般設定は今後実装予定です。"
-    },
     "fields": {
       "locale": "言語:",
       "language": "言語"
+    },
+    "time_zone": {
+      "title": "タイムゾーン",
+      "preview": "現地時刻",
+      "custom": "カスタム TZ 文字列",
+      "custom_hint": "POSIX TZ 形式。例: パリは CET-1CEST,M3.5.0,M10.5.0/3。",
+      "custom_name": "カスタム",
+      "apply_custom": "この TZ 文字列を使用",
+      "apply_zone": "このゾーンを使用",
+      "region": "地域",
+      "zone": "ゾーン",
+      "other_region": "その他",
+      "saved": "タイムゾーンを保存しました。今後起動するアプリに適用されます。",
+      "unsynchronized": "時計が設定されていません。",
+      "errors": {
+        "invalid": "有効な POSIX TZ 文字列ではありません。",
+        "too_long": "TZ 文字列が長すぎます。",
+        "permission_denied": "タイムゾーンを変更できるのは管理者だけです。",
+        "save_failed": "タイムゾーンを保存できませんでした。"
+      },
+      "editor": "選択方法",
+      "editors": {
+        "zone": "ゾーン名",
+        "offset": "UTC オフセット",
+        "string": "TZ 文字列 (詳細)"
+      },
+      "form": {
+        "offset": "UTC オフセット",
+        "minutes": "分",
+        "daylight_saving": "夏時間",
+        "shift": "夏時間のオフセット",
+        "rules": "規則",
+        "presets": {
+          "european_union": "欧州連合",
+          "united_states": "アメリカ合衆国",
+          "custom": "カスタム"
+        },
+        "start": "開始",
+        "end": "終了",
+        "month": "月",
+        "week": "週",
+        "weekday": "曜日",
+        "time": "現地時刻",
+        "weeks": {
+          "first": "第 1",
+          "second": "第 2",
+          "third": "第 3",
+          "fourth": "第 4",
+          "last": "最終"
+        },
+        "standard_name": "標準時の略称 (任意)",
+        "daylight_name": "夏時間の略称 (任意)",
+        "names_hint": "3 から 7 文字の英字、数字、+ または -。例: CET と CEST。空の場合はオフセットを使用します (例: +01)。",
+        "generated": "生成された TZ 文字列",
+        "apply": "このオフセットを使用",
+        "errors": {
+          "abbreviation": "略称は 3 から 7 文字の英字、数字、+ または - です。"
+        }
+      }
     }
   },
   "common": {

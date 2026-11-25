@@ -127,6 +127,7 @@ pub(crate) mod tests {
         restore_appearance(graphics, vfs, task).await;
         crate::tabs::appearance::tests::exercise_ui(context, graphics).await;
         crate::tabs::network::wifi::tests::exercise_ui(context, graphics).await;
+        crate::tabs::time_zone::tests::exercise_ui(context, graphics).await;
     }
 
     /// Backlight level of the test screen, which has brightness control.

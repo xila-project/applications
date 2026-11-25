@@ -87,12 +87,68 @@
     }
   },
   "general": {
-    "status": {
-      "coming_soon": "Le impostazioni generali saranno implementate qui."
-    },
     "fields": {
       "locale": "Lingua:",
       "language": "Lingua"
+    },
+    "time_zone": {
+      "title": "Fuso orario",
+      "preview": "Ora locale",
+      "custom": "Stringa TZ personalizzata",
+      "custom_hint": "Formato TZ POSIX, ad esempio CET-1CEST,M3.5.0,M10.5.0/3 per Parigi.",
+      "custom_name": "Personalizzato",
+      "apply_custom": "Usa questa stringa TZ",
+      "apply_zone": "Usa questo fuso",
+      "region": "Regione",
+      "zone": "Fuso",
+      "other_region": "Altri",
+      "saved": "Fuso orario salvato. Le applicazioni avviate da ora in poi lo usano.",
+      "unsynchronized": "L'orologio non è impostato.",
+      "errors": {
+        "invalid": "Non è una stringa TZ POSIX valida.",
+        "too_long": "Questa stringa TZ è troppo lunga.",
+        "permission_denied": "Solo un amministratore può cambiare il fuso orario.",
+        "save_failed": "Impossibile salvare il fuso orario."
+      },
+      "editor": "Scegli per",
+      "editors": {
+        "zone": "Nome del fuso",
+        "offset": "Scostamento UTC",
+        "string": "Stringa TZ (avanzato)"
+      },
+      "form": {
+        "offset": "Scostamento UTC",
+        "minutes": "Minuti",
+        "daylight_saving": "Ora legale",
+        "shift": "Scostamento estivo",
+        "rules": "Regole",
+        "presets": {
+          "european_union": "Unione europea",
+          "united_states": "Stati Uniti",
+          "custom": "Personalizzate"
+        },
+        "start": "Inizio",
+        "end": "Fine",
+        "month": "Mese",
+        "week": "Settimana",
+        "weekday": "Giorno",
+        "time": "Ora locale",
+        "weeks": {
+          "first": "Prima",
+          "second": "Seconda",
+          "third": "Terza",
+          "fourth": "Quarta",
+          "last": "Ultima"
+        },
+        "standard_name": "Abbreviazione standard (facoltativa)",
+        "daylight_name": "Abbreviazione estiva (facoltativa)",
+        "names_hint": "Da 3 a 7 lettere, cifre, + o -, ad esempio CET e CEST. Se vuota si usa lo scostamento, ad esempio +01.",
+        "generated": "Stringa TZ generata",
+        "apply": "Usa questo scostamento",
+        "errors": {
+          "abbreviation": "Un'abbreviazione ha da 3 a 7 lettere, cifre, + o -."
+        }
+      }
     }
   },
   "common": {

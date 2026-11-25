@@ -7,10 +7,14 @@ license.workspace = true
 
 [dependencies]
 embedded-i18n = { workspace = true }
-xila = { workspace = true, default-features = true, features = ["graphics"] }
+xila = { workspace = true, default-features = true, features = [
+  "graphics",
+  "time_zone",
+] }
 const_format = { version = "0.2", features = ["fmt"] }
 embedded-io = { workspace = true }
 embassy-futures = { workspace = true }
+time_zone = { workspace = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dev-dependencies]
 drivers_core = { workspace = true }
@@ -23,6 +27,25 @@ task = { workspace = true, features = ["test_harness"] }
 
 [features]
 test_harness = ["task/test_harness"]
+# IANA zone names for the time zone selector, one feature per region of
+# xila-time-zone; they combine. Without one of them, Settings links no zone
+# table and offers the offset form and the TZ string field only. See the
+# xila-time-zone README for the flash cost of each region.
+time-zone-names = []
+time-zone-names-africa = ["time-zone-names", "time_zone/iana-africa"]
+time-zone-names-america = ["time-zone-names", "time_zone/iana-america"]
+time-zone-names-antarctica = ["time-zone-names", "time_zone/iana-antarctica"]
+time-zone-names-arctic = ["time-zone-names", "time_zone/iana-arctic"]
+time-zone-names-asia = ["time-zone-names", "time_zone/iana-asia"]
+time-zone-names-atlantic = ["time-zone-names", "time_zone/iana-atlantic"]
+time-zone-names-australia = ["time-zone-names", "time_zone/iana-australia"]
+time-zone-names-etc = ["time-zone-names", "time_zone/iana-etc"]
+time-zone-names-europe = ["time-zone-names", "time_zone/iana-europe"]
+time-zone-names-indian = ["time-zone-names", "time_zone/iana-indian"]
+time-zone-names-pacific = ["time-zone-names", "time_zone/iana-pacific"]
+time-zone-names-all = ["time-zone-names", "time_zone/iana-all"]
+# Add the legacy aliases of the enabled regions (US/Eastern, Asia/Calcutta).
+time-zone-names-legacy-aliases = ["time_zone/iana-legacy-aliases"]
 
 [[test]]
 name = "integration_test"

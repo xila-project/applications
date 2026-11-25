@@ -119,6 +119,10 @@ pub mod appearance;
 pub mod general;
 pub mod network;
 pub mod password;
+pub mod time_zone;
+pub mod time_zone_form;
+#[cfg(feature = "time-zone-names")]
+pub mod time_zone_names;
 
 pub use about::AboutTab;
 pub use appearance::AppearanceTab;
