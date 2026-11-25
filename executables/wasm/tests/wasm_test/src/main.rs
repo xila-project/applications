@@ -65,6 +65,13 @@ fn test_directory() {
 }
 
 fn main() -> Result<(), ()> {
+    // `--write-time-zone PATH`: write the `TZ` variable that the guest received
+    // through WASI `environ_get` to PATH, then exit. It needs no input.
+    let mut arguments = std::env::args().skip_while(|argument| argument != "--write-time-zone");
+    if let Some(path) = arguments.nth(1) {
+        std::fs::write(path, std::env::var("TZ").unwrap_or_default()).unwrap();
+        return Ok(());
+    }
     test_stdio()?;
     test_file();
     test_directory();

@@ -10,7 +10,7 @@
       "save_and_enable": "Enregistrer et activer"
     },
     "instructions": {
-      "repeat_days_utc": "Répéter les jours sélectionnés ; aucun pour une seule fois. Les heures sont en UTC."
+      "repeat_days_local": "Répéter les jours choisis ; aucun signifie une fois. Les heures sont locales : une heure sautée par un changement d’heure sonne après le changement (02:30 devient 03:30), et une heure répétée sonne une fois, la première."
     },
     "status": {
       "disabled": "Désactivée",
@@ -43,7 +43,7 @@
       "host_unavailable": "Heure du système indisponible"
     },
     "instructions": {
-      "utc_only": "UTC / heure du système. Les fuseaux des villes ne sont pas encore disponibles."
+      "local_time": "Heure locale du fuseau horaire réglé dans Paramètres."
     }
   },
   "errors": {

@@ -213,7 +213,7 @@ async fn real_clock_guest_runs_stopwatch_timer_saves_alarm_and_closes() {
     click(manager, Some(1), &text("alarm.controls.save_and_enable")).await;
     wait_label(
         manager,
-        &format!("{}{alarm_hour:02}:00 UTC", text("alarm.status.enabled")),
+        &format!("{}{alarm_hour:02}:00\n", text("alarm.status.enabled")),
         true,
     )
     .await;
@@ -257,7 +257,7 @@ async fn real_clock_guest_runs_stopwatch_timer_saves_alarm_and_closes() {
     open_alarm_tab(manager).await;
     wait_label(
         manager,
-        &format!("{}{alarm_hour:02}:00 UTC", text("alarm.status.enabled")),
+        &format!("{}{alarm_hour:02}:00\n", text("alarm.status.enabled")),
         true,
     )
     .await;

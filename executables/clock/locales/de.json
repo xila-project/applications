@@ -10,7 +10,7 @@
       "save_and_enable": "Speichern und aktivieren"
     },
     "instructions": {
-      "repeat_days_utc": "An ausgewählten Tagen wiederholen; ohne Auswahl nur einmal. Alle Uhrzeiten sind in UTC."
+      "repeat_days_local": "An den gewählten Tagen wiederholen; keiner bedeutet einmal. Zeiten sind Ortszeiten: Eine durch die Zeitumstellung übersprungene Zeit klingelt nach der Umstellung (02:30 wird 03:30), eine wiederholte Zeit klingelt einmal, beim ersten Mal."
     },
     "status": {
       "disabled": "Deaktiviert",
@@ -43,7 +43,7 @@
       "host_unavailable": "Systemuhr nicht verfügbar"
     },
     "instructions": {
-      "utc_only": "UTC / Systemzeit. Zeitzonen für Städte sind noch nicht verfügbar."
+      "local_time": "Ortszeit der in den Einstellungen gewählten Zeitzone."
     }
   },
   "errors": {

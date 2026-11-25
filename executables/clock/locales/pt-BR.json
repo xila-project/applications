@@ -10,7 +10,7 @@
       "save_and_enable": "Salvar e ativar"
     },
     "instructions": {
-      "repeat_days_utc": "Repetir nos dias selecionados; sem seleção, tocar apenas uma vez. Todos os horários estão em UTC."
+      "repeat_days_local": "Repetir nos dias escolhidos; nenhum significa uma vez. Os horários são locais: um horário pulado por uma mudança de horário toca depois da mudança (02:30 passa a 03:30), e um horário repetido toca uma vez, na primeira."
     },
     "status": {
       "disabled": "Desativado",
@@ -43,7 +43,7 @@
       "host_unavailable": "Relógio do sistema indisponível"
     },
     "instructions": {
-      "utc_only": "UTC / relógio do sistema. Os fusos horários de cidades ainda não estão disponíveis."
+      "local_time": "Hora local do fuso horário definido em Configurações."
     }
   },
   "errors": {

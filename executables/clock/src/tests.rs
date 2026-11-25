@@ -1,5 +1,11 @@
 use super::*;
 
+fn utc() -> TimeZone {
+    zone_from_environment(None)
+}
+
+const PARIS: &str = "CET-1CEST,M3.5.0,M10.5.0/3";
+
 #[test]
 fn stopwatch_uses_elapsed_time_and_excludes_pauses() {
     let mut watch = Stopwatch::default();
@@ -52,29 +58,29 @@ fn timer_pauses_and_fires_once_even_after_a_delayed_poll() {
 #[test]
 fn one_time_alarm_rolls_to_tomorrow_and_survives_delayed_polling() {
     let mut alarm = Alarm::new(7, 30, 0).unwrap();
-    alarm.arm(8 * 3600);
+    alarm.arm(8 * 3600, &utc());
     assert_eq!(alarm.next(), Some(86400 + 7 * 3600 + 30 * 60));
-    assert!(!alarm.tick(86400 + 7 * 3600));
-    assert!(alarm.tick(86400 + 8 * 3600));
-    assert!(!alarm.tick(86400 + 8 * 3600 + 1));
+    assert!(!alarm.tick(86400 + 7 * 3600, &utc()));
+    assert!(alarm.tick(86400 + 8 * 3600, &utc()));
+    assert!(!alarm.tick(86400 + 8 * 3600 + 1, &utc()));
     assert!(!alarm.enabled());
 }
 
 #[test]
 fn recurring_alarm_does_not_ring_twice_after_a_backward_clock_change() {
     let mut alarm = Alarm::new(0, 1, 0x7f).unwrap();
-    alarm.arm(0);
-    assert!(alarm.tick(61));
-    assert!(!alarm.tick(50));
-    assert!(!alarm.tick(61));
-    assert!(alarm.tick(86461));
+    alarm.arm(0, &utc());
+    assert!(alarm.tick(61, &utc()));
+    assert!(!alarm.tick(50, &utc()));
+    assert!(!alarm.tick(61, &utc()));
+    assert!(alarm.tick(86461, &utc()));
 }
 
 #[test]
 fn weekdays_use_monday_as_bit_zero_and_skip_the_weekend() {
     // 1970-01-01 is Thursday; day 1 is Friday, day 4 is Monday.
     let mut alarm = Alarm::new(8, 0, 0b000_0001).unwrap();
-    alarm.arm(86400);
+    alarm.arm(86400, &utc());
     assert_eq!(alarm.next(), Some(4 * 86400 + 8 * 3600));
     assert!(Alarm::new(24, 0, 0).is_none());
     assert!(Alarm::new(0, 60, 0).is_none());
@@ -87,7 +93,7 @@ fn settings_round_trip_rejects_truncation_and_invalid_values() {
         twelve_hour: true,
         alarm: Some(Alarm::new(23, 59, 0x1f).unwrap()),
     };
-    settings.alarm.as_mut().unwrap().arm(0);
+    settings.alarm.as_mut().unwrap().arm(0, &utc());
     let bytes = settings.encode();
     let decoded = Settings::decode(&bytes).unwrap();
     assert!(decoded.twelve_hour);
@@ -157,4 +163,67 @@ fn timer_stays_active_until_cancelled() {
     timer.cancel();
     assert!(!timer.is_active());
     assert_eq!(timer.duration(), 0);
+}
+
+#[test]
+fn the_zone_comes_from_tz() {
+    assert_eq!(zone_from_environment(None).offset_at(0), 0);
+    assert_eq!(zone_from_environment(Some("not a zone")).offset_at(0), 0);
+    assert_eq!(zone_from_environment(Some("JST-9")).offset_at(0), 9 * 3600);
+}
+
+#[test]
+fn alarms_ring_at_local_time() {
+    let paris = zone_from_environment(Some(PARIS));
+    // 2026-07-15 12:00 UTC is 14:00 in Paris: 07:00 tomorrow is 05:00 UTC.
+    let mut alarm = Alarm::new(7, 0, 0).unwrap();
+    alarm.arm(1_784_116_800, &paris);
+    assert_eq!(alarm.next(), Some(1_784_178_000));
+    // Weekdays are local days: in UTC+14, Sunday 2026-11-22 12:00 UTC is
+    // already Monday 02:00, so a Monday 08:00 alarm is later the same UTC day.
+    let kiribati = zone_from_environment(Some("<+14>-14"));
+    let mut monday = Alarm::new(8, 0, 0b000_0001).unwrap();
+    monday.arm(1_795_348_800, &kiribati);
+    assert_eq!(monday.next(), Some(1_795_370_400));
+}
+
+#[test]
+fn a_skipped_alarm_time_rings_after_the_spring_change() {
+    let paris = zone_from_environment(Some(PARIS));
+    let mut alarm = Alarm::new(2, 30, 0x7f).unwrap();
+    // 2026-03-28 13:00 in Paris. On 2026-03-29, 02:00 CET becomes 03:00 CEST,
+    // so 02:30 does not exist: the alarm rings at 03:30 CEST (01:30 UTC).
+    alarm.arm(1_774_699_200, &paris);
+    assert_eq!(alarm.next(), Some(1_774_747_800));
+    assert!(alarm.tick(1_774_747_800, &paris));
+    // The next day, 02:30 CEST is 00:30 UTC.
+    assert_eq!(alarm.next(), Some(1_774_830_600));
+}
+
+#[test]
+fn a_repeated_alarm_time_rings_once_in_autumn() {
+    let paris = zone_from_environment(Some(PARIS));
+    let mut alarm = Alarm::new(2, 30, 0x7f).unwrap();
+    // On 2026-10-25, 03:00 CEST becomes 02:00 CET: 02:30 happens at 00:30 UTC
+    // and again at 01:30 UTC. The alarm rings at the first one only.
+    alarm.arm(1_792_843_200, &paris);
+    assert_eq!(alarm.next(), Some(1_792_888_200));
+    assert!(alarm.tick(1_792_888_200, &paris));
+    assert!(!alarm.tick(1_792_891_800, &paris));
+    // The next day, 02:30 CET is 01:30 UTC.
+    assert_eq!(alarm.next(), Some(1_792_978_200));
+}
+
+#[test]
+fn a_new_time_zone_reschedules_future_alarms_only() {
+    let paris = zone_from_environment(Some(PARIS));
+    let mut alarm = Alarm::new(7, 0, 0).unwrap();
+    alarm.arm(1_784_116_800, &utc());
+    assert_eq!(alarm.next(), Some(1_784_178_000 + 2 * 3600));
+    alarm.reschedule(1_784_116_800, &paris);
+    assert_eq!(alarm.next(), Some(1_784_178_000));
+    // An overdue occurrence is kept, so that it still rings once.
+    alarm.reschedule(1_784_178_001, &utc());
+    assert_eq!(alarm.next(), Some(1_784_178_000));
+    assert!(alarm.tick(1_784_178_001, &paris));
 }

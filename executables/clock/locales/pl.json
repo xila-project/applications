@@ -10,7 +10,7 @@
       "save_and_enable": "Zapisz i włącz"
     },
     "instructions": {
-      "repeat_days_utc": "Powtarzaj w wybrane dni; brak wyboru oznacza jednorazowe uruchomienie. Wszystkie godziny są w UTC."
+      "repeat_days_local": "Powtarzaj w wybrane dni; brak oznacza raz. Godziny są lokalne: godzina pominięta przez zmianę czasu dzwoni po zmianie (02:30 staje się 03:30), a powtórzona godzina dzwoni raz, za pierwszym razem."
     },
     "status": {
       "disabled": "Wyłączony",
@@ -43,7 +43,7 @@
       "host_unavailable": "Zegar systemowy niedostępny"
     },
     "instructions": {
-      "utc_only": "UTC / czas systemowy. Strefy czasowe miast nie są jeszcze dostępne."
+      "local_time": "Czas lokalny strefy czasowej ustawionej w Ustawieniach."
     }
   },
   "errors": {

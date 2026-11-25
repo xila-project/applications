@@ -24,7 +24,6 @@
     "Mon": "alarm.weekdays.monday",
     "No saved alarm": "alarm.status.no_saved_alarm",
     "Pause / resume": "timer.controls.toggle_pause",
-    "Repeat on selected days; none means once. All times are UTC.": "alarm.instructions.repeat_days_utc",
     "Recorded laps": "stopwatch.laps.recorded",
     "Reset": "stopwatch.controls.reset",
     "Restart": "timer.controls.restart",
@@ -42,7 +41,6 @@
     "Timer": "tabs.timer",
     "Timer finished! ": "alerts.timer_finished",
     "Tue": "alarm.weekdays.tuesday",
-    "UTC / host clock. City time zones are not available yet.": "clock.instructions.utc_only",
     "Wed": "alarm.weekdays.wednesday"
   },
   "split_review": {
