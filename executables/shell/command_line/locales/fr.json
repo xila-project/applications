@@ -153,11 +153,9 @@
   },
   "time_zone": {
     "labels": {
-      "name": "Fuseau horaire",
       "string": "Chaîne TZ",
       "local": "Heure locale"
     },
-    "custom": "personnalisé",
     "unsynchronized": "non réglée (l’horloge n’est pas synchronisée)",
     "no_names": "Cette version n’a pas de noms de fuseaux ; donnez une chaîne TZ POSIX.",
     "saved": "Fuseau horaire enregistré. Les programmes lancés à partir de maintenant l’utilisent.",

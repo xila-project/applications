@@ -153,11 +153,9 @@
   },
   "time_zone": {
     "labels": {
-      "name": "Time zone",
       "string": "TZ string",
       "local": "Local time"
     },
-    "custom": "custom",
     "unsynchronized": "not set (the clock is not synchronized)",
     "no_names": "This build has no zone names; give a POSIX TZ string.",
     "saved": "Time zone saved. Programs started from now on use it.",

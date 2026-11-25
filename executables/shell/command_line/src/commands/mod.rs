@@ -34,6 +34,7 @@ mod realpath;
 mod sleep;
 mod statistics;
 mod tail;
+#[cfg(feature = "time-zone-command")]
 mod time_zone;
 mod touch;
 mod tree;
@@ -149,6 +150,7 @@ pub enum UserCommandKind {
     WordCount,
     Head,
     Tail,
+    #[cfg(feature = "time-zone-command")]
     TimeZone,
     Touch,
     Sleep,
@@ -294,6 +296,7 @@ const BUILTINS: &[(&str, UserCommandKind, &str)] = &[
     ),
     ("head", UserCommandKind::Head, head::HeadArguments::HELP),
     ("tail", UserCommandKind::Tail, tail::TailArguments::HELP),
+    #[cfg(feature = "time-zone-command")]
     (
         "time_zone",
         UserCommandKind::TimeZone,
@@ -419,6 +422,7 @@ where
         UserCommandKind::WordCount => WordCountCommand.execute(context, options, paths).await,
         UserCommandKind::Head => HeadCommand.execute(context, options, paths).await,
         UserCommandKind::Tail => TailCommand.execute(context, options, paths).await,
+        #[cfg(feature = "time-zone-command")]
         UserCommandKind::TimeZone => {
             time_zone::TimeZoneCommand
                 .execute(context, options, paths)

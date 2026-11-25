@@ -153,11 +153,9 @@
   },
   "time_zone": {
     "labels": {
-      "name": "Fuso orario",
       "string": "Stringa TZ",
       "local": "Ora locale"
     },
-    "custom": "personalizzato",
     "unsynchronized": "non impostata (l'orologio non è sincronizzato)",
     "no_names": "Questa versione non ha nomi di fusi; indica una stringa TZ POSIX.",
     "saved": "Fuso orario salvato. I programmi avviati da ora in poi lo usano.",

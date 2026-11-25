@@ -153,11 +153,9 @@
   },
   "time_zone": {
     "labels": {
-      "name": "Zona horaria",
       "string": "Cadena TZ",
       "local": "Hora local"
     },
-    "custom": "personalizada",
     "unsynchronized": "sin ajustar (el reloj no está sincronizado)",
     "no_names": "Esta versión no tiene nombres de zona; indique una cadena TZ POSIX.",
     "saved": "Zona horaria guardada. Los programas que se inicien a partir de ahora la usan.",

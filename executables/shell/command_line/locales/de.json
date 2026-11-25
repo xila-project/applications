@@ -153,11 +153,9 @@
   },
   "time_zone": {
     "labels": {
-      "name": "Zeitzone",
       "string": "TZ-Zeichenkette",
       "local": "Ortszeit"
     },
-    "custom": "eigene",
     "unsynchronized": "nicht gestellt (die Uhr ist nicht synchronisiert)",
     "no_names": "Diese Version hat keine Zonennamen; geben Sie eine POSIX-TZ-Zeichenkette an.",
     "saved": "Zeitzone gespeichert. Ab jetzt gestartete Programme verwenden sie.",

@@ -150,11 +150,9 @@
   },
   "time_zone": {
     "labels": {
-      "name": "时区",
       "string": "TZ 字符串",
       "local": "本地时间"
     },
-    "custom": "自定义",
     "unsynchronized": "未设置（时钟未同步）",
     "no_names": "此版本没有时区名称；请提供 POSIX TZ 字符串。",
     "saved": "时区已保存。此后启动的程序将使用它。",

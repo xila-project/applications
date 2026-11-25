@@ -159,11 +159,9 @@
   },
   "time_zone": {
     "labels": {
-      "name": "Strefa czasowa",
       "string": "Ciąg TZ",
       "local": "Czas lokalny"
     },
-    "custom": "własna",
     "unsynchronized": "nieustawiony (zegar nie jest zsynchronizowany)",
     "no_names": "Ta wersja nie ma nazw stref; podaj ciąg TZ POSIX.",
     "saved": "Zapisano strefę czasową. Programy uruchamiane od teraz będą jej używać.",

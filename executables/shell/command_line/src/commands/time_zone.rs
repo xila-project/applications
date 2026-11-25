@@ -1,11 +1,15 @@
-//! `time_zone [-l] [VALUE]`: show the system time zone, list the zone names of
-//! the build, or set the time zone.
+//! `time_zone [-l] [VALUE]`: show the time zone of the Shell, list the zone
+//! names of the build, or set the system time zone. Built with the
+//! `time-zone-command` feature.
 //!
 //! VALUE is a POSIX TZ string (`CET-1CEST,M3.5.0,M10.5.0/3`), or an IANA zone
 //! name (`Europe/Paris`) when the build links the table of its region; a name
 //! is stored with its TZ string. Setting needs root or the administrator group
 //! and goes through `xila::local_time::set`: programs started afterwards get
 //! the new `TZ`, and this Shell too when it still follows the system value.
+//!
+//! The display reads the `TZ` variable of the Shell, not the configuration
+//! file: it shows the time zone that the Shell and the programs it starts use.
 
 use core::fmt::Write;
 use getargs_derive::GetArgs;
@@ -41,34 +45,6 @@ pub(crate) fn setting_for(value: &str) -> core::result::Result<Setting, local_ti
     }
 }
 
-/// Write the local time of `utc` in `setting`, for example
-/// `2026-03-29 03:00:00 CEST (UTC+02:00)`.
-pub(crate) fn write_local_time(
-    output: &mut impl Write,
-    setting: &Setting,
-    utc: Option<i64>,
-) -> core::fmt::Result {
-    let Some(utc) = utc else {
-        return write!(output, "{}", t!("time_zone.unsynchronized"));
-    };
-    let zone = setting.time_zone();
-    let local = zone.from_utc(utc);
-    let date_time = local.date_time;
-    write!(
-        output,
-        "{:04}-{:02}-{:02} {:02}:{:02}:{:02} {} (UTC",
-        date_time.year,
-        date_time.month,
-        date_time.day,
-        date_time.hour,
-        date_time.minute,
-        date_time.second,
-        local.abbreviation,
-    )?;
-    local_time::write_offset(output, local.offset_seconds)?;
-    output.write_char(')')
-}
-
 impl UserCommand for TimeZoneCommand {
     async fn execute<'a, I, C>(
         &self,
@@ -83,18 +59,20 @@ impl UserCommand for TimeZoneCommand {
         let arguments = TimeZoneArguments::parse(options)?;
         let executable = context.executable_context();
         let task = context.task_id();
+        let mut output = alloc::string::String::new();
 
         if arguments.list {
-            if iana::zone_count() == 0 {
-                context
-                    .write_out_fmt(format_args!("{}\n", t!("time_zone.no_names")))
-                    .await?;
+            let count = iana::zone_count();
+            if count == 0 {
+                writeln!(output, "{}", t!("time_zone.no_names"))?;
             }
-            for index in 0..iana::zone_count() {
+            for index in 0..count {
                 if let Some(name) = iana::zone_name(index) {
-                    context.write_out_fmt(format_args!("{name}\n")).await?;
+                    output.push_str(name);
+                    output.push('\n');
                 }
             }
+            context.write_out(output.as_bytes()).await?;
             return Ok(());
         }
 
@@ -109,29 +87,35 @@ impl UserCommand for TimeZoneCommand {
             )
             .await
             .map_err(Error::FailedToSetTimeZone)?;
-            context
-                .write_out_fmt(format_args!("{}\n", t!("time_zone.saved")))
-                .await?;
+            writeln!(output, "{}", t!("time_zone.saved"))?;
         }
 
-        let setting = local_time::load(executable.virtual_file_system, task).await;
-        let utc = executable
+        let time_zone = executable
+            .task_manager
+            .get_environment_variable(task, local_time::ENVIRONMENT_VARIABLE)
+            .await
+            .ok();
+        let time_zone = time_zone
+            .as_ref()
+            .map_or(local_time::DEFAULT_TIME_ZONE, |variable| variable.get_value());
+        let zone = local_time::time_zone::TimeZone::parse(time_zone)
+            .unwrap_or_else(|_| local_time::utc());
+        write!(
+            output,
+            "{}: {time_zone}\n{}: ",
+            t!("time_zone.labels.string"),
+            t!("time_zone.labels.local"),
+        )?;
+        match executable
             .time_manager
             .realtime_now()
             .and_then(|utc| utc.try_as_seconds())
-            .ok();
-        let mut local = alloc::string::String::new();
-        write_local_time(&mut local, &setting, utc)?;
-        let name = setting.name().unwrap_or(t!("time_zone.custom"));
-        context
-            .write_out_fmt(format_args!(
-                "{}: {name}\n{}: {}\n{}: {local}\n",
-                t!("time_zone.labels.name"),
-                t!("time_zone.labels.string"),
-                setting.time_zone_string(),
-                t!("time_zone.labels.local"),
-            ))
-            .await?;
+        {
+            Ok(utc) => local_time::write_local_time(&mut output, &zone, utc)?,
+            Err(_) => output.push_str(t!("time_zone.unsynchronized")),
+        }
+        output.push('\n');
+        context.write_out(output.as_bytes()).await?;
         Ok(())
     }
 }
@@ -139,10 +123,9 @@ impl UserCommand for TimeZoneCommand {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloc::string::String;
 
     #[test]
-    fn values_and_local_time() {
+    fn values() {
         let custom = setting_for("<+0545>-5:45").unwrap();
         assert_eq!(custom.name(), None);
         assert!(setting_for("UTC").is_err());
@@ -151,13 +134,5 @@ mod tests {
             setting_for("Europe/Paris").is_ok(),
             iana::contains("Europe/Paris")
         );
-
-        let paris = Setting::new(None, "CET-1CEST,M3.5.0,M10.5.0/3").unwrap();
-        let mut output = String::new();
-        write_local_time(&mut output, &paris, Some(1_774_746_000)).unwrap();
-        assert_eq!(output, "2026-03-29 03:00:00 CEST (UTC+02:00)");
-        output.clear();
-        write_local_time(&mut output, &paris, Some(1_792_890_000)).unwrap();
-        assert_eq!(output, "2026-10-25 02:00:00 CET (UTC+01:00)");
     }
 }

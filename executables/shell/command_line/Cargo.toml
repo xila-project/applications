@@ -10,12 +10,12 @@ embassy-futures = { workspace = true }
 embedded-i18n = { workspace = true }
 device = { workspace = true, optional = true }
 time_zone = { workspace = true, optional = true }
-xila = { workspace = true, default-features = false, features = ["time_zone"] }
+xila = { workspace = true, default-features = false }
 getargs = { version = "0.5", default-features = false }
 getargs-derive = { workspace = true }
 
 [features]
-default = ["network", "time-commands"]
+default = ["network", "time-commands", "time-zone-command"]
 network = ["xila/network"]
 # The date, uptime and real_time_clock commands. Off on flash-constrained
 # boards such as the Nano 33 BLE, which builds this shell with
@@ -26,6 +26,10 @@ time-commands = [
   "xila/time_services",
   "xila/time_zone",
 ]
+# The `time_zone` command: show and set the system time zone. It links the
+# time zone code of Core (about 11 KB on Cortex-M); boards with little flash
+# leave it out.
+time-zone-command = ["xila/time_zone"]
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dev-dependencies]
 task = { workspace = true, features = ["test_harness"] }
