@@ -447,7 +447,7 @@ async fn send_close(manager: &Manager) {
 
 async fn wait_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
     let mut join = core::pin::pin!(handle.join());
-    for _ in 0..1000 {
+    for _ in 0..100 {
         if let Poll::Ready(status) =
             poll_fn(|context| Poll::Ready(join.as_mut().poll(context))).await
         {
@@ -455,13 +455,18 @@ async fn wait_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
             assert_eq!(manager.get_window_count().await.unwrap(), 0);
             return;
         }
-        xila::task::sleep(Duration::from_millis(10)).await;
+        // A burst of window events can fill the host queue and drop the
+        // close request, which the host sends only once: send it again
+        // until the guest exits.
+        if manager.get_window_count().await.unwrap() != 0 {
+            send_close(manager).await;
+        }
+        xila::task::sleep(Duration::from_millis(100)).await;
     }
     panic!("Home Assistant did not exit");
 }
 
 async fn close_and_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
-    send_close(manager).await;
     wait_join(manager, handle).await;
 }
 
@@ -701,7 +706,6 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     // A close request during the next refresh is kept, not drained.
     tap(manager, "\u{F021}").await;
     wait_requests(home_assistant, before + 5).await;
-    send_close(manager).await;
     wait_join(manager, fourth).await;
     *home_assistant.delay.lock().unwrap() = Duration::ZERO;
 
