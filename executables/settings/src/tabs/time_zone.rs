@@ -5,18 +5,25 @@
 //!
 //! - with a `time-zone-names-*` feature, the zone selector of
 //!   [`super::time_zone_names`] (the default);
-//! - the offset form of [`super::time_zone_form`], which builds a TZ string
-//!   from an offset and daylight saving rules (the default without names);
+//! - with the `time-zone-offset-form` feature, the offset form of
+//!   [`super::time_zone_form`], which builds a TZ string from an offset and
+//!   daylight saving rules (the default without names);
 //! - a field for a raw POSIX TZ string, with validation.
 //!
+//! Only the selected editor exists: changing the editor deletes the objects of
+//! the previous one and builds the next one.
+//!
 //! Saving goes through `xila::local_time::set`, which stores the setting and
-//! publishes it as `TZ` to new tasks.
+//! publishes it as `TZ` to new tasks. An editor event only records the request
+//! ([`TimeZoneSection::handle_event`]); Settings then calls
+//! [`TimeZoneSection::save_pending`] after it releases the graphics lock, so
+//! the lock is not held across the flash write.
 
 use crate::error::Result;
 use alloc::string::String;
 use core::fmt::Write;
 use xila::executable::ExecutableContext;
-use xila::graphics::{Event, EventKind, lvgl};
+use xila::graphics::{self, Event, EventKind, lvgl};
 use xila::internationalization::t;
 use xila::local_time::{self, Setting, SettingError, TimeZone};
 use xila::virtual_file_system::IoErrorKind;
@@ -53,40 +60,20 @@ pub(crate) async fn save(
 /// not set.
 pub(crate) fn write_preview(output: &mut String, zone: &TimeZone, utc: Option<i64>) {
     output.clear();
-    let Some(utc) = utc else {
-        let _ = write!(output, "{}", t!("general.time_zone.unsynchronized"));
-        return;
+    let _ = match utc {
+        Some(utc) => local_time::write_local_time(output, zone, utc),
+        None => write!(output, "{}", t!("general.time_zone.unsynchronized")),
     };
-    let local = zone.from_utc(utc);
-    let date_time = local.date_time;
-    let _ = write!(
-        output,
-        "{:04}-{:02}-{:02} {:02}:{:02}:{:02} {} (UTC",
-        date_time.year,
-        date_time.month,
-        date_time.day,
-        date_time.hour,
-        date_time.minute,
-        date_time.second,
-        local.abbreviation,
-    );
-    let _ = local_time::write_offset(output, local.offset_seconds);
-    output.push(')');
 }
 
 /// Write the description of the stored setting: its name, or "Custom", and
-/// its TZ string.
+/// its TZ string, in one write.
 pub(crate) fn write_current(output: &mut String, setting: &Setting) {
     output.clear();
-    match setting.name() {
-        Some(name) => output.push_str(name),
-        None => {
-            let _ = write!(output, "{}", t!("general.time_zone.custom_name"));
-        }
-    }
-    output.push_str(" (");
-    output.push_str(setting.time_zone_string());
-    output.push(')');
+    let name = setting
+        .name()
+        .unwrap_or(t!("general.time_zone.custom_name"));
+    let _ = write!(output, "{name} ({})", setting.time_zone_string());
 }
 
 /// Set a label to a Rust string. LVGL copies the text.
@@ -99,13 +86,12 @@ unsafe fn set_label(label: *mut lvgl::lv_obj_t, text: &mut String) {
     text.pop();
 }
 
-/// The editors of the section, in the order of the editor dropdown. The zone
-/// selector exists only with a `time-zone-names-*` feature; then it is the
-/// default, otherwise the offset form is.
+/// The editors of the section, in the order of the editor dropdown.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Editor {
     #[cfg(feature = "time-zone-names")]
     Zone,
+    #[cfg(feature = "time-zone-offset-form")]
     Offset,
     String,
 }
@@ -113,24 +99,75 @@ enum Editor {
 const EDITORS: &[Editor] = &[
     #[cfg(feature = "time-zone-names")]
     Editor::Zone,
+    #[cfg(feature = "time-zone-offset-form")]
     Editor::Offset,
     Editor::String,
 ];
+
+/// The raw TZ string editor.
+struct StringEditor {
+    text_area: *mut lvgl::lv_obj_t,
+    apply: *mut lvgl::lv_obj_t,
+}
+
+impl StringEditor {
+    /// # Safety
+    /// `parent` must be live and the caller must hold the graphics lock.
+    unsafe fn new(parent: *mut lvgl::lv_obj_t) -> Result<Self> {
+        unsafe {
+            super::caption(parent, t!(c"general.time_zone.custom"))?;
+            let text_area = super::check(lvgl::lv_textarea_create(parent))?;
+            lvgl::lv_textarea_set_one_line(text_area, true);
+            lvgl::lv_textarea_set_max_length(text_area, local_time::MAXIMUM_TIME_ZONE_LENGTH as u32);
+            lvgl::lv_textarea_set_placeholder_text(
+                text_area,
+                c"CET-1CEST,M3.5.0,M10.5.0/3".as_ptr(),
+            );
+            lvgl::lv_obj_set_width(text_area, lvgl::lv_pct(100));
+            super::caption(parent, t!(c"general.time_zone.custom_hint"))?;
+            let apply = super::check(lvgl::lv_button_create(parent))?;
+            let label = super::check(lvgl::lv_label_create(apply))?;
+            lvgl::lv_label_set_text(label, t!(c"general.time_zone.apply_custom").as_ptr());
+            lvgl::lv_obj_center(label);
+            Ok(Self { text_area, apply })
+        }
+    }
+
+    /// The text of the field, without surrounding spaces.
+    fn text(&self) -> String {
+        // SAFETY: the text area is live and the caller holds the graphics lock.
+        let text = unsafe { core::ffi::CStr::from_ptr(lvgl::lv_textarea_get_text(self.text_area)) };
+        String::from(text.to_str().unwrap_or("\u{fffd}").trim())
+    }
+}
+
+/// The editor that exists.
+enum Active {
+    #[cfg(feature = "time-zone-names")]
+    Zone(super::time_zone_names::ZoneSelector),
+    #[cfg(feature = "time-zone-offset-form")]
+    Offset(super::time_zone_form::OffsetForm),
+    String(StringEditor),
+}
+
+/// A setting to store once the graphics lock is released.
+struct PendingSave {
+    name: Option<&'static str>,
+    time_zone: String,
+}
 
 pub struct TimeZoneSection {
     context: &'static ExecutableContext,
     current_label: *mut lvgl::lv_obj_t,
     preview_label: *mut lvgl::lv_obj_t,
     editor: *mut lvgl::lv_obj_t,
-    form: super::time_zone_form::OffsetForm,
-    string_container: *mut lvgl::lv_obj_t,
-    #[cfg(feature = "time-zone-names")]
-    zone_container: *mut lvgl::lv_obj_t,
-    text_area: *mut lvgl::lv_obj_t,
-    apply_button: *mut lvgl::lv_obj_t,
+    /// The container of the active editor.
+    host: *mut lvgl::lv_obj_t,
     status_label: *mut lvgl::lv_obj_t,
-    #[cfg(feature = "time-zone-names")]
-    selector: super::time_zone_names::ZoneSelector,
+    active: Option<Active>,
+    /// The stored name, to preselect it in the zone selector.
+    stored_name: Option<String>,
+    pending: Option<PendingSave>,
     /// The zone that the preview shows: the stored one, or the one being
     /// edited once it is valid.
     preview: TimeZone,
@@ -146,33 +183,41 @@ impl TimeZoneSection {
             current_label: core::ptr::null_mut(),
             preview_label: core::ptr::null_mut(),
             editor: core::ptr::null_mut(),
-            form: super::time_zone_form::OffsetForm::new(),
-            string_container: core::ptr::null_mut(),
-            #[cfg(feature = "time-zone-names")]
-            zone_container: core::ptr::null_mut(),
-            text_area: core::ptr::null_mut(),
-            apply_button: core::ptr::null_mut(),
+            host: core::ptr::null_mut(),
             status_label: core::ptr::null_mut(),
-            #[cfg(feature = "time-zone-names")]
-            selector: super::time_zone_names::ZoneSelector::new(),
+            active: None,
+            stored_name: None,
+            pending: None,
             preview: local_time::utc(),
             last_preview: None,
             text: String::new(),
         }
     }
 
-    /// Build the section in `parent`.
+    /// Build the section in `parent`, with the default editor.
     ///
     /// # Safety
     /// `parent` must be live and the caller must hold the graphics lock.
     pub async unsafe fn create_ui(&mut self, parent: *mut lvgl::lv_obj_t) -> Result<()> {
-        let task = self
-            .context
-            .task_manager
-            .get_current_task_identifier()
-            .await;
+        let task = self.context.task_manager.get_current_task_identifier().await;
         let setting = local_time::load(self.context.virtual_file_system, task).await;
         self.preview = setting.time_zone();
+        self.stored_name = setting.name().map(String::from);
+
+        let mut editors = String::new();
+        for (index, editor) in EDITORS.iter().enumerate() {
+            if index != 0 {
+                editors.push('\n');
+            }
+            editors.push_str(match editor {
+                #[cfg(feature = "time-zone-names")]
+                Editor::Zone => t!("general.time_zone.editors.zone"),
+                #[cfg(feature = "time-zone-offset-form")]
+                Editor::Offset => t!("general.time_zone.editors.offset"),
+                Editor::String => t!("general.time_zone.editors.string"),
+            });
+        }
+        editors.push('\0');
 
         unsafe {
             let card = super::card(parent)?;
@@ -193,62 +238,16 @@ impl TimeZoneSection {
             self.preview_label = super::check(lvgl::lv_label_create(card))?;
             lvgl::lv_obj_set_width(self.preview_label, lvgl::lv_pct(100));
 
-            let mut editors = String::new();
-            for editor in EDITORS {
-                if !editors.is_empty() {
-                    editors.push('\n');
-                }
-                editors.push_str(match editor {
-                    #[cfg(feature = "time-zone-names")]
-                    Editor::Zone => t!("general.time_zone.editors.zone"),
-                    Editor::Offset => t!("general.time_zone.editors.offset"),
-                    Editor::String => t!("general.time_zone.editors.string"),
-                });
-            }
-            editors.push('\0');
             super::caption(card, t!(c"general.time_zone.editor"))?;
             self.editor = super::check(lvgl::lv_dropdown_create(card))?;
             lvgl::lv_obj_set_width(self.editor, lvgl::lv_pct(100));
             lvgl::lv_dropdown_set_options(self.editor, editors.as_ptr().cast());
 
-            let column = |parent| -> Result<*mut lvgl::lv_obj_t> {
-                let column = super::check(lvgl::lv_obj_create(parent))?;
-                lvgl::lv_obj_remove_style_all(column);
-                lvgl::lv_obj_set_size(column, lvgl::lv_pct(100), lvgl::LV_SIZE_CONTENT);
-                lvgl::lv_obj_set_flex_flow(column, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
-                lvgl::lv_obj_set_style_pad_row(column, 6, 0);
-                Ok(column)
-            };
-
-            #[cfg(feature = "time-zone-names")]
-            {
-                self.zone_container = column(card)?;
-                self.selector
-                    .create_ui(self.zone_container, setting.name())?;
-            }
-
-            self.form.create_ui(card)?;
-
-            self.string_container = column(card)?;
-            let field = self.string_container;
-            super::caption(field, t!(c"general.time_zone.custom"))?;
-            self.text_area = super::check(lvgl::lv_textarea_create(field))?;
-            lvgl::lv_textarea_set_one_line(self.text_area, true);
-            lvgl::lv_textarea_set_max_length(
-                self.text_area,
-                local_time::MAXIMUM_TIME_ZONE_LENGTH as u32,
-            );
-            lvgl::lv_textarea_set_placeholder_text(
-                self.text_area,
-                c"CET-1CEST,M3.5.0,M10.5.0/3".as_ptr(),
-            );
-            lvgl::lv_obj_set_width(self.text_area, lvgl::lv_pct(100));
-            super::caption(field, t!(c"general.time_zone.custom_hint"))?;
-
-            self.apply_button = super::check(lvgl::lv_button_create(field))?;
-            let label = super::check(lvgl::lv_label_create(self.apply_button))?;
-            lvgl::lv_label_set_text(label, t!(c"general.time_zone.apply_custom").as_ptr());
-            lvgl::lv_obj_center(label);
+            self.host = super::check(lvgl::lv_obj_create(card))?;
+            lvgl::lv_obj_remove_style_all(self.host);
+            lvgl::lv_obj_set_size(self.host, lvgl::lv_pct(100), lvgl::LV_SIZE_CONTENT);
+            lvgl::lv_obj_set_flex_flow(self.host, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
+            lvgl::lv_obj_set_style_pad_row(self.host, 6, 0);
 
             self.status_label = super::check(lvgl::lv_label_create(card))?;
             lvgl::lv_label_set_text(self.status_label, c"".as_ptr());
@@ -257,38 +256,32 @@ impl TimeZoneSection {
                 self.status_label,
                 lvgl::lv_label_long_mode_t_LV_LABEL_LONG_MODE_WRAP,
             );
+            self.build_editor(EDITORS[0])?;
         }
-        self.show_editor();
         self.refresh();
         Ok(())
     }
 
-    fn selected_editor(&self) -> Editor {
-        // SAFETY: the dropdown is live and the caller holds the graphics lock.
-        let index = unsafe { lvgl::lv_dropdown_get_selected(self.editor) } as usize;
-        EDITORS.get(index).copied().unwrap_or(EDITORS[0])
-    }
-
-    /// Show the selected editor only.
-    fn show_editor(&mut self) {
-        let selected = self.selected_editor();
-        let containers = [
-            #[cfg(feature = "time-zone-names")]
-            (Editor::Zone, self.zone_container),
-            (Editor::Offset, self.form.container()),
-            (Editor::String, self.string_container),
-        ];
-        for (editor, container) in containers {
-            // SAFETY: the containers are live and the caller holds the
-            // graphics lock.
-            unsafe {
-                if editor == selected {
-                    lvgl::lv_obj_remove_flag(container, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
-                } else {
-                    lvgl::lv_obj_add_flag(container, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
-                }
-            }
+    /// Delete the objects of the active editor and build `editor`.
+    ///
+    /// # Safety
+    /// The caller must hold the graphics lock.
+    unsafe fn build_editor(&mut self, editor: Editor) -> Result<()> {
+        self.active = None;
+        unsafe {
+            lvgl::lv_obj_clean(self.host);
+            self.active = Some(match editor {
+                #[cfg(feature = "time-zone-names")]
+                Editor::Zone => Active::Zone(super::time_zone_names::ZoneSelector::new(
+                    self.host,
+                    self.stored_name.as_deref(),
+                )?),
+                #[cfg(feature = "time-zone-offset-form")]
+                Editor::Offset => Active::Offset(super::time_zone_form::OffsetForm::new(self.host)?),
+                Editor::String => Active::String(StringEditor::new(self.host)?),
+            });
         }
+        Ok(())
     }
 
     /// Update the preview once per second.
@@ -341,83 +334,116 @@ impl TimeZoneSection {
         self.refresh();
     }
 
-    /// The text of the custom field, without surrounding spaces.
-    fn custom_text(&self) -> String {
-        // SAFETY: the text area is live and the caller holds the graphics lock.
-        let text = unsafe { core::ffi::CStr::from_ptr(lvgl::lv_textarea_get_text(self.text_area)) };
-        String::from(text.to_str().unwrap_or("\u{fffd}").trim())
+    /// Record a setting to store, if it is valid. The caller holds the
+    /// graphics lock; [`Self::save_pending`] stores it after the lock is
+    /// released.
+    fn request_save(&mut self, name: Option<&'static str>, time_zone: String) {
+        match Setting::new(name, &time_zone) {
+            Ok(_) => self.pending = Some(PendingSave { name, time_zone }),
+            Err(error) => self.show_error(SaveError::Invalid(error)),
+        }
     }
 
-    async fn apply(&mut self, name: Option<&str>, time_zone: &str) {
-        match save(self.context, name, time_zone).await {
-            Ok(setting) => {
-                write_current(&mut self.text, &setting);
-                // SAFETY: the label is live and the caller holds the graphics lock.
-                unsafe { set_label(self.current_label, &mut self.text) };
-                self.set_preview(setting.time_zone());
-                self.show_status(t!(c"general.time_zone.saved"), false);
+    /// Whether a save waits for [`Self::save_pending`].
+    pub fn has_pending_save(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    /// Store the recorded setting, then show the result. The caller must not
+    /// hold the graphics lock: the write runs without it, and the result is
+    /// shown under it.
+    pub async fn save_pending(&mut self, graphics_manager: &'static graphics::Manager) {
+        let Some(pending) = self.pending.take() else {
+            return;
+        };
+        let result = save(self.context, pending.name, &pending.time_zone).await;
+        graphics::lock!(graphics_manager, {
+            match result {
+                Ok(setting) => {
+                    self.stored_name = setting.name().map(String::from);
+                    write_current(&mut self.text, &setting);
+                    // SAFETY: the label is live and the graphics lock is held.
+                    unsafe { set_label(self.current_label, &mut self.text) };
+                    self.set_preview(setting.time_zone());
+                    self.show_status(t!(c"general.time_zone.saved"), false);
+                }
+                Err(error) => self.show_error(error),
             }
-            Err(error) => self.show_error(error),
-        }
+        });
     }
 
     /// Handle an event of the section. The caller holds the graphics lock.
-    pub async fn handle_event(&mut self, event: &Event) -> bool {
+    pub fn handle_event(&mut self, event: &Event) -> bool {
         if event.code == EventKind::ValueChanged && event.is_target(self.editor) {
-            self.show_editor();
-            self.show_status(c"", false);
+            // SAFETY: the dropdown is live and the caller holds the lock.
+            let index = unsafe { lvgl::lv_dropdown_get_selected(self.editor) } as usize;
+            let editor = EDITORS.get(index).copied().unwrap_or(EDITORS[0]);
+            // SAFETY: the caller holds the graphics lock.
+            if unsafe { self.build_editor(editor) }.is_err() {
+                self.show_status(t!(c"general.time_zone.errors.save_failed"), true);
+            } else {
+                self.show_status(c"", false);
+            }
             return true;
         }
-        match self.form.handle_event(event) {
-            super::time_zone_form::Action::None => {}
-            super::time_zone_form::Action::Changed(Ok(zone)) => {
-                self.set_preview(zone);
-                return true;
-            }
-            super::time_zone_form::Action::Changed(Err(_)) => return true,
-            super::time_zone_form::Action::Apply(Ok(string)) => {
-                self.apply(None, &string).await;
-                return true;
-            }
-            super::time_zone_form::Action::Apply(Err(_)) => {
-                self.show_status(t!(c"general.time_zone.errors.invalid"), true);
-                return true;
-            }
-        }
-        if event.code == EventKind::ValueChanged && event.is_target(self.text_area) {
-            let text = self.custom_text();
-            if text.is_empty() {
-                self.show_status(c"", false);
-            } else {
-                match local_time::validate_time_zone(&text) {
-                    Ok(zone) => {
+        let Some(active) = self.active.as_mut() else {
+            return false;
+        };
+        match active {
+            #[cfg(feature = "time-zone-names")]
+            Active::Zone(selector) => match selector.handle_event(event) {
+                super::time_zone_names::Action::None => false,
+                super::time_zone_names::Action::Handled => true,
+                super::time_zone_names::Action::Preview(zone) => {
+                    self.set_preview(zone);
+                    true
+                }
+                super::time_zone_names::Action::Apply { name, time_zone } => {
+                    self.request_save(Some(name), String::from(time_zone));
+                    true
+                }
+            },
+            #[cfg(feature = "time-zone-offset-form")]
+            Active::Offset(form) => match form.handle_event(event) {
+                super::time_zone_form::Action::None => false,
+                super::time_zone_form::Action::Changed(Ok(zone)) => {
+                    self.set_preview(zone);
+                    true
+                }
+                super::time_zone_form::Action::Changed(Err(_)) => true,
+                super::time_zone_form::Action::Apply(Ok(string)) => {
+                    self.request_save(None, string);
+                    true
+                }
+                super::time_zone_form::Action::Apply(Err(_)) => {
+                    self.show_status(t!(c"general.time_zone.errors.invalid"), true);
+                    true
+                }
+            },
+            Active::String(editor) => {
+                if event.code == EventKind::ValueChanged && event.is_target(editor.text_area) {
+                    let text = editor.text();
+                    if text.is_empty() {
                         self.show_status(c"", false);
-                        self.set_preview(zone);
+                    } else {
+                        match local_time::validate_time_zone(&text) {
+                            Ok(zone) => {
+                                self.show_status(c"", false);
+                                self.set_preview(zone);
+                            }
+                            Err(error) => self.show_error(SaveError::Invalid(error)),
+                        }
                     }
-                    Err(error) => self.show_error(SaveError::Invalid(error)),
+                    true
+                } else if event.code == EventKind::Clicked && event.is_target(editor.apply) {
+                    let text = editor.text();
+                    self.request_save(None, text);
+                    true
+                } else {
+                    false
                 }
             }
-            return true;
         }
-        if event.code == EventKind::Clicked && event.is_target(self.apply_button) {
-            let text = self.custom_text();
-            self.apply(None, &text).await;
-            return true;
-        }
-        #[cfg(feature = "time-zone-names")]
-        match self.selector.handle_event(event) {
-            super::time_zone_names::Action::None => {}
-            super::time_zone_names::Action::Handled => return true,
-            super::time_zone_names::Action::Preview(zone) => {
-                self.set_preview(zone);
-                return true;
-            }
-            super::time_zone_names::Action::Apply { name, time_zone } => {
-                self.apply(Some(name), time_zone).await;
-                return true;
-            }
-        }
-        false
     }
 }
 
@@ -425,11 +451,9 @@ impl TimeZoneSection {
 pub(crate) mod tests {
     use super::*;
 
-    const PARIS: &str = "CET-1CEST,M3.5.0,M10.5.0/3";
-
     #[test]
     fn preview_at_a_daylight_saving_change() {
-        let paris = TimeZone::parse(PARIS).unwrap();
+        let paris = TimeZone::parse("CET-1CEST,M3.5.0,M10.5.0/3").unwrap();
         let mut output = String::new();
         // 2026-03-29 00:59:59 UTC is the last second of winter time.
         write_preview(&mut output, &paris, Some(1_774_745_999));
@@ -442,30 +466,37 @@ pub(crate) mod tests {
     }
 
     /// Exercise the section through the real widgets: an invalid string is
-    /// refused, a valid one is saved and published.
+    /// refused, a valid one is saved (outside the graphics lock) and
+    /// published, and the default editor saves its own string.
     pub(crate) async fn exercise_ui(
         context: &'static ExecutableContext,
         graphics: &'static xila::graphics::Manager,
     ) {
         let task = context.task_manager.get_current_task_identifier().await;
-        let _lock = graphics.lock().await;
-        let screen = unsafe { lvgl::lv_screen_active() };
         let mut section = TimeZoneSection::new(context);
-        unsafe { section.create_ui(screen).await.unwrap() };
+        let screen = graphics::lock!(graphics, {
+            let screen = unsafe { lvgl::lv_screen_active() };
+            unsafe { section.create_ui(screen).await.unwrap() };
+            unsafe { section.build_editor(Editor::String).unwrap() };
+            screen
+        });
+        let set_text = |section: &mut TimeZoneSection, text: &core::ffi::CStr| {
+            let Some(Active::String(editor)) = section.active.as_ref() else {
+                panic!("the string editor is active");
+            };
+            unsafe { lvgl::lv_textarea_set_text(editor.text_area, text.as_ptr()) };
+            let text = editor.text();
+            section.request_save(None, text);
+        };
 
         // `UTC` has no offset, so it is not a valid TZ string.
-        unsafe { lvgl::lv_textarea_set_text(section.text_area, c"UTC".as_ptr()) };
-        let text = section.custom_text();
-        section.apply(None, &text).await;
-        assert!(
-            local_time::read(context.virtual_file_system, task)
-                .await
-                .is_err()
-        );
+        graphics::lock!(graphics, { set_text(&mut section, c"UTC") });
+        assert!(!section.has_pending_save());
+        assert!(local_time::read(context.virtual_file_system, task).await.is_err());
 
-        unsafe { lvgl::lv_textarea_set_text(section.text_area, c" JST-9 ".as_ptr()) };
-        let text = section.custom_text();
-        section.apply(None, &text).await;
+        graphics::lock!(graphics, { set_text(&mut section, c" JST-9 ") });
+        assert!(section.has_pending_save());
+        section.save_pending(graphics).await;
         let stored = local_time::read(context.virtual_file_system, task)
             .await
             .unwrap();
@@ -480,40 +511,62 @@ pub(crate) mod tests {
                 .get_value(),
             "JST-9"
         );
-        let current =
-            unsafe { core::ffi::CStr::from_ptr(lvgl::lv_label_get_text(section.current_label)) };
-        assert!(current.to_str().unwrap().ends_with("(JST-9)"));
+        graphics::lock!(graphics, {
+            let current = unsafe {
+                core::ffi::CStr::from_ptr(lvgl::lv_label_get_text(section.current_label))
+            };
+            assert!(current.to_str().unwrap().ends_with("(JST-9)"));
+        });
 
         // The offset form: UTC+01:00 with the European Union rules (the
         // default preset) and no abbreviations.
-        assert_eq!(section.form.build().unwrap(), "<+00>0");
-        unsafe { section.form.select(1, true) };
-        let string = section.form.build().unwrap();
-        assert_eq!(string, "<+01>-1<+02>,M3.5.0,M10.5.0/3");
-        section.apply(None, &string).await;
-        assert_eq!(
-            local_time::read(context.virtual_file_system, task)
-                .await
-                .unwrap()
-                .time_zone_string(),
-            string
-        );
+        #[cfg(feature = "time-zone-offset-form")]
+        {
+            let string = graphics::lock!(graphics, {
+                unsafe { section.build_editor(Editor::Offset).unwrap() };
+                let Some(Active::Offset(form)) = section.active.as_mut() else {
+                    panic!("the offset form is active");
+                };
+                assert_eq!(form.build().unwrap(), "<+00>0");
+                unsafe { form.select(1, true) };
+                let string = form.build().unwrap();
+                section.request_save(None, string.clone());
+                string
+            });
+            assert_eq!(string, "<+01>-1<+02>,M3.5.0,M10.5.0/3");
+            section.save_pending(graphics).await;
+            assert_eq!(
+                local_time::read(context.virtual_file_system, task)
+                    .await
+                    .unwrap()
+                    .time_zone_string(),
+                string
+            );
+        }
 
         #[cfg(any(feature = "time-zone-names-europe", feature = "time-zone-names-all"))]
         {
-            section
-                .apply(
+            graphics::lock!(graphics, {
+                section.request_save(
                     Some("Europe/Paris"),
-                    xila::time_zone::iana::time_zone_string("Europe/Paris").unwrap(),
-                )
-                .await;
+                    String::from(xila::time_zone::iana::time_zone_string("Europe/Paris").unwrap()),
+                );
+            });
+            section.save_pending(graphics).await;
             let stored = local_time::read(context.virtual_file_system, task)
                 .await
                 .unwrap();
             assert_eq!(stored.name(), Some("Europe/Paris"));
-            assert_eq!(stored.time_zone_string(), PARIS);
+            assert_eq!(stored.time_zone_string(), "CET-1CEST,M3.5.0,M10.5.0/3");
+            // The selector preselects the stored name.
+            graphics::lock!(graphics, {
+                unsafe { section.build_editor(Editor::Zone).unwrap() };
+            });
         }
 
-        unsafe { lvgl::lv_obj_clean(screen) };
+        graphics::lock!(graphics, {
+            section.active = None;
+            unsafe { lvgl::lv_obj_clean(screen) };
+        });
     }
 }

@@ -12,9 +12,19 @@
 //!     03:00 for UTC+01:00).
 //!   - "United States": second Sunday of March to first Sunday of November,
 //!     at 02:00 local time.
-//!   - Custom: month, week (first to fourth, or last), weekday and hour of the
+//!   - Custom: month, week (first to fourth, or last), weekday and time of the
 //!     start and of the end, in local time (standard time for the start,
-//!     daylight time for the end, as POSIX defines).
+//!     daylight time for the end, as POSIX defines). The time is 00:00 to
+//!     24:45 in steps of 15 minutes, which covers the rules of tzdata such as
+//!     `/2:45` (Pacific/Chatham) and `/24` (America/Santiago). POSIX also
+//!     allows negative times and times up to 167 hours; for those, use the TZ
+//!     string field.
+//! - The offset is limited to UTC-12:00 to UTC+14:00, the range of the zones
+//!   in use.
+//!
+//! The form builds its objects lazily: the daylight saving fields when daylight
+//! saving time is turned on, and the custom rule fields when "Custom" is
+//! chosen.
 //! - Abbreviations are optional (`CET`, `CEST`). When empty, the numeric form
 //!   of tzdata is used (`<+01>`, `<+0530>`).
 
@@ -80,6 +90,8 @@ pub(crate) struct Values<'a> {
 pub(crate) enum FormError {
     /// An abbreviation is not 3 to 7 ASCII letters, digits, `+` or `-`.
     InvalidAbbreviation,
+    /// The offset is outside UTC-12:00 to UTC+14:00.
+    OffsetOutOfRange,
     /// The string does not parse (for example a rule time out of range).
     Invalid,
 }
@@ -169,6 +181,9 @@ fn write_transition(output: &mut String, transition: &Transition) {
 
 /// Build and check the TZ string of the form.
 pub(crate) fn build(values: &Values<'_>) -> core::result::Result<String, FormError> {
+    if !(MINIMUM_OFFSET_HOURS * 60..=MAXIMUM_OFFSET_HOURS * 60).contains(&values.offset_minutes) {
+        return Err(FormError::OffsetOutOfRange);
+    }
     let mut output = String::new();
     write_name(&mut output, values.standard_name, values.offset_minutes)?;
     write_hours(&mut output, -values.offset_minutes);
@@ -190,25 +205,91 @@ pub(crate) fn build(values: &Values<'_>) -> core::result::Result<String, FormErr
 }
 
 /// Dropdown options separated by `\n` and ended by `\0`.
-fn options(items: impl Iterator<Item = String>) -> String {
+fn options(count: usize, mut item: impl FnMut(&mut String, usize)) -> String {
     let mut options = String::new();
-    for item in items {
-        if !options.is_empty() {
+    for index in 0..count {
+        if index != 0 {
             options.push('\n');
         }
-        options.push_str(&item);
+        item(&mut options, index);
     }
     options.push('\0');
     options
 }
 
-/// The widgets of one custom transition.
+/// A dropdown under a caption, as wide as its parent.
+///
+/// # Safety
+/// `parent` must be live and the caller must hold the graphics lock.
+unsafe fn dropdown(
+    parent: *mut lvgl::lv_obj_t,
+    caption: &core::ffi::CStr,
+    options: &str,
+) -> Result<*mut lvgl::lv_obj_t> {
+    unsafe {
+        super::caption(parent, caption)?;
+        let dropdown = super::check(lvgl::lv_dropdown_create(parent))?;
+        lvgl::lv_obj_set_width(dropdown, lvgl::lv_pct(100));
+        lvgl::lv_dropdown_set_options(dropdown, options.as_ptr().cast());
+        Ok(dropdown)
+    }
+}
+
+/// A column that holds a part of the form.
+///
+/// # Safety
+/// `parent` must be live and the caller must hold the graphics lock.
+unsafe fn column(parent: *mut lvgl::lv_obj_t) -> Result<*mut lvgl::lv_obj_t> {
+    unsafe {
+        let column = super::check(lvgl::lv_obj_create(parent))?;
+        lvgl::lv_obj_remove_style_all(column);
+        lvgl::lv_obj_set_size(column, lvgl::lv_pct(100), lvgl::LV_SIZE_CONTENT);
+        lvgl::lv_obj_set_flex_flow(column, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
+        lvgl::lv_obj_set_style_pad_row(column, 6, 0);
+        Ok(column)
+    }
+}
+
+/// A one-line text field for an abbreviation, under a caption.
+///
+/// # Safety
+/// `parent` must be live and the caller must hold the graphics lock.
+unsafe fn abbreviation_field(
+    parent: *mut lvgl::lv_obj_t,
+    caption: &core::ffi::CStr,
+) -> Result<*mut lvgl::lv_obj_t> {
+    unsafe {
+        super::caption(parent, caption)?;
+        let text_area = super::check(lvgl::lv_textarea_create(parent))?;
+        lvgl::lv_textarea_set_one_line(text_area, true);
+        lvgl::lv_textarea_set_max_length(text_area, 7);
+        lvgl::lv_obj_set_width(text_area, lvgl::lv_pct(100));
+        Ok(text_area)
+    }
+}
+
+/// Show or hide an object.
+///
+/// # Safety
+/// `object` must be live and the caller must hold the graphics lock.
+unsafe fn set_visible(object: *mut lvgl::lv_obj_t, visible: bool) {
+    unsafe {
+        if visible {
+            lvgl::lv_obj_remove_flag(object, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lvgl::lv_obj_add_flag(object, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+}
+
+/// The widgets of one custom transition. Null until the custom fields exist.
 #[derive(Clone, Copy)]
 struct TransitionFields {
     month: *mut lvgl::lv_obj_t,
     week: *mut lvgl::lv_obj_t,
     weekday: *mut lvgl::lv_obj_t,
     hour: *mut lvgl::lv_obj_t,
+    minute: *mut lvgl::lv_obj_t,
 }
 
 impl TransitionFields {
@@ -218,24 +299,31 @@ impl TransitionFields {
             week: core::ptr::null_mut(),
             weekday: core::ptr::null_mut(),
             hour: core::ptr::null_mut(),
+            minute: core::ptr::null_mut(),
         }
     }
 
-    fn contains(&self, object: &Event) -> bool {
-        [self.month, self.week, self.weekday, self.hour]
+    fn contains(&self, event: &Event) -> bool {
+        [self.month, self.week, self.weekday, self.hour, self.minute]
             .iter()
-            .any(|field| object.is_target(*field))
+            .any(|field| !field.is_null() && event.is_target(*field))
     }
 
+    /// The transition of the fields, or `default` while they do not exist.
+    ///
     /// # Safety
-    /// The fields must be live and the caller must hold the graphics lock.
-    unsafe fn read(&self) -> Transition {
+    /// The caller must hold the graphics lock.
+    unsafe fn read(&self, default: Transition) -> Transition {
+        if self.month.is_null() {
+            return default;
+        }
         unsafe {
             Transition {
                 month: lvgl::lv_dropdown_get_selected(self.month) as u8 + 1,
                 week: lvgl::lv_dropdown_get_selected(self.week) as u8 + 1,
                 weekday: lvgl::lv_dropdown_get_selected(self.weekday) as u8,
-                time_minutes: lvgl::lv_dropdown_get_selected(self.hour) as i16 * 60,
+                time_minutes: lvgl::lv_dropdown_get_selected(self.hour) as i16 * 60
+                    + OFFSET_MINUTES[lvgl::lv_dropdown_get_selected(self.minute) as usize % 4],
             }
         }
     }
@@ -250,231 +338,208 @@ pub enum Action {
     Apply(core::result::Result<String, FormError>),
 }
 
+/// The custom rules shown first: the European Union rules at UTC+01:00.
+const DEFAULT_START: Transition = Transition {
+    month: 3,
+    week: 5,
+    weekday: 0,
+    time_minutes: 120,
+};
+const DEFAULT_END: Transition = Transition {
+    month: 10,
+    week: 5,
+    weekday: 0,
+    time_minutes: 180,
+};
+
 pub struct OffsetForm {
-    container: *mut lvgl::lv_obj_t,
     hours: *mut lvgl::lv_obj_t,
     minutes: *mut lvgl::lv_obj_t,
     daylight_saving: *mut lvgl::lv_obj_t,
+    /// Empty until daylight saving time is first turned on.
     daylight_container: *mut lvgl::lv_obj_t,
     shift: *mut lvgl::lv_obj_t,
     preset: *mut lvgl::lv_obj_t,
+    daylight_name: *mut lvgl::lv_obj_t,
+    /// Empty until "Custom" is first chosen.
     custom_container: *mut lvgl::lv_obj_t,
     start: TransitionFields,
     end: TransitionFields,
     standard_name: *mut lvgl::lv_obj_t,
-    daylight_name: *mut lvgl::lv_obj_t,
     generated: *mut lvgl::lv_obj_t,
     apply: *mut lvgl::lv_obj_t,
 }
 
 impl OffsetForm {
-    pub const fn new() -> Self {
-        Self {
-            container: core::ptr::null_mut(),
+    /// Build the form in `parent`, set to UTC, without daylight saving time.
+    ///
+    /// # Safety
+    /// `parent` must be live and the caller must hold the graphics lock.
+    pub unsafe fn new(parent: *mut lvgl::lv_obj_t) -> Result<Self> {
+        let hours = options(
+            (MAXIMUM_OFFSET_HOURS - MINIMUM_OFFSET_HOURS + 1) as usize,
+            |output, index| {
+                let hour = index as i16 + MINIMUM_OFFSET_HOURS;
+                let sign = if hour < 0 { '-' } else { '+' };
+                let _ = write!(output, "UTC{sign}{:02}", hour.unsigned_abs());
+            },
+        );
+        let mut form = Self {
             hours: core::ptr::null_mut(),
             minutes: core::ptr::null_mut(),
             daylight_saving: core::ptr::null_mut(),
             daylight_container: core::ptr::null_mut(),
             shift: core::ptr::null_mut(),
             preset: core::ptr::null_mut(),
+            daylight_name: core::ptr::null_mut(),
             custom_container: core::ptr::null_mut(),
             start: TransitionFields::null(),
             end: TransitionFields::null(),
             standard_name: core::ptr::null_mut(),
-            daylight_name: core::ptr::null_mut(),
             generated: core::ptr::null_mut(),
             apply: core::ptr::null_mut(),
+        };
+        unsafe {
+            form.hours = dropdown(parent, t!(c"general.time_zone.form.offset"), &hours)?;
+            lvgl::lv_dropdown_set_selected(form.hours, (-MINIMUM_OFFSET_HOURS) as u32);
+            form.minutes = dropdown(
+                parent,
+                t!(c"general.time_zone.form.minutes"),
+                ":00\n:15\n:30\n:45\0",
+            )?;
+            let row = super::setting_row(parent, t!(c"general.time_zone.form.daylight_saving"))?;
+            form.daylight_saving = super::check(lvgl::lv_switch_create(row))?;
+            form.daylight_container = column(parent)?;
+            set_visible(form.daylight_container, false);
+            form.standard_name =
+                abbreviation_field(parent, t!(c"general.time_zone.form.standard_name"))?;
+            super::caption(parent, t!(c"general.time_zone.form.names_hint"))?;
+            super::caption(parent, t!(c"general.time_zone.form.generated"))?;
+            form.generated = super::check(lvgl::lv_label_create(parent))?;
+            lvgl::lv_obj_set_width(form.generated, lvgl::lv_pct(100));
+            lvgl::lv_label_set_long_mode(
+                form.generated,
+                lvgl::lv_label_long_mode_t_LV_LABEL_LONG_MODE_WRAP,
+            );
+            form.apply = super::check(lvgl::lv_button_create(parent))?;
+            let label = super::check(lvgl::lv_label_create(form.apply))?;
+            lvgl::lv_label_set_text(label, t!(c"general.time_zone.form.apply").as_ptr());
+            lvgl::lv_obj_center(label);
         }
+        let _ = form.update_generated();
+        Ok(form)
     }
 
-    pub fn container(&self) -> *mut lvgl::lv_obj_t {
-        self.container
-    }
-
-    /// Build the form in `parent`, set to UTC.
+    /// Build the daylight saving fields, once.
     ///
     /// # Safety
-    /// `parent` must be live and the caller must hold the graphics lock.
-    pub unsafe fn create_ui(&mut self, parent: *mut lvgl::lv_obj_t) -> Result<()> {
-        let formatter = internationalization::DateTimeFormatter::new(
-            internationalization::date_time_locale(internationalization::locale!()),
-        );
-        // Month and weekday names come from the locale of the build:
-        // 2024-01-14 (day 19,736) is a Sunday.
-        // Days since 1970-01-01 of the first day of each month of 2024.
-        const MONTH_STARTS: [i64; 12] = [
-            19_723, 19_754, 19_783, 19_814, 19_844, 19_875, 19_905, 19_936, 19_967, 19_997, 20_028,
-            20_058,
-        ];
-        let month_options = options(MONTH_STARTS.iter().map(|days| {
-            let mut name = String::new();
-            let _ = formatter.write(&mut name, (days + 14) * 86_400, "%B");
-            name
-        }));
-        let weekday_options = options((0..7_i64).map(|weekday| {
-            let mut name = String::new();
-            let _ = formatter.write(&mut name, (19_736 + weekday) * 86_400, "%A");
-            name
-        }));
-        let week_options = options(
-            [
-                t!("general.time_zone.form.weeks.first"),
-                t!("general.time_zone.form.weeks.second"),
-                t!("general.time_zone.form.weeks.third"),
-                t!("general.time_zone.form.weeks.fourth"),
-                t!("general.time_zone.form.weeks.last"),
-            ]
-            .into_iter()
-            .map(String::from),
-        );
-        let hour_options = options((0..24).map(|hour| alloc::format!("{hour:02}:00")));
-
+    /// The caller must hold the graphics lock.
+    unsafe fn build_daylight_saving(&mut self) -> Result<()> {
+        if !self.shift.is_null() {
+            return Ok(());
+        }
+        let presets = options(3, |output, index| {
+            output.push_str(match index {
+                0 => t!("general.time_zone.form.presets.european_union"),
+                1 => t!("general.time_zone.form.presets.united_states"),
+                _ => t!("general.time_zone.form.presets.custom"),
+            })
+        });
         unsafe {
-            let dropdown =
-                |parent, caption: &core::ffi::CStr, options: &str| -> Result<*mut lvgl::lv_obj_t> {
-                    super::caption(parent, caption)?;
-                    let dropdown = super::check(lvgl::lv_dropdown_create(parent))?;
-                    lvgl::lv_obj_set_width(dropdown, lvgl::lv_pct(100));
-                    lvgl::lv_dropdown_set_options(dropdown, options.as_ptr().cast());
-                    Ok(dropdown)
-                };
-            let column = |parent| -> Result<*mut lvgl::lv_obj_t> {
-                let column = super::check(lvgl::lv_obj_create(parent))?;
-                lvgl::lv_obj_remove_style_all(column);
-                lvgl::lv_obj_set_size(column, lvgl::lv_pct(100), lvgl::LV_SIZE_CONTENT);
-                lvgl::lv_obj_set_flex_flow(column, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
-                lvgl::lv_obj_set_style_pad_row(column, 6, 0);
-                Ok(column)
-            };
-            let text_area = |parent, caption: &core::ffi::CStr| -> Result<*mut lvgl::lv_obj_t> {
-                super::caption(parent, caption)?;
-                let text_area = super::check(lvgl::lv_textarea_create(parent))?;
-                lvgl::lv_textarea_set_one_line(text_area, true);
-                lvgl::lv_textarea_set_max_length(text_area, 7);
-                lvgl::lv_obj_set_width(text_area, lvgl::lv_pct(100));
-                Ok(text_area)
-            };
-
-            self.container = column(parent)?;
-            let hours = options((MINIMUM_OFFSET_HOURS..=MAXIMUM_OFFSET_HOURS).map(|hour| {
-                if hour < 0 {
-                    alloc::format!("UTC-{:02}", -hour)
-                } else {
-                    alloc::format!("UTC+{hour:02}")
-                }
-            }));
-            self.hours = dropdown(self.container, t!(c"general.time_zone.form.offset"), &hours)?;
-            lvgl::lv_dropdown_set_selected(self.hours, (-MINIMUM_OFFSET_HOURS) as u32);
-            let minutes = options(
-                OFFSET_MINUTES
-                    .iter()
-                    .map(|minute| alloc::format!(":{minute:02}")),
-            );
-            self.minutes = dropdown(
-                self.container,
-                t!(c"general.time_zone.form.minutes"),
-                &minutes,
-            )?;
-
-            let row = super::setting_row(
-                self.container,
-                t!(c"general.time_zone.form.daylight_saving"),
-            )?;
-            self.daylight_saving = super::check(lvgl::lv_switch_create(row))?;
-
-            self.daylight_container = column(self.container)?;
+            let parent = self.daylight_container;
             self.shift = dropdown(
-                self.daylight_container,
+                parent,
                 t!(c"general.time_zone.form.shift"),
                 "+00:30\n+01:00\n+02:00\0",
             )?;
             lvgl::lv_dropdown_set_selected(self.shift, 1);
-            let presets = options(
-                [
-                    t!("general.time_zone.form.presets.european_union"),
-                    t!("general.time_zone.form.presets.united_states"),
-                    t!("general.time_zone.form.presets.custom"),
-                ]
-                .into_iter()
-                .map(String::from),
-            );
-            self.preset = dropdown(
-                self.daylight_container,
-                t!(c"general.time_zone.form.rules"),
-                &presets,
-            )?;
+            self.preset = dropdown(parent, t!(c"general.time_zone.form.rules"), &presets)?;
+            self.custom_container = column(parent)?;
+            set_visible(self.custom_container, false);
+            self.daylight_name =
+                abbreviation_field(parent, t!(c"general.time_zone.form.daylight_name"))?;
+        }
+        Ok(())
+    }
 
-            self.custom_container = column(self.daylight_container)?;
-            for (fields, caption, month, week) in [
-                (&mut self.start, t!(c"general.time_zone.form.start"), 2, 4),
-                (&mut self.end, t!(c"general.time_zone.form.end"), 9, 4),
+    /// Build the custom rule fields, once.
+    ///
+    /// # Safety
+    /// The caller must hold the graphics lock.
+    unsafe fn build_custom_rules(&mut self) -> Result<()> {
+        if !self.start.month.is_null() {
+            return Ok(());
+        }
+        let formatter = internationalization::DateTimeFormatter::new(
+            internationalization::date_time_locale(internationalization::locale!()),
+        );
+        // Month and weekday names come from the locale of the build. Day
+        // 19,723 is 2024-01-01; 2024-01-14 (day 19,736) is a Sunday.
+        const MONTH_STARTS: [u16; 12] = [0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335];
+        let months = options(12, |output, index| {
+            let day = 19_723 + 14 + i64::from(MONTH_STARTS[index]);
+            let _ = formatter.write(output, day * 86_400, "%B");
+        });
+        let weekdays = options(7, |output, index| {
+            let _ = formatter.write(output, (19_736 + index as i64) * 86_400, "%A");
+        });
+        let weeks = options(5, |output, index| {
+            output.push_str(match index {
+                0 => t!("general.time_zone.form.weeks.first"),
+                1 => t!("general.time_zone.form.weeks.second"),
+                2 => t!("general.time_zone.form.weeks.third"),
+                3 => t!("general.time_zone.form.weeks.fourth"),
+                _ => t!("general.time_zone.form.weeks.last"),
+            })
+        });
+        let hours = options(25, |output, index| {
+            let _ = write!(output, "{index:02}");
+        });
+        unsafe {
+            let parent = self.custom_container;
+            for (fields, caption, default) in [
+                (&mut self.start, t!(c"general.time_zone.form.start"), DEFAULT_START),
+                (&mut self.end, t!(c"general.time_zone.form.end"), DEFAULT_END),
             ] {
-                let title = super::check(lvgl::lv_label_create(self.custom_container))?;
+                let title = super::check(lvgl::lv_label_create(parent))?;
                 lvgl::lv_label_set_text(title, caption.as_ptr());
-                fields.month = dropdown(
-                    self.custom_container,
-                    t!(c"general.time_zone.form.month"),
-                    &month_options,
-                )?;
-                lvgl::lv_dropdown_set_selected(fields.month, month);
-                fields.week = dropdown(
-                    self.custom_container,
-                    t!(c"general.time_zone.form.week"),
-                    &week_options,
-                )?;
-                lvgl::lv_dropdown_set_selected(fields.week, week);
-                fields.weekday = dropdown(
-                    self.custom_container,
-                    t!(c"general.time_zone.form.weekday"),
-                    &weekday_options,
-                )?;
-                fields.hour = dropdown(
-                    self.custom_container,
-                    t!(c"general.time_zone.form.time"),
-                    &hour_options,
-                )?;
-                lvgl::lv_dropdown_set_selected(fields.hour, 2);
+                fields.month = dropdown(parent, t!(c"general.time_zone.form.month"), &months)?;
+                lvgl::lv_dropdown_set_selected(fields.month, u32::from(default.month - 1));
+                fields.week = dropdown(parent, t!(c"general.time_zone.form.week"), &weeks)?;
+                lvgl::lv_dropdown_set_selected(fields.week, u32::from(default.week - 1));
+                fields.weekday =
+                    dropdown(parent, t!(c"general.time_zone.form.weekday"), &weekdays)?;
+                fields.hour = dropdown(parent, t!(c"general.time_zone.form.time"), &hours)?;
+                lvgl::lv_dropdown_set_selected(fields.hour, (default.time_minutes / 60) as u32);
+                fields.minute = super::check(lvgl::lv_dropdown_create(parent))?;
+                lvgl::lv_obj_set_width(fields.minute, lvgl::lv_pct(100));
+                lvgl::lv_dropdown_set_options(fields.minute, c":00\n:15\n:30\n:45".as_ptr());
             }
-
-            self.standard_name =
-                text_area(self.container, t!(c"general.time_zone.form.standard_name"))?;
-            self.daylight_name = text_area(
-                self.daylight_container,
-                t!(c"general.time_zone.form.daylight_name"),
-            )?;
-            super::caption(self.container, t!(c"general.time_zone.form.names_hint"))?;
-
-            super::caption(self.container, t!(c"general.time_zone.form.generated"))?;
-            self.generated = super::check(lvgl::lv_label_create(self.container))?;
-            lvgl::lv_obj_set_width(self.generated, lvgl::lv_pct(100));
-            lvgl::lv_label_set_long_mode(
-                self.generated,
-                lvgl::lv_label_long_mode_t_LV_LABEL_LONG_MODE_WRAP,
-            );
-
-            self.apply = super::check(lvgl::lv_button_create(self.container))?;
-            let label = super::check(lvgl::lv_label_create(self.apply))?;
-            lvgl::lv_label_set_text(label, t!(c"general.time_zone.form.apply").as_ptr());
-            lvgl::lv_obj_center(label);
-
-            self.update_visibility();
-            let _ = self.update_generated();
         }
         Ok(())
     }
 
     /// # Safety
-    /// The widgets must be live and the caller must hold the graphics lock.
+    /// The widget must be live and the caller must hold the graphics lock.
     unsafe fn text(text_area: *mut lvgl::lv_obj_t) -> String {
+        if text_area.is_null() {
+            return String::new();
+        }
         let text = unsafe { core::ffi::CStr::from_ptr(lvgl::lv_textarea_get_text(text_area)) };
         String::from(text.to_str().unwrap_or("\u{fffd}").trim())
+    }
+
+    fn daylight_saving_enabled(&self) -> bool {
+        // SAFETY: the switch is live and the caller holds the graphics lock.
+        unsafe { lvgl::lv_obj_has_state(self.daylight_saving, lvgl::LV_STATE_CHECKED) }
     }
 
     /// The TZ string of the current values.
     ///
     /// The caller must hold the graphics lock.
     pub fn build(&self) -> core::result::Result<String, FormError> {
-        // SAFETY: the widgets are live and the caller holds the graphics lock.
+        // SAFETY: the widgets are live (or null until built) and the caller
+        // holds the graphics lock.
         unsafe {
             let hours = lvgl::lv_dropdown_get_selected(self.hours) as i16 + MINIMUM_OFFSET_HOURS;
             let minutes = OFFSET_MINUTES[lvgl::lv_dropdown_get_selected(self.minutes) as usize % 4];
@@ -483,21 +548,19 @@ impl OffsetForm {
             } else {
                 hours * 60 + minutes
             };
-            let daylight_saving =
-                lvgl::lv_obj_has_state(self.daylight_saving, lvgl::LV_STATE_CHECKED).then(|| {
-                    DaylightSaving {
-                        shift_minutes: SHIFTS
-                            [lvgl::lv_dropdown_get_selected(self.shift) as usize % 3],
-                        rules: match lvgl::lv_dropdown_get_selected(self.preset) {
-                            0 => Rules::EuropeanUnion,
-                            1 => Rules::UnitedStates,
-                            _ => Rules::Custom {
-                                start: self.start.read(),
-                                end: self.end.read(),
-                            },
+            let daylight_saving = (self.daylight_saving_enabled() && !self.shift.is_null()).then(|| {
+                DaylightSaving {
+                    shift_minutes: SHIFTS[lvgl::lv_dropdown_get_selected(self.shift) as usize % 3],
+                    rules: match lvgl::lv_dropdown_get_selected(self.preset) {
+                        0 => Rules::EuropeanUnion,
+                        1 => Rules::UnitedStates,
+                        _ => Rules::Custom {
+                            start: self.start.read(DEFAULT_START),
+                            end: self.end.read(DEFAULT_END),
                         },
-                    }
-                });
+                    },
+                }
+            });
             let standard_name = Self::text(self.standard_name);
             let daylight_name = Self::text(self.daylight_name);
             build(&Values {
@@ -509,41 +572,21 @@ impl OffsetForm {
         }
     }
 
-    /// Set the offset in whole hours and the daylight saving switch, for tests.
-    ///
-    /// # Safety
-    /// The widgets must be live and the caller must hold the graphics lock.
-    #[cfg(all(test, target_os = "linux"))]
-    pub(crate) unsafe fn select(&mut self, offset_hours: i16, daylight_saving: bool) {
-        unsafe {
-            lvgl::lv_dropdown_set_selected(
-                self.hours,
-                (offset_hours - MINIMUM_OFFSET_HOURS) as u32,
-            );
-            if daylight_saving {
-                lvgl::lv_obj_add_state(self.daylight_saving, lvgl::LV_STATE_CHECKED);
-            } else {
-                lvgl::lv_obj_remove_state(self.daylight_saving, lvgl::LV_STATE_CHECKED);
-            }
-        }
-        self.update_visibility();
-    }
-
-    /// Show the daylight saving and custom rule fields only when they apply.
-    fn update_visibility(&mut self) {
+    /// Build the fields that now apply, and show only them.
+    fn update_fields(&mut self) {
+        let daylight = self.daylight_saving_enabled();
         // SAFETY: the widgets are live and the caller holds the graphics lock.
         unsafe {
-            let daylight = lvgl::lv_obj_has_state(self.daylight_saving, lvgl::LV_STATE_CHECKED);
-            let custom = lvgl::lv_dropdown_get_selected(self.preset) == 2;
-            for (object, visible) in [
-                (self.daylight_container, daylight),
-                (self.custom_container, custom),
-            ] {
-                if visible {
-                    lvgl::lv_obj_remove_flag(object, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
-                } else {
-                    lvgl::lv_obj_add_flag(object, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_HIDDEN);
+            if daylight {
+                let _ = self.build_daylight_saving();
+            }
+            set_visible(self.daylight_container, daylight);
+            if !self.preset.is_null() {
+                let custom = lvgl::lv_dropdown_get_selected(self.preset) == 2;
+                if custom {
+                    let _ = self.build_custom_rules();
                 }
+                set_visible(self.custom_container, custom);
             }
         }
     }
@@ -563,7 +606,7 @@ impl OffsetForm {
                     self.generated,
                     t!(c"general.time_zone.form.errors.abbreviation").as_ptr(),
                 ),
-                Err(FormError::Invalid) => lvgl::lv_label_set_text(
+                Err(FormError::OffsetOutOfRange | FormError::Invalid) => lvgl::lv_label_set_text(
                     self.generated,
                     t!(c"general.time_zone.errors.invalid").as_ptr(),
                 ),
@@ -571,6 +614,23 @@ impl OffsetForm {
             lvgl::lv_theme_shadcn_set_error(self.generated, result.is_err());
         }
         result
+    }
+
+    /// Set the offset in whole hours and the daylight saving switch, for tests.
+    ///
+    /// # Safety
+    /// The widgets must be live and the caller must hold the graphics lock.
+    #[cfg(all(test, target_os = "linux"))]
+    pub(crate) unsafe fn select(&mut self, offset_hours: i16, daylight_saving: bool) {
+        unsafe {
+            lvgl::lv_dropdown_set_selected(self.hours, (offset_hours - MINIMUM_OFFSET_HOURS) as u32);
+            if daylight_saving {
+                lvgl::lv_obj_add_state(self.daylight_saving, lvgl::LV_STATE_CHECKED);
+            } else {
+                lvgl::lv_obj_remove_state(self.daylight_saving, lvgl::LV_STATE_CHECKED);
+            }
+        }
+        self.update_fields();
     }
 
     /// Handle an event of the form. The caller holds the graphics lock.
@@ -590,17 +650,18 @@ impl OffsetForm {
             self.standard_name,
             self.daylight_name,
         ];
-        if !fields.iter().any(|field| event.is_target(*field))
+        if !fields
+            .iter()
+            .any(|field| !field.is_null() && event.is_target(*field))
             && !self.start.contains(event)
             && !self.end.contains(event)
         {
             return Action::None;
         }
-        self.update_visibility();
-        Action::Changed(
-            self.update_generated()
-                .map(|string| TimeZone::parse(&string).unwrap_or_else(|_| xila::local_time::utc())),
-        )
+        self.update_fields();
+        Action::Changed(self.update_generated().map(|string| {
+            TimeZone::parse(&string).unwrap_or_else(|_| xila::local_time::utc())
+        }))
     }
 }
 
@@ -727,6 +788,61 @@ mod tests {
         assert_eq!(
             build(&values(0, two_hours)).unwrap(),
             "<+00>0<+02>-2,M3.2.0,M11.1.0"
+        );
+    }
+
+    #[test]
+    fn offsets_outside_the_zones_in_use_are_refused() {
+        assert_eq!(build(&values(14 * 60 + 15, None)), Err(FormError::OffsetOutOfRange));
+        assert_eq!(build(&values(-12 * 60 - 30, None)), Err(FormError::OffsetOutOfRange));
+        assert_eq!(build(&values(-12 * 60, None)).unwrap(), "<-12>12");
+    }
+
+    #[test]
+    fn custom_rule_times_with_minutes_and_hour_24() {
+        // Pacific/Chatham: `<+1245>-12:45<+1345>,M9.5.0/2:45,M4.1.0/3:45`.
+        let chatham = Some(DaylightSaving {
+            shift_minutes: 60,
+            rules: Rules::Custom {
+                start: Transition {
+                    month: 9,
+                    week: 5,
+                    weekday: 0,
+                    time_minutes: 2 * 60 + 45,
+                },
+                end: Transition {
+                    month: 4,
+                    week: 1,
+                    weekday: 0,
+                    time_minutes: 3 * 60 + 45,
+                },
+            },
+        });
+        assert_eq!(
+            build(&values(12 * 60 + 45, chatham)).unwrap(),
+            "<+1245>-12:45<+1345>,M9.5.0/2:45,M4.1.0/3:45"
+        );
+        // America/Santiago: `<-04>4<-03>,M9.1.6/24,M4.1.6/24`.
+        let santiago = Some(DaylightSaving {
+            shift_minutes: 60,
+            rules: Rules::Custom {
+                start: Transition {
+                    month: 9,
+                    week: 1,
+                    weekday: 6,
+                    time_minutes: 24 * 60,
+                },
+                end: Transition {
+                    month: 4,
+                    week: 1,
+                    weekday: 6,
+                    time_minutes: 24 * 60,
+                },
+            },
+        });
+        assert_eq!(
+            build(&values(-4 * 60, santiago)).unwrap(),
+            "<-04>4<-03>,M9.1.6/24,M4.1.6/24"
         );
     }
 

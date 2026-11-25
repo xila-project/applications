@@ -64,6 +64,14 @@ impl GeneralTab {
     }
 
     pub async fn handle_event(&mut self, event: &Event) -> bool {
-        self.time_zone.handle_event(event).await
+        self.time_zone.handle_event(event)
+    }
+
+    /// Store a time zone that an event asked for. The caller must not hold the
+    /// graphics lock.
+    pub async fn save_pending(&mut self, graphics_manager: &'static xila::graphics::Manager) {
+        if self.time_zone.has_pending_save() {
+            self.time_zone.save_pending(graphics_manager).await;
+        }
     }
 }

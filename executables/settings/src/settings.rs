@@ -112,6 +112,13 @@ impl Settings {
             }
         });
 
+        // A time zone change is written after the graphics lock is released.
+        for tab in &mut self.tabs {
+            if let Tab::General(general) = tab {
+                general.save_pending(self.graphics_manager).await;
+            }
+        }
+
         let events = task::suspend(|ctx| {
             self.window.register_waker(ctx.waker());
         });

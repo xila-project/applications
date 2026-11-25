@@ -120,6 +120,7 @@ pub mod general;
 pub mod network;
 pub mod password;
 pub mod time_zone;
+#[cfg(feature = "time-zone-offset-form")]
 pub mod time_zone_form;
 #[cfg(feature = "time-zone-names")]
 pub mod time_zone_names;
