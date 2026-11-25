@@ -36,16 +36,26 @@ fn kind_to_filetype(kind: &xila::file_system::Kind) -> u8 {
     }
 }
 
-fn make_filestat(stats: &xila::file_system::Statistics) -> Filestat {
+/// Build the WASI `filestat` of Core statistics, with the descriptor file type
+/// `filetype` (`fd_filestat_get` reports the descriptor kind, for example a
+/// standard stream as a character device, while `path_filestat_get` derives it
+/// from the statistics kind).
+///
+/// `ctim` is the last file status change time, which Core reports in
+/// `Statistics::status`, not the creation time. `dev` stays 0: the Core
+/// `Statistics` carries no device or mount identifier yet (gap G14 in the
+/// review on xila-project/core#835), so `(dev, ino)` does not identify a file
+/// across mounts until a Core change adds the identifier.
+pub(crate) fn make_filestat(stats: &xila::file_system::Statistics, filetype: u8) -> Filestat {
     Filestat {
         dev: 0,
         ino: stats.inode,
-        filetype: kind_to_filetype(&stats.kind),
+        filetype,
         nlink: stats.links,
         size: stats.size,
         atime: stats.access.as_u64().saturating_mul(1_000_000_000),
         mtime: stats.modification.as_u64().saturating_mul(1_000_000_000),
-        ctime: stats.creation.as_u64().saturating_mul(1_000_000_000),
+        ctime: stats.status.as_u64().saturating_mul(1_000_000_000),
     }
 }
 
@@ -403,7 +413,7 @@ define_wasi_module! {
             } else {
                 task::block_on(vfs.get_statistics_beneath(task_id, &guest_relative(&root, &absolute_path)?, false, &root))
             }.map_err(kind_error)?;
-            let filestat = make_filestat(&stats);
+            let filestat = make_filestat(&stats, kind_to_filetype(&stats.kind));
             let memory = get_memory(&caller).ok_or(Error::Fault)?;
             borrow_memory(&memory, &mut caller).write(GuestPointer::new(buf_ptr), filestat).ok_or(Error::Fault)?;
             Ok(())
@@ -416,6 +426,39 @@ mod tests {
     extern crate std;
     use super::{Error, check_guest_symlink_target, resolve_guest_path};
     use xila::file_system::PathOwned;
+
+    #[test]
+    fn make_filestat_reports_the_status_change_time_and_a_zero_dev() {
+        use super::make_filestat;
+        use xila::file_system::{Kind, Permissions, Statistics, Time};
+        use xila::users::{GroupIdentifier, UserIdentifier};
+        // The creation and status change times differ, so the test can tell
+        // them apart in `ctim`.
+        let stats = Statistics::new(
+            7,
+            3,
+            42,
+            Time::new(100),
+            Time::new(111),
+            Time::new(222),
+            Time::new(200),
+            Kind::File,
+            Permissions::NONE,
+            UserIdentifier::ROOT,
+            GroupIdentifier::ROOT,
+        );
+        let filestat = make_filestat(&stats, 4);
+        assert_eq!(filestat.dev, 0);
+        assert_eq!(filestat.ino, 7);
+        assert_eq!(filestat.filetype, 4);
+        assert_eq!(filestat.nlink, 3);
+        assert_eq!(filestat.size, 42);
+        assert_eq!(filestat.atime, 111 * 1_000_000_000);
+        assert_eq!(filestat.mtime, 222 * 1_000_000_000);
+        // WASI `ctim` is the last status change time, not the creation time.
+        assert_eq!(filestat.ctime, 200 * 1_000_000_000);
+        assert_ne!(filestat.ctime, 100 * 1_000_000_000);
+    }
 
     #[test]
     fn absolute_guest_paths_are_root_relative_to_the_preopen() {

@@ -11,8 +11,9 @@ use crate::{
             Error,
             context::{FileSystemItem, FileVariant},
             error::{CombinedError, WasiResult, kind_error, status, wrap_function},
+            path::make_filestat,
             rights::right,
-            types::{Fdstat, Filestat, Prestat as PrestatAbi, PrestatDir},
+            types::{Fdstat, Prestat as PrestatAbi, PrestatDir},
         },
     },
 };
@@ -274,7 +275,7 @@ define_wasi_module! {
                 (filetype, metadata)
             };
             borrow_memory(&memory, &mut caller).write(GuestPointer::new(stat_ptr),
-                Filestat { dev: 0, ino: metadata.inode, filetype, nlink: metadata.links, size: metadata.size, atime: metadata.access.as_u64().saturating_mul(1_000_000_000), mtime: metadata.modification.as_u64().saturating_mul(1_000_000_000), ctime: metadata.creation.as_u64().saturating_mul(1_000_000_000) }).ok_or(Error::Fault)?;
+                make_filestat(&metadata, filetype)).ok_or(Error::Fault)?;
             Ok(())
         })
     }
