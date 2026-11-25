@@ -9,7 +9,9 @@
 //! the entity states through a scripted HTTP device, shows them, answers a
 //! tap on a toggle with a service call followed by a refresh, and shows the
 //! error states of a failed service call, a refused token and a missing
-//! entity.
+//! entity. With a slow device, it checks that a tap made during a refresh
+//! is ignored, and that a close request made during a refresh still exits
+//! the application.
 
 #[path = "support/applications.rs"]
 mod applications;
@@ -38,11 +40,15 @@ fn text(key: &str) -> String {
 /// Answers every request according to its path and token, like a small Home
 /// Assistant server, and keeps the requests. The first service call
 /// succeeds, the next ones fail with 500, and the token `bad-token` is
-/// refused with 401.
+/// refused with 401. Every answer can be delayed, so the guest is caught
+/// inside a refresh.
 struct ScriptedHomeAssistant {
     requests: Mutex<Vec<Vec<u8>>>,
     pending: Mutex<Vec<u8>>,
     service_calls: Mutex<usize>,
+    /// The answer waiting to be served, with its earliest serve time.
+    queued: Mutex<Option<(Vec<u8>, std::time::Instant)>>,
+    delay: Mutex<Duration>,
 }
 
 const LIGHT: &str = concat!(
@@ -96,6 +102,20 @@ impl DirectBaseOperations for ScriptedHomeAssistant {
         _: Size,
     ) -> Poll<xila::file_system::Result<usize>> {
         let mut pending = self.pending.lock().unwrap();
+        if pending.is_empty() {
+            let mut queued = self.queued.lock().unwrap();
+            let due = matches!(&*queued, Some((_, at)) if std::time::Instant::now() >= *at);
+            if due {
+                if let Some((response, _)) = queued.take() {
+                    *pending = response;
+                }
+            } else if queued.is_some() {
+                // The answer is not due yet: report no data for now.
+                return Poll::Pending;
+            } else {
+                return Poll::Ready(Ok(0));
+            }
+        }
         let count = buffer.len().min(pending.len());
         buffer[..count].copy_from_slice(&pending[..count]);
         pending.drain(..count);
@@ -113,12 +133,13 @@ impl DirectBaseOperations for ScriptedHomeAssistant {
         let is_service = core::str::from_utf8(buffer)
             .unwrap_or("")
             .starts_with("POST /api/services/");
-        let response = response_for(buffer, *service_calls);
+        let response = response_for(buffer, *service_calls).as_bytes().to_vec();
         if is_service {
             *service_calls += 1;
         }
         drop(service_calls);
-        *self.pending.lock().unwrap() = response.as_bytes().to_vec();
+        let delay = *self.delay.lock().unwrap();
+        *self.queued.lock().unwrap() = Some((response, std::time::Instant::now() + delay));
         Poll::Ready(Ok(buffer.len()))
     }
 }
@@ -176,6 +197,26 @@ async fn wait_label(manager: &Manager, text: &str) {
     panic!("Home Assistant did not display {text:?}");
 }
 
+/// Waits until the guest is not inside a refresh: the status line no longer
+/// shows the loading text.
+async fn wait_idle(manager: &Manager) {
+    let loading = text("header.loading");
+    for _ in 0..1000 {
+        if manager.get_window_count().await.unwrap() != 0 {
+            let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+            let busy = {
+                let _lock = manager.synchronous_lock();
+                unsafe { find_label(root, &loading) }
+            };
+            if !busy {
+                return;
+            }
+        }
+        xila::task::sleep(Duration::from_millis(10)).await;
+    }
+    panic!("Home Assistant did not become idle");
+}
+
 async fn wait_requests(server: &ScriptedHomeAssistant, count: usize) {
     for _ in 0..1000 {
         if server.requests.lock().unwrap().len() >= count {
@@ -224,9 +265,12 @@ async fn assert_media_glyphs(manager: &Manager) {
     }
 }
 
-async fn close_and_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
+async fn send_close(manager: &Manager) {
     let root = manager.get_window_identifier(0).await.unwrap();
     manager.send_window_close_request(root).await.unwrap();
+}
+
+async fn wait_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
     let mut join = core::pin::pin!(handle.join());
     for _ in 0..1000 {
         if let Poll::Ready(status) =
@@ -238,7 +282,12 @@ async fn close_and_join(manager: &Manager, handle: xila::task::JoinHandle<isize>
         }
         xila::task::sleep(Duration::from_millis(10)).await;
     }
-    panic!("Home Assistant did not exit on close request");
+    panic!("Home Assistant did not exit");
+}
+
+async fn close_and_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
+    send_close(manager).await;
+    wait_join(manager, handle).await;
 }
 
 #[xila::task::test(task_path=xila::task)]
@@ -270,6 +319,8 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
             requests: Mutex::new(Vec::new()),
             pending: Mutex::new(Vec::new()),
             service_calls: Mutex::new(0),
+            queued: Mutex::new(None),
+            delay: Mutex::new(Duration::ZERO),
         }));
     virtual_file_system
         .create_directory(task, &"/devices/network")
@@ -310,6 +361,22 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
             None,
         )
     };
+    let directory = "/users/administrator/applications/home_assistant/configuration";
+    async fn write_token(
+        virtual_file_system: &xila::virtual_file_system::VirtualFileSystem,
+        task: xila::task::TaskIdentifier,
+        directory: &str,
+        token: &[u8],
+    ) {
+        xila::virtual_file_system::File::write_to_path(
+            virtual_file_system,
+            task,
+            format!("{directory}/token").as_str(),
+            token,
+        )
+        .await
+        .unwrap();
+    }
 
     // Without a configuration, the notice says that there is none.
     let first = launch(standard.duplicate().await.unwrap()).await.unwrap();
@@ -318,7 +385,6 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
 
     // The runner created the private directory; write the two files. The
     // last entity does not exist on the server, to show the 404 state.
-    let directory = "/users/administrator/applications/home_assistant/configuration";
     xila::virtual_file_system::File::write_to_path(
         virtual_file_system,
         task,
@@ -328,14 +394,7 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     )
     .await
     .unwrap();
-    xila::virtual_file_system::File::write_to_path(
-        virtual_file_system,
-        task,
-        format!("{directory}/token").as_str(),
-        b"test-token\n",
-    )
-    .await
-    .unwrap();
+    write_token(virtual_file_system, task, directory, b"test-token\n").await;
 
     let second = launch(standard.duplicate().await.unwrap()).await.unwrap();
     // Each configured entity shows its friendly name and its value; the
@@ -352,6 +411,7 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     assert_media_glyphs(manager).await;
     // One state request per entity for the first refresh.
     wait_requests(home_assistant, 4).await;
+    wait_idle(manager).await;
     {
         let requests = home_assistant.requests.lock().unwrap();
         for (request, path) in requests.iter().zip([
@@ -370,6 +430,7 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     // A tap on the toggle calls the service, then refreshes the states.
     tap(manager, &text("controls.toggle")).await;
     wait_requests(home_assistant, 9).await;
+    wait_idle(manager).await;
     {
         let requests = home_assistant.requests.lock().unwrap();
         let post = String::from_utf8(requests[4].clone()).unwrap();
@@ -391,21 +452,46 @@ async fn real_home_assistant_guest_shows_and_controls_the_configured_entities() 
     tap(manager, &text("controls.toggle")).await;
     wait_requests(home_assistant, 14).await;
     wait_label(manager, "Home Assistant error 500").await;
+    wait_idle(manager).await;
     close_and_join(manager, second).await;
 
     // A refused token shows the 401 error, with one request only.
-    xila::virtual_file_system::File::write_to_path(
-        virtual_file_system,
-        task,
-        format!("{directory}/token").as_str(),
-        b"bad-token\n",
-    )
-    .await
-    .unwrap();
+    write_token(virtual_file_system, task, directory, b"bad-token\n").await;
     let before = home_assistant.requests.lock().unwrap().len();
-    let third = launch(standard).await.unwrap();
+    let third = launch(standard.duplicate().await.unwrap()).await.unwrap();
     wait_label(manager, &text("errors.unauthorized")).await;
+    wait_idle(manager).await;
     close_and_join(manager, third).await;
     let after = home_assistant.requests.lock().unwrap().len();
     assert_eq!(after - before, 1, "one request, not one per entity");
+
+    // A slow server: a tap made during a refresh is drained and ignored,
+    // and a close request made during a refresh still exits the guest.
+    write_token(virtual_file_system, task, directory, b"test-token\n").await;
+    *home_assistant.delay.lock().unwrap() = Duration::from_millis(400);
+    let before = home_assistant.requests.lock().unwrap().len();
+    let fourth = launch(standard).await.unwrap();
+    // The first state request is written, its answer is still delayed: the
+    // guest is inside the refresh.
+    wait_requests(home_assistant, before + 1).await;
+    tap(manager, &text("controls.toggle")).await;
+    wait_requests(home_assistant, before + 4).await;
+    wait_label(manager, "Living room").await;
+    wait_idle(manager).await;
+    {
+        // The tap landed during the refresh: no service call was made.
+        let requests = home_assistant.requests.lock().unwrap();
+        for request in &requests[before..] {
+            assert!(
+                request.starts_with(b"GET /api/states/"),
+                "unexpected request: {}",
+                String::from_utf8_lossy(request)
+            );
+        }
+    }
+    // A close request during the next refresh is kept, not drained.
+    tap(manager, "\u{F021}").await;
+    wait_requests(home_assistant, before + 5).await;
+    send_close(manager).await;
+    wait_join(manager, fourth).await;
 }

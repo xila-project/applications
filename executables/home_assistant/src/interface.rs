@@ -66,8 +66,11 @@ pub struct Interface {
     /// Error of the last refresh.
     error: Option<Error>,
     /// Error of the last service call. It stays visible across the refresh
-    /// that follows the call, until the next action or a manual refresh.
+    /// that follows the call, and clears on the next successful refresh.
     action_error: Option<Error>,
+    /// Set when a close request arrived, including one drained after a
+    /// refresh: the host sends it only once, so it must not be lost.
+    close_requested: bool,
     /// Problem found while reading the files at start.
     startup_error: Option<Error>,
     /// Which configuration field failed validation at start.
@@ -124,6 +127,7 @@ impl Interface {
                 next_refresh: None,
                 error: None,
                 action_error: None,
+                close_requested: false,
                 startup_error: None,
                 startup_invalid: None,
                 shown_status: String::new(),
@@ -154,7 +158,12 @@ impl Interface {
                 }
                 match storage.token() {
                     Ok(token) => self.token = token,
-                    Err(error) => self.startup_error = Some(error),
+                    Err(error) => {
+                        // A configuration error shows first when both fail.
+                        if self.startup_error.is_none() {
+                            self.startup_error = Some(error);
+                        }
+                    }
                 }
             }
         }
@@ -275,12 +284,29 @@ impl Interface {
     /// events queued while the guest waited on the network, so a tap made
     /// during the refresh does not start another one right away.
     fn refresh(&mut self) -> wasm::Result<()> {
+        self.refresh_inner(false)
+    }
+
+    /// The refresh that directly follows an action: the action error stays
+    /// visible through it.
+    fn refresh_after_action(&mut self) -> wasm::Result<()> {
+        self.refresh_inner(true)
+    }
+
+    fn refresh_inner(&mut self, keep_action_error: bool) -> wasm::Result<()> {
         let result = self.fetch_and_update();
         self.drain_events()?;
+        if !keep_action_error && self.error.is_none() {
+            // A successful periodic or manual refresh brings the
+            // "updated" line back.
+            self.action_error = None;
+        }
         result
     }
 
-    /// Discards the window events queued while the guest was blocked.
+    /// Discards the window events queued while the guest was blocked. The
+    /// close request is the exception: the host sends it only once, so it is
+    /// kept as a flag for the run loop.
     fn drain_events(&mut self) -> wasm::Result<()> {
         loop {
             let mut code = EventCode::All as u32;
@@ -291,6 +317,10 @@ impl Interface {
                     &mut code,
                     (&mut target as *mut *mut Object).cast(),
                 )?;
+            }
+            if code == EVENT_CLOSE_REQUESTED {
+                self.close_requested = true;
+                return Ok(());
             }
             if code == EventCode::All as u32 {
                 return Ok(());
@@ -309,7 +339,8 @@ impl Interface {
             return Ok(());
         }
         let Some(token) = self.token.clone() else {
-            self.error = Some(Error::MissingToken);
+            // The start-up notice already shows the missing or unreadable
+            // token; do not repeat it in the status line.
             self.finish_refresh(period);
             return Ok(());
         };
@@ -431,7 +462,7 @@ impl Interface {
             // Kept in its own slot: the refresh below reports its own errors.
             self.action_error = Some(error);
         }
-        self.refresh()
+        self.refresh_after_action()
     }
 
     fn show_notice(&mut self) -> wasm::Result<()> {
@@ -479,7 +510,6 @@ impl Interface {
             return Ok(());
         }
         if target == self.refresh_button {
-            self.action_error = None;
             return self.refresh();
         }
         for (card_index, card) in self.cards.iter().enumerate() {
@@ -496,6 +526,10 @@ impl Interface {
     pub fn run(&mut self) -> wasm::Result<()> {
         self.start()?;
         loop {
+            if self.close_requested {
+                unsafe { delete(self.window)? };
+                return Ok(());
+            }
             loop {
                 let mut code = EventCode::All as u32;
                 let mut target: *mut Object = null_mut();
@@ -507,8 +541,8 @@ impl Interface {
                     )?;
                 }
                 if code == EVENT_CLOSE_REQUESTED {
-                    unsafe { delete(self.window)? };
-                    return Ok(());
+                    self.close_requested = true;
+                    break;
                 }
                 if code == EventCode::All as u32 {
                     break;
