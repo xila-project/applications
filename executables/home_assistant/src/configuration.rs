@@ -84,7 +84,8 @@ impl Configuration {
     }
 }
 
-/// Accepts `http://` and `https://` URLs with a host and no spaces.
+/// Accepts `http://` and `https://` URLs with a host, no spaces and no
+/// `?`, `#` or `@`, which a request line or header could misread.
 pub fn validate_url(url: &str) -> core::result::Result<(), Invalid> {
     let rest = url
         .strip_prefix("https://")
@@ -92,9 +93,11 @@ pub fn validate_url(url: &str) -> core::result::Result<(), Invalid> {
         .ok_or(Invalid::Url)?;
     let host = rest.split('/').next().unwrap_or("");
     if host.is_empty()
-        || url
-            .chars()
-            .any(|character| character.is_whitespace() || character.is_control())
+        || url.chars().any(|character| {
+            character.is_whitespace()
+                || character.is_control()
+                || matches!(character, '?' | '#' | '@')
+        })
     {
         return Err(Invalid::Url);
     }
@@ -189,6 +192,16 @@ mod tests {
         assert_eq!(configuration.validate(), Err(Invalid::Url));
         configuration.url = String::from("http://homeassistant.local:8123/api");
         assert_eq!(configuration.validate(), Ok(()));
+        for bad in [
+            "http://homeassistant.local:8123?a=b",
+            "http://homeassistant.local:8123#frag",
+            "http://user@homeassistant.local:8123",
+            "http://home assistant.local",
+        ] {
+            configuration.url = String::from(bad);
+            assert_eq!(configuration.validate(), Err(Invalid::Url), "{bad}");
+        }
+        configuration.url = String::from("http://homeassistant.local:8123");
         configuration.refresh_seconds = 2;
         assert_eq!(configuration.validate(), Err(Invalid::Refresh));
         configuration.refresh_seconds = 30;

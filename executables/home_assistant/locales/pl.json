@@ -25,6 +25,12 @@
     "title": "Home Assistant",
     "updated": "Zaktualizowano {age} temu"
   },
+  "invalid": {
+    "entity": "Identyfikator encji zawiera domenę i identyfikator obiektu, na przykład light.living_room",
+    "refresh": "Okres odświeżania musi być liczbą całkowitą co najmniej 10 sekund",
+    "too_many_entities": "Za dużo encji (maksymalnie 24)",
+    "url": "Adres URL musi zaczynać się od https:// lub http:// i nie może zawierać ?, # ani @"
+  },
   "main": {
     "no_entities": "Brak encji do pokazania: dodaj je do pliku configuration.json.",
     "not_configured": "Brak konfiguracji: napisz configuration.json i plik token."

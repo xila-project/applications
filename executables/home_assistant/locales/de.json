@@ -25,6 +25,12 @@
     "title": "Home Assistant",
     "updated": "Vor {age} aktualisiert"
   },
+  "invalid": {
+    "entity": "Eine Entitäts-ID besteht aus Domäne und Objekt-ID, etwa light.living_room",
+    "refresh": "Die Aktualisierungsperiode muss eine ganze Zahl von mindestens 10 Sekunden sein",
+    "too_many_entities": "Es gibt zu viele Entitäten (höchstens 24)",
+    "url": "Die URL muss mit https:// oder http:// beginnen und darf kein ?, # oder @ enthalten"
+  },
   "main": {
     "no_entities": "Keine Entitäten anzuzeigen: Fügen Sie welche zur Datei configuration.json hinzu.",
     "not_configured": "Keine Konfiguration: Schreiben Sie configuration.json und eine Token-Datei."

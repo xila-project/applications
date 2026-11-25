@@ -25,6 +25,12 @@
     "title": "Home Assistant",
     "updated": "Mis à jour il y a {age}"
   },
+  "invalid": {
+    "entity": "Un identifiant d’entité contient un domaine et un identifiant d’objet, comme light.living_room",
+    "refresh": "La période de rafraîchissement doit être un nombre entier d’au moins 10 secondes",
+    "too_many_entities": "Il y a trop d’entités (24 au maximum)",
+    "url": "L’URL doit commencer par https:// ou http:// et ne contient ni ?, ni #, ni @."
+  },
   "main": {
     "no_entities": "Aucune entité à afficher : ajoutez-en dans configuration.json.",
     "not_configured": "Aucune configuration : écrivez configuration.json et un fichier token."

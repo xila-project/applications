@@ -133,14 +133,15 @@ impl EntityState {
     }
 
     /// The media line: the artist and the title, when the player has them.
+    /// An empty artist or title counts as absent.
     pub fn media_text(&self) -> Option<String> {
-        match (&self.media_artist, &self.media_title) {
-            (Some(artist), Some(title)) if !artist.is_empty() && !title.is_empty() => {
-                Some(format!("{artist} - {title}"))
-            }
-            (None, Some(title)) => Some(title.clone()),
-            (Some(artist), _) if !artist.is_empty() => Some(artist.clone()),
-            _ => None,
+        let artist = self.media_artist.as_deref().filter(|text| !text.is_empty());
+        let title = self.media_title.as_deref().filter(|text| !text.is_empty());
+        match (artist, title) {
+            (Some(artist), Some(title)) => Some(format!("{artist} - {title}")),
+            (Some(artist), None) => Some(String::from(artist)),
+            (None, Some(title)) => Some(String::from(title)),
+            (None, None) => None,
         }
     }
 
@@ -162,7 +163,8 @@ pub fn parse<S: Source>(reader: &mut Reader<S>) -> Result<EntityState> {
             "entity_id" => {
                 entity_id = Some(reader.string(crate::configuration::MAXIMUM_ENTITY_ID_LENGTH)?)
             }
-            "state" => state = Some(reader.string(MAXIMUM_STATE_LENGTH)?),
+            // A long state or attribute truncates instead of failing the entity.
+            "state" => state = Some(reader.truncated_string(MAXIMUM_STATE_LENGTH)?),
             "attributes" => parse_attributes(reader, &mut attributes)?,
             _ => reader.skip()?,
         }
@@ -187,12 +189,18 @@ pub fn parse<S: Source>(reader: &mut Reader<S>) -> Result<EntityState> {
 fn parse_attributes<S: Source>(reader: &mut Reader<S>, state: &mut EntityState) -> Result<()> {
     reader.object(|reader, key| {
         match key {
-            "friendly_name" => state.friendly_name = reader.optional_string(MAXIMUM_NAME_LENGTH)?,
-            "unit_of_measurement" => {
-                state.unit_of_measurement = reader.optional_string(MAXIMUM_UNIT_LENGTH)?
+            "friendly_name" => {
+                state.friendly_name = reader.optional_truncated_string(MAXIMUM_NAME_LENGTH)?
             }
-            "media_title" => state.media_title = reader.optional_string(MAXIMUM_MEDIA_LENGTH)?,
-            "media_artist" => state.media_artist = reader.optional_string(MAXIMUM_MEDIA_LENGTH)?,
+            "unit_of_measurement" => {
+                state.unit_of_measurement = reader.optional_truncated_string(MAXIMUM_UNIT_LENGTH)?
+            }
+            "media_title" => {
+                state.media_title = reader.optional_truncated_string(MAXIMUM_MEDIA_LENGTH)?
+            }
+            "media_artist" => {
+                state.media_artist = reader.optional_truncated_string(MAXIMUM_MEDIA_LENGTH)?
+            }
             "volume_level" => state.volume_level = reader.optional_number()?,
             _ => reader.skip()?,
         }
@@ -345,6 +353,9 @@ mod tests {
         assert_eq!(state.media_text().as_deref(), Some("Song"));
         state.media_artist = Some(String::from("Artist"));
         assert_eq!(state.media_text().as_deref(), Some("Artist - Song"));
+        // An empty artist counts as absent: the title shows alone.
+        state.media_artist = Some(String::new());
+        assert_eq!(state.media_text().as_deref(), Some("Song"));
         state.volume_level = Some(1.0);
         assert_eq!(state.volume_text().as_deref(), Some("100 %"));
         state.volume_level = Some(7.5);
@@ -371,11 +382,40 @@ mod tests {
             parse_str(r#"{"entity_id": "light.a", "state": "on"} trailing"#),
             Err(Error::InvalidResponse)
         );
+    }
+
+    #[test]
+    fn long_strings_truncate_on_a_character_boundary() {
         let long_name = std::format!(
             r#"{{"entity_id": "light.a", "state": "on", "attributes": {{"friendly_name": "{}"}}}}"#,
-            "x".repeat(MAXIMUM_NAME_LENGTH + 1)
+            "é".repeat(MAXIMUM_NAME_LENGTH)
         );
-        assert_eq!(parse_str(&long_name), Err(Error::TooLarge));
+        let state = parse_str(&long_name).unwrap();
+        assert_eq!(
+            state.friendly_name.as_deref().map(str::len),
+            Some(MAXIMUM_NAME_LENGTH)
+        );
+        let long_state = std::format!(
+            r#"{{"entity_id": "light.a", "state": "{}", "attributes": {{}}}}"#,
+            "y".repeat(MAXIMUM_STATE_LENGTH + 10)
+        );
+        assert_eq!(
+            parse_str(&long_state).unwrap().state.len(),
+            MAXIMUM_STATE_LENGTH
+        );
+        let long_title = std::format!(
+            r#"{{"entity_id": "media_player.a", "state": "playing", "attributes": {{"media_title": "{}"}}}}"#,
+            "曲".repeat(MAXIMUM_MEDIA_LENGTH)
+        );
+        let state = parse_str(&long_title).unwrap();
+        // 128 bytes is not a 3-byte boundary of 曲, so the cut lands at 126.
+        assert_eq!(
+            state.media_title.as_deref().map(str::len),
+            Some(MAXIMUM_MEDIA_LENGTH - MAXIMUM_MEDIA_LENGTH % 3)
+        );
+        // The entity identifier itself must still fit.
+        let long_id = std::format!(r#"{{"entity_id": "{}", "state": "on"}}"#, "a.".repeat(40));
+        assert_eq!(parse_str(&long_id), Err(Error::TooLarge));
     }
 
     #[test]

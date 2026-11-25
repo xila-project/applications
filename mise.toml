@@ -12,7 +12,7 @@ description = "Check all WASI guest applications"
 run = "cargo check --locked --target wasm32-wasip1 -p xila-calculator -p xila-clock -p xila-weather -p xila-pixel-painter -p xila-text-editor -p xila-synth -p xila-digits -p xila-dashboard -p xila-home-assistant"
 
 [tasks."build:applications"]
-description = "Build and size-optimize the eight WASI application artifacts"
+description = "Build and size-optimize the nine WASI application artifacts"
 tools."aqua:WebAssembly/binaryen" = "{{ vars.binaryen_version }}"
 run = """
 set -eu

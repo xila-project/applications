@@ -11,13 +11,13 @@ use std::{
 use embedded_i18n::t;
 use home_assistant::{
     api,
-    configuration::{self, Configuration, domain_of},
+    configuration::{self, Configuration, Invalid, domain_of},
     error::Error,
     net::{Endpoint, device::Devices},
     service,
     state::{Control, Domain, EntityState, controls},
     storage::Storage,
-    text::{age, error_message},
+    text::{age, error_message, invalid_message},
 };
 use wasm::*;
 
@@ -29,10 +29,6 @@ include!(concat!(env!("OUT_DIR"), "/shortcut_icon.rs"));
 const WIDE_MINIMUM_WIDTH: i32 = 400;
 const ERROR_COLOR: u32 = 0xEF4444;
 const MUTED_COLOR: u32 = 0x71717A;
-/// A tap within this time of the end of a refresh does not start another
-/// one: taps made while the guest waited on the network are queued, and would
-/// otherwise repeat the refresh back to back.
-const TAP_REFRESH_INTERVAL: Duration = Duration::from_secs(3);
 
 /// A card button and the control it calls.
 struct CardButton {
@@ -66,13 +62,16 @@ pub struct Interface {
     states: Vec<Option<EntityState>>,
     errors: Vec<Option<Error>>,
     last_refresh: Option<Instant>,
-    /// End of the last refresh attempt, successful or not.
-    refresh_ended: Option<Instant>,
     next_refresh: Option<Instant>,
     /// Error of the last refresh.
     error: Option<Error>,
+    /// Error of the last service call. It stays visible across the refresh
+    /// that follows the call, until the next action or a manual refresh.
+    action_error: Option<Error>,
     /// Problem found while reading the files at start.
     startup_error: Option<Error>,
+    /// Which configuration field failed validation at start.
+    startup_invalid: Option<Invalid>,
     shown_status: String,
 }
 
@@ -122,10 +121,11 @@ impl Interface {
                 states: Vec::new(),
                 errors: Vec::new(),
                 last_refresh: None,
-                refresh_ended: None,
                 next_refresh: None,
                 error: None,
+                action_error: None,
                 startup_error: None,
+                startup_invalid: None,
                 shown_status: String::new(),
             })
         }
@@ -152,13 +152,18 @@ impl Interface {
                     Ok(configuration) => self.configuration = configuration,
                     Err(error) => self.startup_error = Some(error),
                 }
-                self.token = storage.token().ok().flatten();
+                match storage.token() {
+                    Ok(token) => self.token = token,
+                    Err(error) => self.startup_error = Some(error),
+                }
             }
         }
-        if let Some(configuration) = &self.configuration
-            && configuration.validate().is_err()
-        {
-            self.startup_error = Some(Error::Configuration);
+        let invalid = self
+            .configuration
+            .as_ref()
+            .and_then(|configuration| configuration.validate().err());
+        if let Some(invalid) = invalid {
+            self.startup_invalid = Some(invalid);
             self.configuration = None;
         }
         if self.configuration.is_some() && self.token.is_none() && self.startup_error.is_none() {
@@ -266,8 +271,34 @@ impl Interface {
         }
     }
 
-    /// Reads every entity state and updates the cards.
+    /// Reads every entity state and updates the cards, then discards the
+    /// events queued while the guest waited on the network, so a tap made
+    /// during the refresh does not start another one right away.
     fn refresh(&mut self) -> wasm::Result<()> {
+        let result = self.fetch_and_update();
+        self.drain_events()?;
+        result
+    }
+
+    /// Discards the window events queued while the guest was blocked.
+    fn drain_events(&mut self) -> wasm::Result<()> {
+        loop {
+            let mut code = EventCode::All as u32;
+            let mut target: *mut Object = null_mut();
+            unsafe {
+                window_pop_event(
+                    self.window,
+                    &mut code,
+                    (&mut target as *mut *mut Object).cast(),
+                )?;
+            }
+            if code == EventCode::All as u32 {
+                return Ok(());
+            }
+        }
+    }
+
+    fn fetch_and_update(&mut self) -> wasm::Result<()> {
         let period = self
             .configuration
             .as_ref()
@@ -321,9 +352,7 @@ impl Interface {
 
     /// The period counts from the end of the refresh.
     fn finish_refresh(&mut self, period: u32) {
-        let ended = Instant::now();
-        self.refresh_ended = Some(ended);
-        self.next_refresh = Some(ended + Duration::from_secs(u64::from(period)));
+        self.next_refresh = Some(Instant::now() + Duration::from_secs(u64::from(period)));
         self.shown_status.clear();
     }
 
@@ -389,6 +418,7 @@ impl Interface {
             }
         };
         self.show_busy(t!("header.loading"))?;
+        self.action_error = None;
         let body = service::service_body(&entity_id);
         if let Err(error) = api::call_service(
             &mut Devices,
@@ -398,13 +428,16 @@ impl Interface {
             control.service(),
             &body,
         ) {
-            self.error = Some(error);
+            // Kept in its own slot: the refresh below reports its own errors.
+            self.action_error = Some(error);
         }
         self.refresh()
     }
 
     fn show_notice(&mut self) -> wasm::Result<()> {
-        let text = if let Some(error) = &self.startup_error {
+        let text = if let Some(invalid) = &self.startup_invalid {
+            Some(String::from(invalid_message(*invalid)))
+        } else if let Some(error) = &self.startup_error {
             Some(error_message(error))
         } else if self.configuration.is_none() {
             Some(String::from(t!("main.not_configured")))
@@ -422,13 +455,14 @@ impl Interface {
 
     /// Status line: the error of the last refresh, else the time since it.
     fn update_status(&mut self) -> wasm::Result<()> {
-        let (text, color) = match (&self.error, self.last_refresh) {
-            (Some(error), _) => (error_message(error), ERROR_COLOR),
-            (None, Some(last)) => (
+        let (text, color) = match (&self.action_error, &self.error, self.last_refresh) {
+            (Some(error), _, _) => (error_message(error), ERROR_COLOR),
+            (None, Some(error), _) => (error_message(error), ERROR_COLOR),
+            (None, None, Some(last)) => (
                 t!("header.updated", age = age(last.elapsed().as_secs())).to_string(),
                 MUTED_COLOR,
             ),
-            (None, None) => (String::new(), MUTED_COLOR),
+            (None, None, None) => (String::new(), MUTED_COLOR),
         };
         if text != self.shown_status {
             unsafe {
@@ -445,13 +479,8 @@ impl Interface {
             return Ok(());
         }
         if target == self.refresh_button {
+            self.action_error = None;
             return self.refresh();
-        }
-        if self
-            .refresh_ended
-            .is_some_and(|ended| ended.elapsed() < TAP_REFRESH_INTERVAL)
-        {
-            return Ok(());
         }
         for (card_index, card) in self.cards.iter().enumerate() {
             for button in &card.buttons {

@@ -25,6 +25,12 @@
     "title": "Home Assistant",
     "updated": "Atualizado há {age}"
   },
+  "invalid": {
+    "entity": "Um identificador de entidade tem um domínio e um identificador de objeto, como light.living_room",
+    "refresh": "O período de atualização deve ser um número inteiro de pelo menos 10 segundos",
+    "too_many_entities": "Há entidades demais (no máximo 24)",
+    "url": "A URL deve começar com https:// ou http:// e não pode conter ?, # ou @"
+  },
   "main": {
     "no_entities": "Nenhuma entidade para mostrar: adicione algumas a configuration.json.",
     "not_configured": "Sem configuração: escreva configuration.json e um arquivo token."

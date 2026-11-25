@@ -2,7 +2,7 @@
 //! services, with `Authorization: Bearer <token>` on every request.
 
 use crate::configuration::Configuration;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::json::Reader;
 use crate::net::{Connector, Endpoint, read_response, status_error};
 use crate::service::{service_path, state_path};
@@ -54,7 +54,10 @@ pub fn call_service<C: Connector>(
 
 /// Reads every configured entity state, one request each, in order. An
 /// entity that fails does not stop the others: its error is returned in its
-/// slot, so a missing entity (404) shows on its card alone.
+/// slot, so a missing entity (404) shows on its card alone. A server-level
+/// failure (no network, timeout, refused token) stops the refresh and is
+/// copied to the remaining entities, so one dead server is one request, not
+/// one per entity.
 pub fn refresh_states<C: Connector>(
     connector: &mut C,
     configuration: &Configuration,
@@ -62,16 +65,30 @@ pub fn refresh_states<C: Connector>(
     entities: &[String],
 ) -> Result<Vec<Result<EntityState>>> {
     let endpoint = Endpoint::parse(&configuration.url)?;
-    Ok(entities
-        .iter()
-        .map(|entity_id| fetch_state(connector, &endpoint, token, entity_id))
-        .collect())
+    let mut results: Vec<Result<EntityState>> = Vec::with_capacity(entities.len());
+    for entity_id in entities {
+        let result = fetch_state(connector, &endpoint, token, entity_id);
+        let fatal = matches!(
+            &result,
+            Err(Error::Network | Error::Timeout | Error::Unauthorized)
+        );
+        results.push(result);
+        if fatal {
+            let error = results.last().and_then(|r| r.as_ref().err().cloned());
+            if let Some(error) = error {
+                while results.len() < entities.len() {
+                    results.push(Err(error.clone()));
+                }
+            }
+            break;
+        }
+    }
+    Ok(results)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::Error;
     use crate::net::tests::{Canned, canned};
     use std::string::String;
 
@@ -239,6 +256,40 @@ mod tests {
                 .1
                 .starts_with("GET /api/states/media_player.television ")
         );
+    }
+
+    #[test]
+    fn refresh_stops_at_the_first_server_level_failure() {
+        let configuration = configuration();
+        // No canned response: the connector itself reports no network.
+        let mut connector = recorder(&[]);
+        let results =
+            refresh_states(&mut connector, &configuration, "t", &configuration.entities).unwrap();
+        assert_eq!(results.len(), 3);
+        assert!(results.iter().all(|r| *r == Err(Error::Network)));
+        assert_eq!(
+            connector.requests.len(),
+            1,
+            "one request, not one per entity"
+        );
+        // A refused token behaves the same.
+        let mut connector = recorder(&["HTTP/1.1 401 Unauthorized\r\n\r\n{}"]);
+        let results =
+            refresh_states(&mut connector, &configuration, "t", &configuration.entities).unwrap();
+        assert!(results.iter().all(|r| *r == Err(Error::Unauthorized)));
+        assert_eq!(connector.requests.len(), 1);
+        // A missing entity (404) is not server level: the others still load.
+        let responses = [
+            String::from("HTTP/1.1 404 Not Found\r\n\r\n{}"),
+            ok(include_str!("../tests/fixtures/sensor.json")),
+            ok(include_str!("../tests/fixtures/media_player.json")),
+        ];
+        let mut connector = recorder(&responses.iter().map(String::as_str).collect::<Vec<_>>());
+        let results =
+            refresh_states(&mut connector, &configuration, "t", &configuration.entities).unwrap();
+        assert_eq!(results[0], Err(Error::NotFound));
+        assert!(results[1].is_ok() && results[2].is_ok());
+        assert_eq!(connector.requests.len(), 3);
     }
 
     #[test]

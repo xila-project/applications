@@ -1,5 +1,6 @@
 //! User-visible text built from the catalog.
 
+use crate::configuration::Invalid;
 use crate::error::Error;
 use embedded_i18n::t;
 use std::string::{String, ToString};
@@ -16,6 +17,16 @@ pub fn error_message(error: &Error) -> String {
         Error::InvalidResponse => String::from(t!("errors.invalid_response")),
         Error::TooLarge => String::from(t!("errors.too_large")),
         Error::Storage => String::from(t!("errors.storage")),
+    }
+}
+
+/// Which configuration field is wrong, shown at start.
+pub fn invalid_message(invalid: Invalid) -> &'static str {
+    match invalid {
+        Invalid::Url => t!("invalid.url"),
+        Invalid::Refresh => t!("invalid.refresh"),
+        Invalid::Entity => t!("invalid.entity"),
+        Invalid::TooManyEntities => t!("invalid.too_many_entities"),
     }
 }
 
@@ -49,5 +60,13 @@ mod tests {
         assert_eq!(age(42), "42 s");
         assert_eq!(age(600), "10 min");
         assert_eq!(age(7_300), "2 h");
+        assert_eq!(
+            invalid_message(Invalid::Url),
+            "The URL must start with https:// or http:// and hold no ?, # or @"
+        );
+        assert_eq!(
+            invalid_message(Invalid::Entity),
+            "An entity identifier holds a domain and an object identifier, such as light.living_room"
+        );
     }
 }

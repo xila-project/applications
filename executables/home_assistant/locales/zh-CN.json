@@ -25,6 +25,12 @@
     "title": "Home Assistant",
     "updated": "更新于{age}前"
   },
+  "invalid": {
+    "entity": "实体标识符由域和对象标识符组成，例如light.living_room",
+    "refresh": "刷新间隔必须是至少10秒的整数",
+    "too_many_entities": "实体过多（最多24个）",
+    "url": "URL必须以https://或http://开头，且不能包含?、#或@"
+  },
   "main": {
     "no_entities": "没有要显示的实体: 请在configuration.json中添加。",
     "not_configured": "没有配置: 请编写configuration.json和token文件。"
