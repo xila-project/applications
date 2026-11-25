@@ -29,7 +29,9 @@ fn map_error(result: i32) -> Error {
     let error = io::Error::from_raw_os_error(result);
     match error.kind() {
         io::ErrorKind::NotFound => Error::Missing,
-        io::ErrorKind::WouldBlock => Error::Busy,
+        // An interrupted call is retried like a busy one, by the single
+        // bounded loop in `shortcuts::channel`.
+        io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted => Error::Busy,
         io::ErrorKind::NotConnected => Error::NotConnected,
         _ => Error::Io,
     }
@@ -38,38 +40,33 @@ fn map_error(result: i32) -> Error {
 fn map_io_error(error: io::Error) -> Error {
     match error.kind() {
         io::ErrorKind::NotFound => Error::Missing,
-        io::ErrorKind::WouldBlock => Error::Busy,
+        io::ErrorKind::WouldBlock | io::ErrorKind::Interrupted => Error::Busy,
         io::ErrorKind::NotConnected => Error::NotConnected,
         _ => Error::Io,
     }
 }
 
-/// Runs one control command once; busy answers are retried by
-/// [`shortcuts::channel`], interrupted ones right here.
+/// Runs one control command once; busy and interrupted answers are retried by
+/// the bounded loop in [`shortcuts::channel`].
 fn call_control(file: &File, command: u32, input: &[u8], output: &mut [u8]) -> Result<()> {
     let mut input_buffer = Aligned([0u8; MAXIMUM_CONTROL_PAYLOAD]);
     let mut output_buffer = Aligned([0u8; MAXIMUM_CONTROL_PAYLOAD]);
     input_buffer.0[..input.len()].copy_from_slice(input);
-    loop {
-        let result = unsafe {
-            wasm::fd_control(
-                file.as_raw_fd(),
-                command,
-                input_buffer.0.as_ptr(),
-                input.len() as u32,
-                output_buffer.0.as_mut_ptr(),
-                output.len() as u32,
-            )
-        };
-        if result == 0 {
-            output.copy_from_slice(&output_buffer.0[..output.len()]);
-            return Ok(());
-        }
-        if io::Error::from_raw_os_error(result).kind() == io::ErrorKind::Interrupted {
-            continue;
-        }
-        return Err(map_error(result));
+    let result = unsafe {
+        wasm::fd_control(
+            file.as_raw_fd(),
+            command,
+            input_buffer.0.as_ptr(),
+            input.len() as u32,
+            output_buffer.0.as_mut_ptr(),
+            output.len() as u32,
+        )
+    };
+    if result == 0 {
+        output.copy_from_slice(&output_buffer.0[..output.len()]);
+        return Ok(());
     }
+    Err(map_error(result))
 }
 
 /// One opened emulation device.
@@ -91,12 +88,7 @@ impl Emulation {
 
 impl Channel for Emulation {
     fn write(&mut self, bytes: &[u8]) -> Result<usize> {
-        loop {
-            match io::Write::write(&mut self.file, bytes) {
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-                result => return result.map_err(map_io_error),
-            }
-        }
+        io::Write::write(&mut self.file, bytes).map_err(map_io_error)
     }
 
     fn control(&mut self, command: u32, input: &[u8], output: &mut [u8]) -> Result<()> {

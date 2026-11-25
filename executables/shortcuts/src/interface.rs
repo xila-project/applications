@@ -680,11 +680,15 @@ impl Interface {
             && storage.save_settings(&self.settings).is_ok()
             && self.settings_broken
         {
-            // The broken file was replaced: say so in the start-up
-            // notice, which stays visible.
+            // The broken file was replaced: the start-up line that reported
+            // it now says so, and stays visible.
             self.settings_broken = false;
-            self.startup_lines
-                .push(String::from(t!("errors.configuration_replaced")));
+            let invalid = error_text(shortcuts::Error::Configuration);
+            let replaced = String::from(t!("errors.configuration_replaced"));
+            match self.startup_lines.iter_mut().find(|line| **line == invalid) {
+                Some(line) => *line = replaced,
+                None => self.startup_lines.push(replaced),
+            }
             let _ = self.refresh_notice();
         }
     }
