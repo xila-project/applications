@@ -122,6 +122,21 @@ pub unsafe fn set_field(area: *mut Object, value: &str) -> wasm::Result<()> {
     unsafe { textarea_set_text(area, value.as_ptr()) }
 }
 
+/// What a hidden secret field shows instead of the secret. The length is
+/// fixed: it must not leak how long the secret is.
+pub const SECRET_MASK: &str = "********";
+
+/// Sets the text of a field that already has its maximum length, without the
+/// one insert event per character that a set limit makes LVGL send: the
+/// limit is lifted while the text is set, then restored.
+pub unsafe fn set_field_bounded(area: *mut Object, value: &str, maximum: u32) -> wasm::Result<()> {
+    unsafe {
+        textarea_set_max_length(area, 0)?;
+        set_field(area, value)?;
+        textarea_set_max_length(area, maximum)
+    }
+}
+
 pub unsafe fn field_text(area: *mut Object) -> wasm::Result<String> {
     unsafe {
         let length = textarea_get_text_length(area)?.max(0) as usize;

@@ -75,34 +75,6 @@ pub fn range_name(seconds: u32) -> String {
     }
 }
 
-/// Character shown for each hidden token character.
-pub const MASK: char = '*';
-
-/// Mask of `count` characters.
-pub fn mask(count: usize) -> String {
-    core::iter::repeat_n(MASK, count).collect()
-}
-
-/// Applies an edit of a masked field to the secret it hides. The field shows
-/// one mask character per secret character, so each mask character stands for
-/// the next character of the secret, and any other character is new text,
-/// wherever it was typed. Characters deleted are taken from the end: the
-/// field cannot tell which of its mask characters went.
-pub fn apply_masked_edit(secret: &mut String, shown: &str) {
-    let mut old = secret.chars();
-    let mut edited = String::new();
-    for character in shown.chars() {
-        if character == MASK {
-            if let Some(kept) = old.next() {
-                edited.push(kept);
-            }
-        } else {
-            edited.push(character);
-        }
-    }
-    *secret = edited;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,32 +101,5 @@ mod tests {
         assert_eq!(range_name(86_400), "24 h");
         assert_eq!(unit_name(Unit::Fraction), "Percent (0 to 1)");
         assert_eq!(kind_name(Kind::Chart), "Chart");
-    }
-
-    #[test]
-    fn masked_edits_append_and_delete_at_the_end() {
-        let mut token = String::new();
-        apply_masked_edit(&mut token, "a");
-        apply_masked_edit(&mut token, "*b");
-        apply_masked_edit(&mut token, "**cd");
-        assert_eq!(token, "abcd");
-        assert_eq!(mask(token.chars().count()), "****");
-        apply_masked_edit(&mut token, "***");
-        assert_eq!(token, "abc");
-        apply_masked_edit(&mut token, "");
-        assert_eq!(token, "");
-    }
-
-    #[test]
-    fn masked_edits_keep_the_secret_when_typing_elsewhere_than_the_end() {
-        let mut token = String::from("abcd");
-        // Typed in the middle, then at the start.
-        apply_masked_edit(&mut token, "**x**");
-        assert_eq!(token, "abxcd");
-        apply_masked_edit(&mut token, "y*****");
-        assert_eq!(token, "yabxcd");
-        // A pasted value replaces the whole field.
-        apply_masked_edit(&mut token, "glsa_pasted");
-        assert_eq!(token, "glsa_pasted");
     }
 }

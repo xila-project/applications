@@ -15,9 +15,7 @@ use dashboard::{
     model::Reload,
     net::device::Devices,
     storage::{MAXIMUM_TOKEN_LENGTH, Storage},
-    text::{
-        apply_masked_edit, error_message, invalid_message, kind_name, mask, range_name, unit_name,
-    },
+    text::{error_message, invalid_message, kind_name, range_name, unit_name},
 };
 use embedded_i18n::t;
 use std::{thread::sleep, time::Duration};
@@ -241,11 +239,7 @@ impl Settings {
             let content = flex(self.token_section, FlexFlow::Row)?;
             self.token_content = content;
             if editing {
-                let field = field(
-                    content,
-                    &mask(self.token.chars().count()),
-                    MAXIMUM_TOKEN_LENGTH as u32,
-                )?;
+                let field = field(content, "", MAXIMUM_TOKEN_LENGTH as u32)?;
                 object_set_width(field, 0)?;
                 object_set_flex_grow(field, 1)?;
                 let (toggle, toggle_label) =
@@ -255,6 +249,7 @@ impl Settings {
                 self.token_toggle_label = toggle_label;
                 self.token_visible = false;
                 self.actions.push((toggle, Action::ToggleToken));
+                self.refresh_token_shown()?;
             } else {
                 let text = label(content, t!("settings.token_set"), FONT_MEDIUM)?;
                 object_set_width(text, 0)?;
@@ -269,14 +264,23 @@ impl Settings {
         Ok(())
     }
 
+    /// Shows the token field as the secret while it is visible, as the mask
+    /// while it is hidden.
+    unsafe fn refresh_token_shown(&self) -> wasm::Result<()> {
+        let shown = if self.token_visible {
+            self.token.clone()
+        } else if self.token.is_empty() {
+            String::new()
+        } else {
+            String::from(SECRET_MASK)
+        };
+        unsafe { set_field_bounded(self.token_field, &shown, MAXIMUM_TOKEN_LENGTH as u32) }
+    }
+
     unsafe fn toggle_token(&mut self) -> wasm::Result<()> {
         self.token_visible = !self.token_visible;
         unsafe {
-            if self.token_visible {
-                set_field(self.token_field, &self.token)?;
-            } else {
-                set_field(self.token_field, &mask(self.token.chars().count()))?;
-            }
+            self.refresh_token_shown()?;
             let caption = if self.token_visible {
                 t!("settings.hide")
             } else {
@@ -293,11 +297,17 @@ impl Settings {
             self.token = shown;
             return Ok(());
         }
-        let before = self.token.clone();
-        apply_masked_edit(&mut self.token, &shown);
-        let masked = mask(self.token.chars().count());
-        if shown != masked || before != self.token {
-            unsafe { set_field(self.token_field, &masked)? };
+        // Hidden, the field shows the mask: an edit cannot be told apart from
+        // the mask, so it is discarded and the mask shown again. Setting the
+        // same text again would send another change event, so only reset when
+        // the text differs.
+        let masked = if self.token.is_empty() {
+            String::new()
+        } else {
+            String::from(SECRET_MASK)
+        };
+        if shown != masked {
+            unsafe { self.refresh_token_shown()? };
         }
         Ok(())
     }
