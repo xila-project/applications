@@ -522,6 +522,7 @@ mod tests {
             login_flow_body(),
             "{\"client_id\":\"https://xila.dev/applications/home-assistant/\",\"handler\":[\"homeassistant\",null],\"redirect_uri\":\"https://xila.dev/applications/home-assistant/\"}"
         );
+        // codeql[rs/hardcoded-credentials]: test fixture, not a real credential
         assert_eq!(
             credentials_body("alice", "s3cret \"quoted\"\n"),
             "{\"client_id\":\"https://xila.dev/applications/home-assistant/\",\"username\":\"alice\",\"password\":\"s3cret \\\"quoted\\\"\\n\"}"
@@ -531,6 +532,7 @@ mod tests {
             "{\"client_id\":\"https://xila.dev/applications/home-assistant/\",\"code\":\"123456\"}"
         );
         // The bodies parse back as JSON objects.
+        // codeql[rs/hardcoded-credentials]: test fixture, not a real credential
         for body in [login_flow_body(), credentials_body("a", "b"), mfa_body("1")] {
             let mut reader = Reader::new(SliceSource::new(body.as_bytes()));
             reader
@@ -664,6 +666,7 @@ mod tests {
         let mut connector = recorder(&[&ok(
             r#"{"type":"create_entry","title":"Alice","result":"auth-code-1"}"#,
         )]);
+        // codeql[rs/hardcoded-credentials]: test fixture, not a real credential
         let result = submit_login_flow(
             &mut connector,
             &endpoint(),
