@@ -523,7 +523,7 @@ mod tests {
             "{\"client_id\":\"https://xila.dev/applications/home-assistant/\",\"handler\":[\"homeassistant\",null],\"redirect_uri\":\"https://xila.dev/applications/home-assistant/\"}"
         );
         assert_eq!(
-            // codeql[rs/hardcoded-credentials]: test fixture, not a real credential
+            // codeql[rust/hard-coded-cryptographic-value]: test fixture, not a real credential
             credentials_body("alice", "s3cret \"quoted\"\n"),
             "{\"client_id\":\"https://xila.dev/applications/home-assistant/\",\"username\":\"alice\",\"password\":\"s3cret \\\"quoted\\\"\\n\"}"
         );
@@ -534,7 +534,7 @@ mod tests {
         // The bodies parse back as JSON objects.
         for body in [
             login_flow_body(),
-            // codeql[rs/hardcoded-credentials]: test fixture, not a real credential
+            // codeql[rust/hard-coded-cryptographic-value]: test fixture, not a real credential
             credentials_body("a", "b"),
             mfa_body("1"),
         ] {
@@ -674,7 +674,7 @@ mod tests {
             &mut connector,
             &endpoint(),
             "f1",
-            // codeql[rs/hardcoded-credentials]: test fixture, not a real credential
+            // codeql[rust/hard-coded-cryptographic-value]: test fixture, not a real credential
             &credentials_body("alice", "pw"),
         )
         .unwrap();
