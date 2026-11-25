@@ -219,9 +219,15 @@ impl<S: Source> Reader<S> {
         let bytes = match String::from_utf8(bytes) {
             Ok(text) => text.into_bytes(),
             Err(error) => {
-                // Drop the incomplete character the read window cut in half.
-                let valid_up_to = error.utf8_error().valid_up_to();
+                let utf8_error = error.utf8_error();
+                let valid_up_to = utf8_error.valid_up_to();
+                // Only an incomplete character at the cut may be dropped;
+                // any other invalid byte fails the answer.
+                let invalid = utf8_error.error_len().is_some();
                 let mut bytes = error.into_bytes();
+                if invalid {
+                    return Err(Error::InvalidResponse);
+                }
                 bytes.truncate(valid_up_to);
                 bytes
             }
@@ -485,6 +491,14 @@ mod tests {
         assert_eq!(reader("\"aéééé\"").truncated_string(2).unwrap(), "a");
         assert_eq!(reader("\"aéééé\"").truncated_string(4).unwrap(), "aé");
         assert_eq!(reader("\"日本語です\"").truncated_string(4).unwrap(), "日");
+        // An invalid byte inside the string still fails, cut or not.
+        let mut invalid = Reader::new(SliceSource::new(b"\"a\xFFb\""));
+        assert_eq!(invalid.truncated_string(10), Err(Error::InvalidResponse));
+        let mut invalid_long = Reader::new(SliceSource::new(b"\"a\xFFbbbbbbbbbbbbbbbbbbbb\""));
+        assert_eq!(
+            invalid_long.truncated_string(4),
+            Err(Error::InvalidResponse)
+        );
         assert_eq!(reader("{\"a\" 1}").skip(), Ok(()), "skip is lenient");
         assert_eq!(
             reader("{\"a\" 1}").object(|json, _| json.skip()),
