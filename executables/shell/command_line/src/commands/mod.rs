@@ -1,9 +1,13 @@
 mod authentication;
 mod change_directory;
 mod chmod;
+#[cfg(feature = "time-commands")]
+mod civil_time;
 mod clear;
 mod concatenate;
 mod cp;
+#[cfg(feature = "time-commands")]
+mod date;
 mod directory;
 #[cfg(feature = "network")]
 mod dns;
@@ -24,12 +28,16 @@ mod mv;
 mod ping;
 mod power;
 mod print_working_directory;
+#[cfg(feature = "time-commands")]
+mod real_time_clock;
 mod realpath;
 mod sleep;
 mod statistics;
 mod tail;
 mod touch;
 mod tree;
+#[cfg(feature = "time-commands")]
+mod uptime;
 #[cfg(feature = "network")]
 mod web_request;
 mod which;
@@ -71,6 +79,8 @@ use self::{
     which::WhichCommand,
     word_count::WordCountCommand,
 };
+#[cfg(feature = "time-commands")]
+use self::{date::DateCommand, real_time_clock::RealTimeClockCommand, uptime::UptimeCommand};
 #[cfg(feature = "network")]
 use self::{
     dns::DnsResolveCommand, ip::IpCommand, ping::PingCommand, web_request::WebRequestCommand,
@@ -147,6 +157,12 @@ pub enum UserCommandKind {
     Link,
     ReadLink,
     Find,
+    #[cfg(feature = "time-commands")]
+    Date,
+    #[cfg(feature = "time-commands")]
+    Uptime,
+    #[cfg(feature = "time-commands")]
+    RealTimeClock,
     /// Handled by `Shell::run_arguments` before built-ins; listed for `help`.
     Sudo,
 }
@@ -288,6 +304,20 @@ const BUILTINS: &[(&str, UserCommandKind, &str)] = &[
         UserCommandKind::Touch,
         "Usage: touch FILE...\nCreate missing files and update access and modification times.",
     ),
+    #[cfg(feature = "time-commands")]
+    ("date", UserCommandKind::Date, date::DateArguments::HELP),
+    #[cfg(feature = "time-commands")]
+    (
+        "real_time_clock",
+        UserCommandKind::RealTimeClock,
+        real_time_clock::RealTimeClockArguments::HELP,
+    ),
+    #[cfg(feature = "time-commands")]
+    (
+        "uptime",
+        UserCommandKind::Uptime,
+        uptime::UptimeArguments::HELP,
+    ),
     (
         "sudo",
         UserCommandKind::Sudo,
@@ -391,6 +421,14 @@ where
         UserCommandKind::Copy => CopyCommand.execute(context, options, paths).await,
         UserCommandKind::Link => ln::LinkCommand.execute(context, options, paths).await,
         UserCommandKind::ReadLink => ln::ReadLinkCommand.execute(context, options, paths).await,
+        #[cfg(feature = "time-commands")]
+        UserCommandKind::Date => DateCommand.execute(context, options, paths).await,
+        #[cfg(feature = "time-commands")]
+        UserCommandKind::Uptime => UptimeCommand.execute(context, options, paths).await,
+        #[cfg(feature = "time-commands")]
+        UserCommandKind::RealTimeClock => {
+            RealTimeClockCommand.execute(context, options, paths).await
+        }
         // `sudo` reads a password from the Shell's own input, so the Shell runs
         // it before resolving built-ins and it never reaches this dispatch.
         UserCommandKind::Sudo => Err(crate::Error::SudoUsage),

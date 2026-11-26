@@ -8,17 +8,30 @@ license.workspace = true
 [dependencies]
 embassy-futures = { workspace = true }
 embedded-i18n = { workspace = true }
+device = { workspace = true, optional = true }
+time_zone = { workspace = true, optional = true }
 xila = { workspace = true, default-features = false }
 getargs = { version = "0.5", default-features = false }
 getargs-derive = { workspace = true }
 
 [features]
-default = ["network"]
+default = ["network", "time-commands"]
 network = ["xila/network"]
+# The date, uptime and real_time_clock commands. Off on flash-constrained
+# boards such as the Nano 33 BLE, which builds this shell with
+# default-features = false.
+time-commands = [
+  "dep:device",
+  "dep:time_zone",
+  "xila/time_services",
+  "xila/time_zone",
+]
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dev-dependencies]
 task = { workspace = true, features = ["test_harness"] }
 drivers_core = { workspace = true }
+drivers_peripherals = { workspace = true, features = ["real-time-clock"] }
+peripherals = { workspace = true, features = ["mock"] }
 time = { workspace = true }
 little_fs = { workspace = true }
 testing = { workspace = true }

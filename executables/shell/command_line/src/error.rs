@@ -88,6 +88,33 @@ pub enum Error<'a> {
     SudoEchoNotSuppressed(virtual_file_system::IoErrorKind),
     /// The password line is longer than the maximum; it was read to its end.
     SudoPasswordTooLong,
+    /// The argument is not an ISO 8601 UTC date and time.
+    #[cfg(feature = "time-commands")]
+    InvalidDateTime,
+    /// The given time is earlier than the build date of this firmware.
+    #[cfg(feature = "time-commands")]
+    BeforeBuildDate,
+    /// The command is reserved to the root user.
+    #[cfg(feature = "time-commands")]
+    NotRoot,
+    /// `TZ` is set but is not a valid POSIX time zone rule string.
+    #[cfg(feature = "time-commands")]
+    InvalidTimeZone(xila::time_zone::ParseError),
+    /// The real-time clock holds no valid time.
+    #[cfg(feature = "time-commands")]
+    RealTimeClockNotValid,
+    /// Unknown subcommand of a command that takes one.
+    #[cfg(feature = "time-commands")]
+    InvalidSubcommand(&'static str),
+    /// A control command on a device node failed.
+    #[cfg(feature = "time-commands")]
+    FailedToControlDevice(virtual_file_system::IoErrorKind),
+    /// The time manager could not serve the request.
+    #[cfg(feature = "time-commands")]
+    Time(xila::time::Error),
+    /// The privileged manual UTC set failed.
+    #[cfg(feature = "time-commands")]
+    ManualTime(xila::time::manual::ManualError),
 }
 
 impl<A: getargs::Argument> From<getargs::Error<A>> for Error<'_> {
@@ -422,6 +449,34 @@ impl Display for Error<'_> {
             Error::SudoPasswordTooLong => {
                 write!(formatter, "{}", t!("sudo.errors.password_too_long"))
             }
+            #[cfg(feature = "time-commands")]
+            Error::InvalidDateTime => write!(formatter, "{}", t!("errors.invalid_date_time")),
+            #[cfg(feature = "time-commands")]
+            Error::BeforeBuildDate => write!(formatter, "{}", t!("errors.before_build_date")),
+            #[cfg(feature = "time-commands")]
+            Error::NotRoot => write!(formatter, "{}", t!("errors.not_root")),
+            #[cfg(feature = "time-commands")]
+            Error::InvalidTimeZone(error) => write!(formatter, "{error}"),
+            #[cfg(feature = "time-commands")]
+            Error::RealTimeClockNotValid => {
+                write!(formatter, "{}", t!("errors.real_time_clock_not_valid"))
+            }
+            #[cfg(feature = "time-commands")]
+            Error::InvalidSubcommand(command) => write!(
+                formatter,
+                "{}",
+                t!("errors.invalid_subcommand", arg0 = command)
+            ),
+            #[cfg(feature = "time-commands")]
+            Error::FailedToControlDevice(error) => write!(
+                formatter,
+                "{}",
+                t!("errors.failed_to_control_device", arg0 = error)
+            ),
+            #[cfg(feature = "time-commands")]
+            Error::Time(error) => write!(formatter, "{error}"),
+            #[cfg(feature = "time-commands")]
+            Error::ManualTime(error) => write!(formatter, "{error}"),
             Error::FailedToReadEnvironmentVariable(error) => {
                 write!(
                     formatter,

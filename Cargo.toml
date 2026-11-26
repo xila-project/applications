@@ -55,9 +55,11 @@ testing = { package = "xila-testing", git = "https://github.com/xila-project/cor
   "graphics",
 ] }
 device = { package = "xila-device", git = "https://github.com/xila-project/core", branch = "main" }
+time_zone = { package = "xila-time-zone", git = "https://github.com/xila-project/core", branch = "main" }
 
 # - Drivers
 drivers_core = { package = "xila-drivers-core", git = "https://github.com/xila-project/core", branch = "main" }
+drivers_peripherals = { package = "xila-drivers-peripherals", git = "https://github.com/xila-project/core", branch = "main" }
 
 # - Executables
 file_manager = { package = "xila-file-manager", path = "executables/file_manager" }

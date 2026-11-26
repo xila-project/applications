@@ -113,6 +113,26 @@ the destination is an existing directory, the source filename is appended to
 it. Directory sources, recursive copies, and copying a file onto itself are
 unsupported. The copy uses a fixed 512-byte buffer.
 
+## Time and the real-time clock
+
+`date` prints the current UTC time, the local time when the task's `TZ`
+variable holds a POSIX time zone rule string (parsed with `xila-time-zone`, no
+IANA table), and the UTC synchronization status and source: unsynchronized,
+build date, real-time clock, network, manual or host. `date --set TIME` sets UTC
+from an ISO 8601 UTC time such as `2026-11-26T12:34:56Z`; only root may set it,
+and a successful set is written back to the real-time clock by the firmware's
+write-back task. Setting the time needs a root login: `sudo` runs external
+commands only, so `sudo date --set ...` does not work.
+
+`uptime` prints the time since boot, read from the monotonic clock. Timers and
+deadlines never use the real-time clock.
+
+`real_time_clock {show|system_to_clock|clock_to_system}` operates the
+`/devices/time/real_time_clock` device node. `show` prints the UTC time the
+clock holds, or that it holds no valid time. `system_to_clock` sets the clock
+from the system UTC time, and `clock_to_system` sets the system UTC time from
+the clock (recorded with the real-time clock source); both are root only.
+
 ## Running a command as root
 
 `sudo [-u USER] COMMAND [ARGUMENT]...` runs one external command as root, or
