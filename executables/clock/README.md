@@ -5,8 +5,9 @@ Shadcn theme. This is the first increment of [#310](https://github.com/xila-proj
 
 ## Available views
 
-- **Clock:** UTC date/time from the host, with a saved 12/24-hour switch. Wide
-  windows frame the time with a seconds ring.
+- **Clock:** local date and time with the zone abbreviation (for example
+  `CET`), with a saved 12/24-hour switch. Wide windows frame the time with a
+  seconds ring.
 - **Alarm:** one saved alarm. Hour and minute come from wrapping rollers, and
   weekday chips select repeat days (none means a one-time occurrence). Actions
   enable, disable or delete it; a ringing alarm offers a five-minute snooze and
@@ -21,9 +22,18 @@ Alerts (alarm ringing, timer finished, snoozed, settings not saved) appear in a
 banner above the tabs only while they apply. Windows smaller than 560×360 use a
 compact arrangement: smaller tab titles, top-aligned scrolling tabs and smaller
 rings. Controls use buttons, rollers, a switch and theme variants, so no
-keyboard is required. All alarm times are explicitly **UTC**; no fixed city
-offsets are presented as timezone support. The host supplies the date/time,
-including whether its clock is set correctly.
+keyboard is required. The host supplies the UTC date/time, including whether
+its clock is set correctly.
+
+## Time zone
+
+Clock shows local time in the system time zone. Xila gives every task the
+POSIX TZ string of the zone in the `TZ` environment variable (set in Settings
+or with the `time_zone` command), and Clock reads it through WASI once, when
+it starts: a change applies when Clock starts again. Without `TZ`, or with a
+string that does not parse, Clock uses UTC. Conversions use `xila-time-zone`
+with no zone table, which adds about 8 KB to the guest (125,934 to 134,184
+bytes for `release-wasm`).
 
 ## Build and run
 
@@ -63,9 +73,18 @@ or changing tabs does not lose time. WASI clock reads and absolute clock polls
 use the same executor clock; wall-clock corrections do not move their deadlines.
 Suspend behavior depends on the platform's Embassy clock driver.
 
-Alarms use wall time. A new one-time alarm targets the next matching UTC time,
-including tomorrow if today's time has passed. Repeating weekdays use
-Monday through Sunday. A delayed check or restart coalesces missed occurrences
+Alarms use local wall time. A new one-time alarm targets the next matching
+local time, including tomorrow if today's time has passed. Repeating weekdays
+use Monday through Sunday, in local days. At a daylight saving change:
+
+- a local time that is skipped (02:30 when 02:00 becomes 03:00) rings after the
+  change, as late as the skipped time: at 03:30, as POSIX `mktime` does;
+- a local time that happens twice (02:30 when 03:00 becomes 02:00) rings once,
+  at its first occurrence.
+
+When Clock starts with another time zone, a saved alarm in the future is
+scheduled again for the new zone; an occurrence already due is kept, so that it
+still rings once. A delayed check or restart coalesces missed occurrences
 into **one** alert; it does not replay every missed day. A backward correction
 waits for the already scheduled occurrence and does not replay a fired alarm.
 Changing an alarm and saving it creates a new schedule. Alarm state is persisted
@@ -106,7 +125,7 @@ power loss. Shared storage also does not serialize concurrent app instances.
 
 ## Follow-up work in #310
 
-- Saved city/world clocks and daylight-saving-aware timezone data/APIs.
+- Saved city/world clocks.
 - Multiple alarms with labels, user-scoped settings, and concurrent editing.
 - Host-owned scheduling/notifications for delivery after the guest exits, plus
   platform-specific RTC wake capabilities.

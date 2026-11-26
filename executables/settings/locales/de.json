@@ -87,12 +87,47 @@
     }
   },
   "general": {
-    "status": {
-      "coming_soon": "Allgemeine Einstellungen werden hier später ergänzt."
-    },
     "fields": {
       "locale": "Sprache:",
       "language": "Sprache"
+    },
+    "time_zone": {
+      "title": "Zeitzone",
+      "preview": "Ortszeit",
+      "custom": "Eigene TZ-Zeichenkette",
+      "custom_hint": "POSIX-TZ-Format, zum Beispiel CET-1CEST,M3.5.0,M10.5.0/3 für Paris.",
+      "custom_name": "Eigene",
+      "apply_custom": "Diese TZ-Zeichenkette verwenden",
+      "apply_zone": "Diese Zone verwenden",
+      "region": "Region",
+      "zone": "Zone",
+      "other_region": "Andere",
+      "saved": "Zeitzone gespeichert. Ab jetzt gestartete Anwendungen verwenden sie.",
+      "unsynchronized": "Die Uhr ist nicht gestellt.",
+      "errors": {
+        "invalid": "Dies ist keine gültige POSIX-TZ-Zeichenkette.",
+        "too_long": "Diese TZ-Zeichenkette ist zu lang.",
+        "permission_denied": "Nur ein Administrator kann die Zeitzone ändern.",
+        "save_failed": "Die Zeitzone konnte nicht gespeichert werden."
+      },
+      "editor": "Auswahl nach",
+      "editors": {
+        "zone": "Zonenname",
+        "offset": "UTC-Versatz",
+        "string": "TZ-Zeichenkette (erweitert)"
+      },
+      "form": {
+        "offset": "UTC-Versatz",
+        "minutes": "Minuten",
+        "daylight_saving": "Sommerzeit",
+        "rules": "Regeln",
+        "presets": {
+          "european_union": "Europäische Union",
+          "united_states": "Vereinigte Staaten"
+        },
+        "generated": "Erzeugte TZ-Zeichenkette",
+        "apply": "Diesen Versatz verwenden"
+      }
     }
   },
   "common": {

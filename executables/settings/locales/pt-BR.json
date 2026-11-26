@@ -87,12 +87,47 @@
     }
   },
   "general": {
-    "status": {
-      "coming_soon": "As configurações gerais serão implementadas aqui."
-    },
     "fields": {
       "locale": "Idioma:",
       "language": "Idioma"
+    },
+    "time_zone": {
+      "title": "Fuso horário",
+      "preview": "Hora local",
+      "custom": "String TZ personalizada",
+      "custom_hint": "Formato TZ POSIX, por exemplo CET-1CEST,M3.5.0,M10.5.0/3 para Paris.",
+      "custom_name": "Personalizado",
+      "apply_custom": "Usar esta string TZ",
+      "apply_zone": "Usar este fuso",
+      "region": "Região",
+      "zone": "Fuso",
+      "other_region": "Outros",
+      "saved": "Fuso horário salvo. Os aplicativos abertos a partir de agora o usam.",
+      "unsynchronized": "O relógio não está ajustado.",
+      "errors": {
+        "invalid": "Esta não é uma string TZ POSIX válida.",
+        "too_long": "Esta string TZ é longa demais.",
+        "permission_denied": "Somente um administrador pode alterar o fuso horário.",
+        "save_failed": "Não foi possível salvar o fuso horário."
+      },
+      "editor": "Escolher por",
+      "editors": {
+        "zone": "Nome do fuso",
+        "offset": "Deslocamento UTC",
+        "string": "String TZ (avançado)"
+      },
+      "form": {
+        "offset": "Deslocamento UTC",
+        "minutes": "Minutos",
+        "daylight_saving": "Horário de verão",
+        "rules": "Regras",
+        "presets": {
+          "european_union": "União Europeia",
+          "united_states": "Estados Unidos"
+        },
+        "generated": "String TZ gerada",
+        "apply": "Usar este deslocamento"
+      }
     }
   },
   "common": {

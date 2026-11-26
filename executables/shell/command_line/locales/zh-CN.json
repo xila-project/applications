@@ -147,5 +147,18 @@
     "prompts": {
       "password": "[sudo] {arg0} 的密码："
     }
+  },
+  "time_zone": {
+    "labels": {
+      "string": "TZ 字符串",
+      "local": "本地时间"
+    },
+    "unsynchronized": "未设置（时钟未同步）",
+    "no_names": "此版本没有时区名称；请提供 POSIX TZ 字符串。",
+    "saved": "时区已保存。此后启动的程序将使用它。",
+    "errors": {
+      "invalid": "无效的时区：请提供 POSIX TZ 字符串，例如 CET-1CEST,M3.5.0,M10.5.0/3，或 time_zone -l 列出的时区名称。",
+      "failed_to_set": "无法保存时区：{arg0}"
+    }
   }
 }

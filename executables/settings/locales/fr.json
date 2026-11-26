@@ -87,12 +87,47 @@
     }
   },
   "general": {
-    "status": {
-      "coming_soon": "Les réglages généraux seront implémentés ici."
-    },
     "fields": {
       "locale": "Langue :",
       "language": "Langue"
+    },
+    "time_zone": {
+      "title": "Fuseau horaire",
+      "preview": "Heure locale",
+      "custom": "Chaîne TZ personnalisée",
+      "custom_hint": "Format TZ POSIX, par exemple CET-1CEST,M3.5.0,M10.5.0/3 pour Paris.",
+      "custom_name": "Personnalisé",
+      "apply_custom": "Utiliser cette chaîne TZ",
+      "apply_zone": "Utiliser ce fuseau",
+      "region": "Région",
+      "zone": "Fuseau",
+      "other_region": "Autres",
+      "saved": "Fuseau horaire enregistré. Les applications lancées à partir de maintenant l’utilisent.",
+      "unsynchronized": "L’horloge n’est pas réglée.",
+      "errors": {
+        "invalid": "Ce n’est pas une chaîne TZ POSIX valide.",
+        "too_long": "Cette chaîne TZ est trop longue.",
+        "permission_denied": "Seul un administrateur peut changer le fuseau horaire.",
+        "save_failed": "Le fuseau horaire n’a pas pu être enregistré."
+      },
+      "editor": "Choisir par",
+      "editors": {
+        "zone": "Nom du fuseau",
+        "offset": "Décalage UTC",
+        "string": "Chaîne TZ (avancé)"
+      },
+      "form": {
+        "offset": "Décalage UTC",
+        "minutes": "Minutes",
+        "daylight_saving": "Heure d’été",
+        "rules": "Règles",
+        "presets": {
+          "european_union": "Union européenne",
+          "united_states": "États-Unis"
+        },
+        "generated": "Chaîne TZ générée",
+        "apply": "Utiliser ce décalage"
+      }
     }
   },
   "common": {

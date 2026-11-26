@@ -10,7 +10,7 @@
       "save_and_enable": "Salva e attiva"
     },
     "instructions": {
-      "repeat_days_utc": "Ripeti nei giorni selezionati; nessuna selezione significa una sola volta. Tutti gli orari sono UTC."
+      "repeat_days_local": "Ripeti nei giorni scelti; nessuno significa una volta. Gli orari sono locali: un orario saltato dal cambio dell'ora suona dopo il cambio (02:30 diventa 03:30) e un orario ripetuto suona una volta, la prima."
     },
     "status": {
       "disabled": "Disattivata",
@@ -43,7 +43,7 @@
       "host_unavailable": "Orologio di sistema non disponibile"
     },
     "instructions": {
-      "utc_only": "UTC / ora di sistema. I fusi orari delle città non sono ancora disponibili."
+      "local_time": "Ora locale del fuso orario impostato in Impostazioni."
     }
   },
   "errors": {

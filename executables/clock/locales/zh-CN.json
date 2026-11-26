@@ -10,7 +10,7 @@
       "save_and_enable": "保存并启用"
     },
     "instructions": {
-      "repeat_days_utc": "在选定的星期重复；不选则仅提醒一次。所有时间均为 UTC。"
+      "repeat_days_local": "在所选日期重复；不选表示仅一次。时间为本地时间：因夏令时切换而跳过的时间在切换后响铃（02:30 变为 03:30），重复的时间只在第一次响铃。"
     },
     "status": {
       "disabled": "已停用",
@@ -43,7 +43,7 @@
       "host_unavailable": "主机时钟不可用"
     },
     "instructions": {
-      "utc_only": "使用 UTC / 主机时钟，暂不支持城市时区。"
+      "local_time": "“设置”中所选时区的本地时间。"
     }
   },
   "errors": {

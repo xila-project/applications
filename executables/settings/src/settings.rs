@@ -58,7 +58,7 @@ impl Settings {
 
         // Create tabs
         let mut tabs = [
-            Tab::General(GeneralTab::new()),
+            Tab::General(GeneralTab::new(context)),
             Tab::Appearance(AppearanceTab::new(context).await),
             Tab::Password(PasswordTab::new(context)),
             Tab::Network(NetworkTab::new(context)),
@@ -80,6 +80,7 @@ impl Settings {
 
     pub async fn handle_events(&mut self) -> bool {
         let mut needs_refresh = false;
+        let mut needs_preview = false;
         graphics::lock!(self.graphics_manager, {
             while let Some(event) = self.window.pop_event() {
                 // Logique de filtrage spécifique à Settings
@@ -96,20 +97,36 @@ impl Settings {
                 }
             }
             for tab in &mut self.tabs {
-                if let Tab::Network(network) = tab {
-                    network.refresh().await;
-                    needs_refresh = network.needs_refresh();
+                match tab {
+                    Tab::Network(network) => {
+                        network.refresh().await;
+                        needs_refresh |= network.needs_refresh();
+                    }
+                    // The local time preview changes every second.
+                    Tab::General(general) if general.is_active() => {
+                        general.refresh();
+                        needs_preview = true;
+                    }
+                    _ => {}
                 }
             }
         });
 
+        // A time zone change is written after the graphics lock is released.
+        for tab in &mut self.tabs {
+            if let Tab::General(general) = tab {
+                general.save_pending(self.graphics_manager).await;
+            }
+        }
+
         let events = task::suspend(|ctx| {
             self.window.register_waker(ctx.waker());
         });
-        if needs_refresh {
+        if needs_refresh || needs_preview {
+            let delay = if needs_refresh { 250 } else { 1000 };
             embassy_futures::select::select(
                 events,
-                task::sleep(core::time::Duration::from_millis(250)),
+                task::sleep(core::time::Duration::from_millis(delay)),
             )
             .await;
         } else {

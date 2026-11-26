@@ -10,7 +10,7 @@
       "save_and_enable": "Guardar y activar"
     },
     "instructions": {
-      "repeat_days_utc": "Repetir los días seleccionados; sin seleccionar ninguno, sonará una sola vez. Todas las horas están en UTC."
+      "repeat_days_local": "Repetir los días elegidos; ninguno significa una vez. Las horas son locales: una hora saltada por un cambio de horario suena después del cambio (02:30 pasa a 03:30), y una hora repetida suena una vez, la primera."
     },
     "status": {
       "disabled": "Desactivada",
@@ -43,7 +43,7 @@
       "host_unavailable": "Reloj del sistema no disponible"
     },
     "instructions": {
-      "utc_only": "UTC / hora del sistema. Las zonas horarias de ciudades aún no están disponibles."
+      "local_time": "Hora local de la zona horaria elegida en Ajustes."
     }
   },
   "errors": {

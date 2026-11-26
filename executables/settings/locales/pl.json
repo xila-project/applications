@@ -87,12 +87,47 @@
     }
   },
   "general": {
-    "status": {
-      "coming_soon": "Ustawienia ogólne zostaną dodane tutaj."
-    },
     "fields": {
       "locale": "Język:",
       "language": "Język"
+    },
+    "time_zone": {
+      "title": "Strefa czasowa",
+      "preview": "Czas lokalny",
+      "custom": "Własny ciąg TZ",
+      "custom_hint": "Format TZ POSIX, na przykład CET-1CEST,M3.5.0,M10.5.0/3 dla Paryża.",
+      "custom_name": "Własna",
+      "apply_custom": "Użyj tego ciągu TZ",
+      "apply_zone": "Użyj tej strefy",
+      "region": "Region",
+      "zone": "Strefa",
+      "other_region": "Inne",
+      "saved": "Zapisano strefę czasową. Aplikacje uruchamiane od teraz będą jej używać.",
+      "unsynchronized": "Zegar nie jest ustawiony.",
+      "errors": {
+        "invalid": "To nie jest prawidłowy ciąg TZ POSIX.",
+        "too_long": "Ten ciąg TZ jest za długi.",
+        "permission_denied": "Tylko administrator może zmienić strefę czasową.",
+        "save_failed": "Nie można zapisać strefy czasowej."
+      },
+      "editor": "Wybierz według",
+      "editors": {
+        "zone": "Nazwa strefy",
+        "offset": "Przesunięcie UTC",
+        "string": "Ciąg TZ (zaawansowane)"
+      },
+      "form": {
+        "offset": "Przesunięcie UTC",
+        "minutes": "Minuty",
+        "daylight_saving": "Czas letni",
+        "rules": "Reguły",
+        "presets": {
+          "european_union": "Unia Europejska",
+          "united_states": "Stany Zjednoczone"
+        },
+        "generated": "Wygenerowany ciąg TZ",
+        "apply": "Użyj tego przesunięcia"
+      }
     }
   },
   "common": {

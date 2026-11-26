@@ -6,7 +6,49 @@ pub mod sound;
 #[cfg(any(test, target_arch = "wasm32"))]
 pub mod storage;
 
+pub use time_zone::TimeZone;
+use time_zone::{DateTime, LocalToUtc};
+
 pub const MAX_LAPS: usize = 32;
+
+/// The time zone of the guest: the POSIX TZ string of its `TZ` environment
+/// variable, which Xila gives every task from the system setting. UTC when the
+/// variable is missing or does not parse. The guest reads it once at start, so
+/// a change in Settings applies when Clock starts again.
+pub fn zone_from_environment(value: Option<&str>) -> TimeZone {
+    value
+        .and_then(|value| TimeZone::parse(value).ok())
+        .unwrap_or_else(|| TimeZone::parse("UTC0").expect("UTC0 is a valid TZ string"))
+}
+
+/// The UTC instant of a local wall time, with the daylight saving rules of
+/// alarms:
+///
+/// - A repeated local time (the autumn change) rings once, at its first
+///   occurrence.
+/// - A skipped local time (the spring change) rings after the change, as late
+///   as the skipped hour: 02:30 becomes 03:30 when the clocks go from 02:00 to
+///   03:00, as POSIX `mktime` does.
+pub fn local_to_utc(zone: &TimeZone, local_seconds: i64) -> i64 {
+    let utc_calendar = TimeZone::parse("UTC0").expect("UTC0 is a valid TZ string");
+    let local = utc_calendar.from_utc(local_seconds).date_time;
+    let date_time = DateTime {
+        year: local.year,
+        month: local.month,
+        day: local.day,
+        hour: local.hour,
+        minute: local.minute,
+        second: local.second,
+    };
+    match zone.to_utc(date_time) {
+        LocalToUtc::Unique(utc) => utc,
+        LocalToUtc::Ambiguous { earlier, .. } => earlier,
+        // The offset before the change: transitions are more than a day apart.
+        LocalToUtc::Nonexistent => {
+            local_seconds - i64::from(zone.offset_at(local_seconds - 86_400))
+        }
+    }
+}
 pub const SETTINGS_SIZE: usize = 26;
 
 #[derive(Default)]
@@ -160,7 +202,10 @@ impl Timer {
     }
 }
 
-/// A UTC alarm. Weekday bits are Monday=1 through Sunday=64; zero means once.
+/// An alarm at a local wall time of the guest's time zone. Weekday bits are
+/// Monday=1 through Sunday=64, in local days; zero means once. `next` and
+/// `last_fired` are UTC seconds; see [`local_to_utc`] for the daylight saving
+/// changes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Alarm {
     pub hour: u8,
@@ -185,32 +230,43 @@ impl Alarm {
             last_fired: None,
         })
     }
-    pub fn arm(&mut self, now: u64) {
+    pub fn arm(&mut self, now: u64, zone: &TimeZone) {
         self.enabled = true;
-        self.schedule(now);
+        self.schedule(now, zone);
     }
-    fn schedule(&mut self, now: u64) {
+    /// Schedule again with `zone`, for example after Clock starts with a new
+    /// time zone. An occurrence already due is kept, so that a missed alarm
+    /// still rings once.
+    pub fn reschedule(&mut self, now: u64, zone: &TimeZone) {
+        if self.enabled && self.next.is_some_and(|next| next > now) {
+            self.schedule(now, zone);
+        }
+    }
+    fn schedule(&mut self, now: u64, zone: &TimeZone) {
         self.next = None;
         let after = now.max(self.last_fired.unwrap_or(0));
-        let day = after / 86400;
-        for offset in 0..=7 {
-            let Some(date) = day.checked_add(offset) else {
-                break;
-            };
-            let Some(candidate) = date.checked_mul(86400).and_then(|n| {
-                n.checked_add(u64::from(self.hour) * 3600 + u64::from(self.minute) * 60)
-            }) else {
-                break;
-            };
-            let weekday = (date % 7 + 3) % 7;
-            if candidate > after && (self.weekdays == 0 || self.weekdays & (1 << weekday) != 0) {
-                self.next = Some(candidate);
+        let Ok(after_seconds) = i64::try_from(after) else {
+            return;
+        };
+        let local_day =
+            (after_seconds + i64::from(zone.offset_at(after_seconds))).div_euclid(86_400);
+        // One day more than a week: the local day of `after` can be before or
+        // after its UTC day.
+        for offset in -1..=8 {
+            let date = local_day + offset;
+            let local = date * 86_400 + i64::from(self.hour) * 3600 + i64::from(self.minute) * 60;
+            let candidate = local_to_utc(zone, local);
+            let weekday = (date.rem_euclid(7) + 3) % 7;
+            if candidate > after_seconds
+                && (self.weekdays == 0 || self.weekdays & (1 << weekday) != 0)
+            {
+                self.next = u64::try_from(candidate).ok();
                 break;
             }
         }
     }
     /// Coalesce missed occurrences into one alert and schedule strictly ahead.
-    pub fn tick(&mut self, now: u64) -> bool {
+    pub fn tick(&mut self, now: u64, zone: &TimeZone) -> bool {
         if !self.enabled || !self.next.is_some_and(|next| now >= next) {
             return false;
         }
@@ -218,7 +274,7 @@ impl Alarm {
         if self.weekdays == 0 {
             self.disable();
         } else {
-            self.schedule(now);
+            self.schedule(now, zone);
         }
         true
     }

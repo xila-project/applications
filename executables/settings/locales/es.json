@@ -87,12 +87,47 @@
     }
   },
   "general": {
-    "status": {
-      "coming_soon": "Aquí se implementarán los ajustes generales."
-    },
     "fields": {
       "locale": "Idioma:",
       "language": "Idioma"
+    },
+    "time_zone": {
+      "title": "Zona horaria",
+      "preview": "Hora local",
+      "custom": "Cadena TZ personalizada",
+      "custom_hint": "Formato TZ POSIX, por ejemplo CET-1CEST,M3.5.0,M10.5.0/3 para París.",
+      "custom_name": "Personalizada",
+      "apply_custom": "Usar esta cadena TZ",
+      "apply_zone": "Usar esta zona",
+      "region": "Región",
+      "zone": "Zona",
+      "other_region": "Otras",
+      "saved": "Zona horaria guardada. Las aplicaciones que se abran a partir de ahora la usan.",
+      "unsynchronized": "El reloj no está ajustado.",
+      "errors": {
+        "invalid": "No es una cadena TZ POSIX válida.",
+        "too_long": "Esta cadena TZ es demasiado larga.",
+        "permission_denied": "Solo un administrador puede cambiar la zona horaria.",
+        "save_failed": "No se pudo guardar la zona horaria."
+      },
+      "editor": "Elegir por",
+      "editors": {
+        "zone": "Nombre de zona",
+        "offset": "Desfase UTC",
+        "string": "Cadena TZ (avanzado)"
+      },
+      "form": {
+        "offset": "Desfase UTC",
+        "minutes": "Minutos",
+        "daylight_saving": "Horario de verano",
+        "rules": "Reglas",
+        "presets": {
+          "european_union": "Unión Europea",
+          "united_states": "Estados Unidos"
+        },
+        "generated": "Cadena TZ generada",
+        "apply": "Usar este desfase"
+      }
     }
   },
   "common": {

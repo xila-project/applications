@@ -63,8 +63,43 @@
       "locale": "区域设置：",
       "language": "语言"
     },
-    "status": {
-      "coming_soon": "常规设置功能将在此提供。"
+    "time_zone": {
+      "title": "时区",
+      "preview": "本地时间",
+      "custom": "自定义 TZ 字符串",
+      "custom_hint": "POSIX TZ 格式，例如巴黎为 CET-1CEST,M3.5.0,M10.5.0/3。",
+      "custom_name": "自定义",
+      "apply_custom": "使用此 TZ 字符串",
+      "apply_zone": "使用此时区",
+      "region": "地区",
+      "zone": "时区",
+      "other_region": "其他",
+      "saved": "时区已保存。此后启动的应用将使用它。",
+      "unsynchronized": "时钟尚未设置。",
+      "errors": {
+        "invalid": "这不是有效的 POSIX TZ 字符串。",
+        "too_long": "此 TZ 字符串过长。",
+        "permission_denied": "只有管理员可以更改时区。",
+        "save_failed": "无法保存时区。"
+      },
+      "editor": "选择方式",
+      "editors": {
+        "zone": "时区名称",
+        "offset": "UTC 偏移",
+        "string": "TZ 字符串（高级）"
+      },
+      "form": {
+        "offset": "UTC 偏移",
+        "minutes": "分钟",
+        "daylight_saving": "夏令时",
+        "rules": "规则",
+        "presets": {
+          "european_union": "欧盟",
+          "united_states": "美国"
+        },
+        "generated": "生成的 TZ 字符串",
+        "apply": "使用此偏移"
+      }
     }
   },
   "network": {

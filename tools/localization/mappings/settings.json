@@ -33,7 +33,6 @@
     "Formatting error": "errors.formatting_error",
     "Gateway": "network.fields.gateway",
     "General": "tabs.general",
-    "General settings will be implemented here.": "general.status.coming_soon",
     "Graphics error : {}": "errors.graphics_error",
     "Green": "appearance.colors.green",
     "Invalid UTF-8 string: {}": "errors.invalid_utf_8_string",

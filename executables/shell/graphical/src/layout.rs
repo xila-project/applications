@@ -4,20 +4,24 @@ use core::ffi::CStr;
 use core::time::Duration;
 use xila::file_system::{AccessFlags, Path};
 use xila::graphics::{self, lvgl, symbol, theme};
+use xila::local_time::{self, TimeZone};
 use xila::log;
 use xila::network::InterfaceKind;
 use xila::virtual_file_system::{Directory, File};
 use xila::{internationalization, network};
 
-// Only the time of day is displayed. Bound calendar conversion independently of
-// the signed timestamp range, including far-future and pre-epoch corrections.
-fn write_clock_text(output: &mut String, current_time: Option<i64>) {
+// Only the local time of day is displayed. Bound calendar conversion
+// independently of the signed timestamp range, including far-future and
+// pre-epoch corrections: the offset is added to the UTC second of the day.
+fn write_clock_text(output: &mut String, current_time: Option<i64>, zone: &TimeZone) {
     output.clear();
     if let Some(seconds) = current_time {
+        let offset = i64::from(zone.offset_at(seconds));
+        let local = (seconds.rem_euclid(86_400) + offset).rem_euclid(86_400);
         let _ = internationalization::DateTimeFormatter::new(
             internationalization::date_time_locale(internationalization::locale!()),
         )
-        .write(output, seconds.rem_euclid(86_400), "%H:%M");
+        .write(output, local, "%H:%M");
     } else {
         output.push_str("--:--");
     }
@@ -350,9 +354,17 @@ impl Layout {
     }
 
     async fn update_clock(&mut self, current_time: Option<i64>) {
+        // Read `TZ` again on each update, so that a change made in Settings
+        // shows at the next update.
+        let task = self
+            .context
+            .task_manager
+            .get_current_task_identifier()
+            .await;
+        let zone = local_time::current(self.context.task_manager, task).await;
         let graphics_manager = graphics::ffi_manager();
         graphics::lock!(graphics_manager, {
-            write_clock_text(&mut self.clock_string, current_time);
+            write_clock_text(&mut self.clock_string, current_time, &zone);
             self.clock_string.push('\0');
 
             unsafe {
@@ -544,8 +556,34 @@ mod clock_tests {
             (Some(i64::MAX), "15:30"),
             (Some(i64::MIN), "08:29"),
         ] {
-            write_clock_text(&mut text, seconds);
+            write_clock_text(&mut text, seconds, &local_time::utc());
             assert_eq!(text, expected);
         }
+    }
+
+    #[test]
+    fn clock_text_is_local_across_daylight_saving_changes() {
+        let paris = TimeZone::parse("CET-1CEST,M3.5.0,M10.5.0/3").unwrap();
+        let mut text = String::new();
+        for (seconds, expected) in [
+            // 2026-03-29: 01:59 CET, then 03:00 CEST.
+            (1_774_745_940, "01:59"),
+            (1_774_746_000, "03:00"),
+            // 2026-10-25: 02:59 CEST, then 02:00 CET again.
+            (1_792_889_940, "02:59"),
+            (1_792_890_000, "02:00"),
+            // Before the epoch and at the extremes, with an offset.
+            (-1, "00:59"),
+        ] {
+            write_clock_text(&mut text, Some(seconds), &paris);
+            assert_eq!(text, expected, "{seconds}");
+        }
+        for seconds in [i64::MAX, i64::MIN] {
+            write_clock_text(&mut text, Some(seconds), &paris);
+            assert_eq!(text.len(), 5);
+        }
+        let kathmandu = TimeZone::parse("<+0545>-5:45").unwrap();
+        write_clock_text(&mut text, Some(0), &kathmandu);
+        assert_eq!(text, "05:45");
     }
 }

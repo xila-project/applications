@@ -87,12 +87,47 @@
     }
   },
   "general": {
-    "status": {
-      "coming_soon": "General settings will be implemented here."
-    },
     "fields": {
       "locale": "Locale:",
       "language": "Language"
+    },
+    "time_zone": {
+      "title": "Time zone",
+      "preview": "Local time",
+      "custom": "Custom TZ string",
+      "custom_hint": "POSIX TZ format, for example CET-1CEST,M3.5.0,M10.5.0/3 for Paris.",
+      "custom_name": "Custom",
+      "apply_custom": "Use this TZ string",
+      "apply_zone": "Use this zone",
+      "region": "Region",
+      "zone": "Zone",
+      "other_region": "Other",
+      "saved": "Time zone saved. Applications started from now on use it.",
+      "unsynchronized": "The clock is not set.",
+      "errors": {
+        "invalid": "This is not a valid POSIX TZ string.",
+        "too_long": "This TZ string is too long.",
+        "permission_denied": "Only an administrator can change the time zone.",
+        "save_failed": "The time zone could not be saved."
+      },
+      "editor": "Choose by",
+      "editors": {
+        "zone": "Zone name",
+        "offset": "UTC offset",
+        "string": "TZ string (advanced)"
+      },
+      "form": {
+        "offset": "UTC offset",
+        "minutes": "Minutes",
+        "daylight_saving": "Daylight saving time",
+        "rules": "Rules",
+        "presets": {
+          "european_union": "European Union",
+          "united_states": "United States"
+        },
+        "generated": "Generated TZ string",
+        "apply": "Use this offset"
+      }
     }
   },
   "common": {

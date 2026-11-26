@@ -150,5 +150,18 @@
     "prompts": {
       "password": "[sudo] Password di {arg0}: "
     }
+  },
+  "time_zone": {
+    "labels": {
+      "string": "Stringa TZ",
+      "local": "Ora locale"
+    },
+    "unsynchronized": "non impostata (l'orologio non è sincronizzato)",
+    "no_names": "Questa versione non ha nomi di fusi; indica una stringa TZ POSIX.",
+    "saved": "Fuso orario salvato. I programmi avviati da ora in poi lo usano.",
+    "errors": {
+      "invalid": "Fuso orario non valido: indica una stringa TZ POSIX, ad esempio CET-1CEST,M3.5.0,M10.5.0/3, o un nome di fuso elencato da time_zone -l.",
+      "failed_to_set": "Impossibile salvare il fuso orario: {arg0}"
+    }
   }
 }

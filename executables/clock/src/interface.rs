@@ -1,6 +1,6 @@
 use clock::{
-    Alarm, AlarmAlert, Settings, Stopwatch, Timer, join_duration, remaining_permille,
-    split_duration, storage::Store,
+    Alarm, AlarmAlert, Settings, Stopwatch, TimeZone, Timer, join_duration, remaining_permille,
+    split_duration, storage::Store, zone_from_environment,
 };
 use embedded_i18n::t;
 use std::{
@@ -92,6 +92,23 @@ struct Interface {
     watch: Stopwatch,
     timer: Timer,
     alarm_alert: AlarmAlert,
+    /// The time zone from `TZ`, read once at start.
+    zone: TimeZone,
+}
+
+/// The current UTC time in seconds, if the host has one.
+fn wall_now() -> Option<u64> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|value| value.as_secs())
+}
+
+/// A date time formatter for the locale, shifted to the local time of `zone`
+/// at `utc`.
+fn local_formatter(zone: &TimeZone, utc: i64) -> embedded_i18n::DateTimeFormatter {
+    embedded_i18n::DateTimeFormatter::new(embedded_i18n::date_time_locale(embedded_i18n::locale!()))
+        .with_utc_offset(zone.offset_at(utc))
 }
 
 #[derive(Default, PartialEq, Eq, Clone, Copy)]
@@ -110,10 +127,7 @@ pub fn run() -> wasm::Result<()> {
     let mut alarm_sound = clock::sound::AlarmSound::default();
     loop {
         let now = epoch.elapsed().as_millis().min(u128::from(u64::MAX)) as u64;
-        let wall = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .ok()
-            .map(|value| value.as_secs());
+        let wall = wall_now();
         let mut dirty = ui.tick(now, wall);
         // Bound work per turn even if an input device floods the window queue.
         for _ in 0..32 {
@@ -213,9 +227,15 @@ impl Interface {
                         (None, Settings::default(), true)
                     }
                 };
+            let zone = zone_from_environment(std::env::var("TZ").ok().as_deref());
+            let mut settings = settings;
+            // The time zone may have changed since the alarm was scheduled.
+            if let (Some(alarm), Some(wall)) = (settings.alarm.as_mut(), wall_now()) {
+                alarm.reschedule(wall, &zone);
+            }
             let window = window_create()?;
             // Ensure a partially constructed window is released on FFI failure.
-            match Self::build(window, store, settings, persistence_error) {
+            match Self::build(window, store, settings, persistence_error, zone) {
                 Ok(ui) => Ok(ui),
                 Err(error) => {
                     if let Ok(handle) = u32::try_from(window as usize) {
@@ -232,6 +252,7 @@ impl Interface {
         store: Option<Store>,
         settings: Settings,
         persistence_error: bool,
+        zone: TimeZone,
     ) -> wasm::Result<Self> {
         unsafe {
             object_set_flex_flow(window, FlexFlow::Column)?;
@@ -271,6 +292,7 @@ impl Interface {
                 watch: Stopwatch::default(),
                 timer: Timer::default(),
                 alarm_alert: AlarmAlert::default(),
+                zone,
             };
 
             // Alert banner: only shown while something needs attention.
@@ -335,7 +357,7 @@ impl Interface {
                 self.clock_ring = ring;
             }
             let note = self.centered(tab, FONT_SMALL)?;
-            Self::text(note, t!("clock.instructions.utc_only"))?;
+            Self::text(note, t!("clock.instructions.local_time"))?;
 
             let format_row = self.row(tab)?;
             let format_label = label_create(format_row)?;
@@ -363,7 +385,11 @@ impl Interface {
             self.alarm_hour = self.roller(picker, 24, u32::from(hour), true)?;
             self.label(picker, ":", FONT_LARGE)?;
             self.alarm_minute = self.roller(picker, 60, u32::from(minute), true)?;
-            self.label(picker, "UTC", FONT_SMALL)?;
+            let abbreviation = wall_now()
+                .and_then(|wall| i64::try_from(wall).ok())
+                .map_or("UTC", |wall| self.zone.from_utc(wall).abbreviation);
+            let abbreviation = String::from(abbreviation);
+            self.label(picker, &abbreviation, FONT_SMALL)?;
 
             // Weekday chips: filled when selected, outlined otherwise.
             let days = self.row(tab)?;
@@ -410,7 +436,7 @@ impl Interface {
                 note,
                 &format!(
                     "{}\n{}",
-                    t!("alarm.instructions.repeat_days_utc"),
+                    t!("alarm.instructions.repeat_days_local"),
                     t!("alerts.instructions")
                 ),
             )?;
@@ -684,7 +710,7 @@ impl Interface {
     fn tick(&mut self, now: u64, wall: Option<u64>) -> bool {
         let mut changed = self.timer.tick(now);
         if let (Some(alarm), Some(wall)) = (self.settings.alarm.as_mut(), wall)
-            && alarm.tick(wall)
+            && alarm.tick(wall, &self.zone)
         {
             self.alarm_alert.ring();
             self.persist();
@@ -716,7 +742,7 @@ impl Interface {
                         let hour = roller_get_selected(self.alarm_hour)?.min(23) as u8;
                         let minute = roller_get_selected(self.alarm_minute)?.min(59) as u8;
                         let mut alarm = Alarm::new(hour, minute, days).unwrap();
-                        alarm.arm(wall);
+                        alarm.arm(wall, &self.zone);
                         self.settings.alarm = Some(alarm);
                         self.alarm_alert.dismiss();
                         self.persist();
@@ -832,9 +858,7 @@ impl Interface {
                     )
                 },
                 |wall| {
-                    let formatter = embedded_i18n::DateTimeFormatter::new(
-                        embedded_i18n::date_time_locale(embedded_i18n::locale!()),
-                    );
+                    let formatter = local_formatter(&self.zone, wall);
                     let pattern = if self.settings.twelve_hour {
                         "%I:%M:%S %p"
                     } else {
@@ -843,6 +867,8 @@ impl Interface {
                     let (mut time, mut date) = (String::new(), String::new());
                     let _ = formatter.write(&mut time, wall, pattern);
                     let _ = formatter.write(&mut date, wall, "%a %d %b %Y");
+                    date.push(' ');
+                    date.push_str(self.zone.from_utc(wall).abbreviation);
                     (time, date)
                 },
             );
@@ -857,13 +883,16 @@ impl Interface {
             match self.settings.alarm {
                 Some(saved) if saved.enabled() => {
                     status.push_str(t!("alarm.status.enabled"));
-                    status.push_str(&format!("{:02}:{:02} UTC", saved.hour, saved.minute));
+                    status.push_str(&format!("{:02}:{:02}", saved.hour, saved.minute));
                     if let Some(next) = saved.next().and_then(|value| i64::try_from(value).ok()) {
                         status.push('\n');
-                        let _ = embedded_i18n::DateTimeFormatter::new(
-                            embedded_i18n::date_time_locale(embedded_i18n::locale!()),
-                        )
-                        .write(&mut status, next, "%a %d %b %H:%M");
+                        let _ = local_formatter(&self.zone, next).write(
+                            &mut status,
+                            next,
+                            "%a %d %b %H:%M",
+                        );
+                        status.push(' ');
+                        status.push_str(self.zone.from_utc(next).abbreviation);
                     }
                 }
                 Some(_) => status.push_str(t!("alarm.status.disabled")),

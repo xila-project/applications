@@ -10,7 +10,7 @@
       "save_and_enable": "Save and enable"
     },
     "instructions": {
-      "repeat_days_utc": "Repeat on selected days; none means once. All times are UTC."
+      "repeat_days_local": "Repeat on selected days; none means once. Times are local: a time skipped by a daylight saving change rings after the change (02:30 becomes 03:30), and a repeated time rings once, the first time."
     },
     "status": {
       "disabled": "Disabled",
@@ -43,7 +43,7 @@
       "host_unavailable": "Host clock unavailable"
     },
     "instructions": {
-      "utc_only": "UTC / host clock. City time zones are not available yet."
+      "local_time": "Local time of the time zone set in Settings."
     }
   },
   "errors": {

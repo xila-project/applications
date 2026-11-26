@@ -66,6 +66,8 @@ device = { workspace = true }
 wat = "1"
 serde_json = "1"
 critical-section = { workspace = true, features = ["std"] }
+# The time zone test uses `xila::local_time`.
+xila = { workspace = true, features = ["time_zone"] }
 
 [[test]]
 name = "integration_test"
