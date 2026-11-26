@@ -24,12 +24,16 @@ fn main() {
 
     if bare_metal {
         build.flag("-ffreestanding");
-    }
-
-    let target = std::env::var("TARGET").unwrap_or_default();
-    let target_abi = std::env::var("CARGO_CFG_TARGET_ABI").unwrap_or_default();
-    if let Some((architecture_flag, abi_flag)) = riscv_compiler_flags(&target, &target_abi) {
-        build.flag(&architecture_flag).flag(&abi_flag);
+        if arch == "xtensa" {
+            // `CALL8` only reaches ±512 KiB; external helpers like `__udivdi3`
+            // live in the firmware binary and may sit farther away in flash.
+            build.flag("-mlongcalls");
+        }
+        let target = std::env::var("TARGET").unwrap_or_default();
+        let target_abi = std::env::var("CARGO_CFG_TARGET_ABI").unwrap_or_default();
+        if let Some((architecture_flag, abi_flag)) = riscv_compiler_flags(&target, &target_abi) {
+            build.flag(&architecture_flag).flag(&abi_flag);
+        }
     }
 
     build.compile("xila_c_demo");
