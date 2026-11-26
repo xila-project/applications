@@ -34,12 +34,16 @@ async fn validate_and_print_path<C: CommandContext>(
     context: &mut C,
     resolved_path: &Path,
 ) -> Result<()> {
-    let _ = context
+    let statistics = context
         .executable_context()
         .virtual_file_system
         .get_statistics(&resolved_path)
         .await
         .map_err(Error::FailedToGetMetadata)?;
+
+    if statistics.kind == xila::file_system::Kind::Directory {
+        return Err(Error::CommandNotFound);
+    }
 
     context
         .write_out_fmt(format_args!("{}\n", resolved_path.as_str()))
@@ -52,10 +56,15 @@ fn resolve_as_path<C: CommandContext>(
     context: &C,
     command: &str,
 ) -> Result<Option<xila::file_system::PathOwned>> {
+    // A bare command name is resolved through `Paths`, like in `execute`.
+    if !command.contains('/') {
+        return Ok(None);
+    }
+
     let path = Path::from_str(command);
 
     if !path.is_valid() {
-        return Ok(None);
+        return Err(Error::InvalidPath);
     }
 
     if path.is_absolute() {
@@ -94,7 +103,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::resolve_as_path;
-    use crate::{Result, commands::CommandContext};
+    use crate::{Error, Result, commands::CommandContext};
     use alloc::borrow::ToOwned;
     use core::fmt;
     use xila::{
@@ -151,7 +160,7 @@ mod tests {
 
         let resolved = resolve_as_path(&context, "ls").unwrap();
 
-        assert_eq!(resolved.unwrap().as_str(), "/base/ls");
+        assert!(resolved.is_none());
     }
 
     #[test]
@@ -163,6 +172,17 @@ mod tests {
         let resolved = resolve_as_path(&context, "bad command").unwrap();
 
         assert!(resolved.is_none());
+    }
+
+    #[test]
+    fn resolve_as_path_rejects_invalid_path_containing_separator() {
+        let context = FakeContext {
+            current_directory: Path::from_str("/base").to_owned(),
+        };
+
+        let result = resolve_as_path(&context, "/bad path");
+
+        assert!(matches!(result, Err(Error::InvalidPath)));
     }
 
     #[test]
@@ -182,8 +202,10 @@ mod tests {
             current_directory: Path::from_str("/base").to_owned(),
         };
 
-        let resolved = resolve_as_path(&context, "tool").unwrap().unwrap();
+        let resolved = resolve_as_path(&context, "sub/tool").unwrap().unwrap();
+        assert_eq!(resolved.as_str(), "/base/sub/tool");
 
-        assert_eq!(resolved.as_str(), "/base/tool");
+        let resolved = resolve_as_path(&context, "./tool").unwrap().unwrap();
+        assert_eq!(resolved.as_str(), "/base/./tool");
     }
 }
