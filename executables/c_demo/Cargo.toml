@@ -9,7 +9,7 @@ description = "Built-in native C ABI demonstration"
 [lib]
 name = "c_demo"
 
-[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", all(target_os = "none", any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "arm", target_arch = "riscv32", target_arch = "xtensa"))))'.dependencies]
 abi_application = { workspace = true }
 executable = { workspace = true, features = ["native-linked"] }
 
