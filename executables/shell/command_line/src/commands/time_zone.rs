@@ -97,9 +97,11 @@ impl UserCommand for TimeZoneCommand {
             .ok();
         let time_zone = time_zone
             .as_ref()
-            .map_or(local_time::DEFAULT_TIME_ZONE, |variable| variable.get_value());
-        let zone = local_time::time_zone::TimeZone::parse(time_zone)
-            .unwrap_or_else(|_| local_time::utc());
+            .map_or(local_time::DEFAULT_TIME_ZONE, |variable| {
+                variable.get_value()
+            });
+        let zone =
+            local_time::time_zone::TimeZone::parse(time_zone).unwrap_or_else(|_| local_time::utc());
         write!(
             output,
             "{}: {time_zone}\n{}: ",

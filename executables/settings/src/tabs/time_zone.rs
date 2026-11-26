@@ -118,7 +118,10 @@ impl StringEditor {
             super::caption(parent, t!(c"general.time_zone.custom"))?;
             let text_area = super::check(lvgl::lv_textarea_create(parent))?;
             lvgl::lv_textarea_set_one_line(text_area, true);
-            lvgl::lv_textarea_set_max_length(text_area, local_time::MAXIMUM_TIME_ZONE_LENGTH as u32);
+            lvgl::lv_textarea_set_max_length(
+                text_area,
+                local_time::MAXIMUM_TIME_ZONE_LENGTH as u32,
+            );
             lvgl::lv_textarea_set_placeholder_text(
                 text_area,
                 c"CET-1CEST,M3.5.0,M10.5.0/3".as_ptr(),
@@ -277,7 +280,9 @@ impl TimeZoneSection {
                     self.stored_name.as_deref(),
                 )?),
                 #[cfg(feature = "time-zone-offset-form")]
-                Editor::Offset => Active::Offset(super::time_zone_form::OffsetForm::new(self.host)?),
+                Editor::Offset => {
+                    Active::Offset(super::time_zone_form::OffsetForm::new(self.host)?)
+                }
                 Editor::String => Active::String(StringEditor::new(self.host)?),
             });
         }
@@ -492,7 +497,11 @@ pub(crate) mod tests {
         // `UTC` has no offset, so it is not a valid TZ string.
         graphics::lock!(graphics, { set_text(&mut section, c"UTC") });
         assert!(!section.has_pending_save());
-        assert!(local_time::read(context.virtual_file_system, task).await.is_err());
+        assert!(
+            local_time::read(context.virtual_file_system, task)
+                .await
+                .is_err()
+        );
 
         graphics::lock!(graphics, { set_text(&mut section, c" JST-9 ") });
         assert!(section.has_pending_save());

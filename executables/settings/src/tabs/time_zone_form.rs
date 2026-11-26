@@ -514,8 +514,16 @@ impl OffsetForm {
         unsafe {
             let parent = self.custom_container;
             for (fields, caption, default) in [
-                (&mut self.start, t!(c"general.time_zone.form.start"), DEFAULT_START),
-                (&mut self.end, t!(c"general.time_zone.form.end"), DEFAULT_END),
+                (
+                    &mut self.start,
+                    t!(c"general.time_zone.form.start"),
+                    DEFAULT_START,
+                ),
+                (
+                    &mut self.end,
+                    t!(c"general.time_zone.form.end"),
+                    DEFAULT_END,
+                ),
             ] {
                 let title = super::check(lvgl::lv_label_create(parent))?;
                 lvgl::lv_label_set_text(title, caption.as_ptr());
@@ -564,8 +572,8 @@ impl OffsetForm {
             } else {
                 hours * 60 + minutes
             };
-            let daylight_saving = (self.daylight_saving_enabled() && !self.shift.is_null()).then(|| {
-                DaylightSaving {
+            let daylight_saving =
+                (self.daylight_saving_enabled() && !self.shift.is_null()).then(|| DaylightSaving {
                     shift_minutes: SHIFTS[lvgl::lv_dropdown_get_selected(self.shift) as usize % 3],
                     rules: match lvgl::lv_dropdown_get_selected(self.preset) {
                         0 => Rules::EuropeanUnion,
@@ -575,8 +583,7 @@ impl OffsetForm {
                             end: self.end.read(DEFAULT_END),
                         },
                     },
-                }
-            });
+                });
             let standard_name = Self::text(self.standard_name);
             let daylight_name = Self::text(self.daylight_name);
             build(&Values {
@@ -639,7 +646,10 @@ impl OffsetForm {
     #[cfg(all(test, target_os = "linux"))]
     pub(crate) unsafe fn select(&mut self, offset_hours: i16, daylight_saving: bool) {
         unsafe {
-            lvgl::lv_dropdown_set_selected(self.hours, (offset_hours - MINIMUM_OFFSET_HOURS) as u32);
+            lvgl::lv_dropdown_set_selected(
+                self.hours,
+                (offset_hours - MINIMUM_OFFSET_HOURS) as u32,
+            );
             if daylight_saving {
                 lvgl::lv_obj_add_state(self.daylight_saving, lvgl::LV_STATE_CHECKED);
             } else {
@@ -675,9 +685,10 @@ impl OffsetForm {
             return Action::None;
         }
         self.update_fields();
-        Action::Changed(self.update_generated().map(|string| {
-            TimeZone::parse(&string).unwrap_or_else(|_| xila::local_time::utc())
-        }))
+        Action::Changed(
+            self.update_generated()
+                .map(|string| TimeZone::parse(&string).unwrap_or_else(|_| xila::local_time::utc())),
+        )
     }
 }
 
@@ -809,8 +820,14 @@ mod tests {
 
     #[test]
     fn offsets_outside_the_zones_in_use_are_refused() {
-        assert_eq!(build(&values(14 * 60 + 15, None)), Err(FormError::OffsetOutOfRange));
-        assert_eq!(build(&values(-12 * 60 - 30, None)), Err(FormError::OffsetOutOfRange));
+        assert_eq!(
+            build(&values(14 * 60 + 15, None)),
+            Err(FormError::OffsetOutOfRange)
+        );
+        assert_eq!(
+            build(&values(-12 * 60 - 30, None)),
+            Err(FormError::OffsetOutOfRange)
+        );
         assert_eq!(build(&values(-12 * 60, None)).unwrap(), "<-12>12");
     }
 

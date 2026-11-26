@@ -315,7 +315,9 @@ mod tests {
     #[test]
     fn all_regions() {
         let regions = Regions::new();
-        let names: alloc::vec::Vec<_> = (0..regions.count).filter_map(|index| regions.get(index)).collect();
+        let names: alloc::vec::Vec<_> = (0..regions.count)
+            .filter_map(|index| regions.get(index))
+            .collect();
         assert_eq!(
             names,
             [
