@@ -520,6 +520,71 @@ async fn bounded_pipelines_stream_large_output_and_close_early_consumers() {
     );
 }
 
+/// A mounted executable that echoes each of its arguments on its own line.
+struct Package;
+impl ExecutableTrait for Package {
+    fn main(mut standard: Standard<'static>, arguments: Vec<String>) -> MainFuture {
+        Box::pin(async move {
+            for argument in &arguments {
+                write_all(standard.out(), format!("{argument}\n").as_bytes())
+                    .await
+                    .unwrap();
+            }
+            Ok(())
+        })
+    }
+}
+
+#[xila::task::test(task_path = xila::task)]
+async fn paths_resolution_runs_a_mounted_executable_and_which_finds_it() {
+    let mut shell = shell().await;
+    let context = shell.context;
+    let task = shell.task;
+    let virtual_file_system = context.virtual_file_system;
+
+    // The first `Paths` entry (`/system/executables` exists in the default
+    // hierarchy) holds a directory named like the command: it must not shadow
+    // the executable mounted in the later entry.
+    xila::virtual_file_system::Directory::create(
+        virtual_file_system,
+        task,
+        "/system/executables/package",
+    )
+    .await
+    .unwrap();
+    mount_executables!(
+        context,
+        virtual_file_system,
+        task,
+        &[(&"/applications/executables/package", Package)]
+    )
+    .await
+    .unwrap();
+    context
+        .task_manager
+        .set_environment_variable(
+            task,
+            "Paths",
+            "/system/executables:/applications/executables",
+        )
+        .await
+        .unwrap();
+
+    // A bare command name is resolved through `Paths` and runs with its arguments.
+    assert_eq!(shell.execute_line("package alpha beta").await.unwrap(), 0);
+    assert_eq!(contents(&shell, "/shell-output").await, "alpha\nbeta\n");
+
+    // `which` resolves the same bare name through `Paths`.
+    assert_eq!(shell.execute_line("which package").await.unwrap(), 0);
+    assert_eq!(
+        contents(&shell, "/shell-output").await,
+        "alpha\nbeta\n/applications/executables/package\n"
+    );
+
+    // A directory given by path is not an executable.
+    assert_ne!(shell.execute_line("which /applications").await.unwrap(), 0);
+}
+
 #[xila::task::test(task_path = xila::task)]
 async fn malformed_source_does_not_execute_a_valid_prefix() {
     let mut shell = shell().await;
