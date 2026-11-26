@@ -1,77 +1,62 @@
 #![no_std]
 #![cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
-extern crate alloc;
 
-use abi_application::{
-    Directory, File, Heap, XILA_RIGHT_READ, XILA_RIGHT_WRITE, XilaStartup, run_main,
-};
-use alloc::{boxed::Box, string::String, vec::Vec};
-use core::{fmt::Write, num::NonZeroUsize};
-use executable::{ExecutableTrait, Standard};
+// The `native-linked` runner drives the C entry on a stackful coroutine, which
+// desktop hosts provide on Linux (x86-64 and AArch64) only. On the other
+// desktop hosts this crate stays empty, as on every non-host target.
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+mod linked {
+    extern crate alloc;
 
-#[allow(improper_ctypes)]
-unsafe extern "C" {
-    fn c_demo_main(startup: *const XilaStartup) -> i32;
-}
+    use alloc::{boxed::Box, string::String, vec::Vec};
+    use core::num::NonZeroUsize;
+    use executable::{ExecutableTrait, LinkedHome, LinkedOptions, Standard};
 
-pub struct CDemoExecutable;
-
-impl ExecutableTrait for CDemoExecutable {
-    fn main(standard: Standard<'static>, arguments: Vec<String>) -> executable::MainFuture {
-        Box::pin(main(standard, arguments))
+    #[allow(improper_ctypes)]
+    unsafe extern "C" {
+        fn c_demo_main(startup: *const abi_application::XilaStartup) -> i32;
     }
-}
 
-pub async fn main(
-    mut standard: Standard<'static>,
-    arguments: Vec<String>,
-) -> Result<(), NonZeroUsize> {
-    let context = standard.context;
-    let task = context.task_manager.get_current_task_identifier().await;
-    let home = async {
-        let user = context.task_manager.get_user(task).await.map_err(|_| ())?;
-        let path = context
-            .virtual_file_system
-            .ensure_user_home(task, user)
-            .await
-            .map_err(|_| ())?;
-        Directory::new(
-            context.virtual_file_system,
-            task,
-            path.as_str(),
-            XILA_RIGHT_READ | XILA_RIGHT_WRITE,
-        )
-        .map_err(|_| ())
-    }
-    .await;
-    let home = match home {
-        Ok(home) => home,
-        Err(()) => {
-            let _ = writeln!(standard.error(), "c_demo: cannot grant user home");
-            return Err(NonZeroUsize::new(1).unwrap());
+    pub struct CDemoExecutable;
+
+    impl ExecutableTrait for CDemoExecutable {
+        fn main(standard: Standard<'static>, arguments: Vec<String>) -> executable::MainFuture {
+            Box::pin(main(standard, arguments))
         }
-    };
-    abi_application::initialize(context.time_manager);
-    let arguments: Vec<_> = arguments.iter().map(String::as_str).collect();
-    let (input, output, error) = standard.split();
-    // `run_main` runs on this task, not on an abandonable coroutine stack, so
-    // the heap can live here and frees every block left when it drops.
-    let mut heap = Heap::new();
-    // SAFETY: the linked entry borrows startup objects only until it returns.
-    let result = unsafe {
-        run_main(
-            c_demo_main,
-            &mut heap,
-            &arguments,
-            Some(File::new(input.into_synchronous_file())),
-            Some(File::new(output.into_synchronous_file())),
-            Some(File::new(error.into_synchronous_file())),
-            Some(home),
-        )
-    };
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(NonZeroUsize::new(result.unsigned_abs() as usize).unwrap())
+    }
+
+    /// Run the linked C program as a native process on the calling task.
+    ///
+    /// The program gets the user's home with read and write rights and runs on
+    /// its own stackful coroutine, so dropping the returned future cancels it
+    /// safely even while it is suspended in a blocking call.
+    pub async fn main(
+        standard: Standard<'static>,
+        arguments: Vec<String>,
+    ) -> Result<(), NonZeroUsize> {
+        // SAFETY: `c_demo_main` is linked into the firmware: it obeys the
+        // `XilaStartup` rules, fits on the coroutine stack (`char line[128]` is
+        // its largest local; the ABI call chain needs the rest in debug builds)
+        // and returns without unwinding.
+        unsafe {
+            executable::run_linked(
+                c_demo_main,
+                LinkedOptions::new()
+                    .stack_size(64 * 1024)
+                    .home(LinkedHome::User),
+                standard,
+                arguments,
+            )
+            .await
+        }
     }
 }
+
+#[cfg(all(
+    target_os = "linux",
+    any(target_arch = "x86_64", target_arch = "aarch64")
+))]
+pub use linked::*;
