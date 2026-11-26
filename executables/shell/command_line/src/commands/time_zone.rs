@@ -77,7 +77,8 @@ impl UserCommand for TimeZoneCommand {
         }
 
         if !arguments.value.is_empty() {
-            let setting = setting_for(arguments.value).map_err(|_| Error::InvalidTimeZone)?;
+            let setting =
+                setting_for(arguments.value).map_err(|_| Error::InvalidTimeZoneSetting)?;
             local_time::set(
                 executable.task_manager,
                 executable.users_manager,

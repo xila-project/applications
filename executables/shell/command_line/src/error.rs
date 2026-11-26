@@ -50,7 +50,7 @@ pub enum Error<'a> {
     Format,
     InvalidSleepDuration,
     /// The value is neither a valid POSIX TZ string nor a zone name of the build.
-    InvalidTimeZone,
+    InvalidTimeZoneSetting,
     FailedToSetTimeZone(virtual_file_system::IoErrorKind),
     FailedToSetPermissions(virtual_file_system::IoErrorKind),
     FailedToGetTaskUser(task::Error),
@@ -405,7 +405,7 @@ impl Display for Error<'_> {
             Error::InvalidSleepDuration => {
                 write!(formatter, "{}", t!("sleep.errors.invalid_duration"))
             }
-            Error::InvalidTimeZone => {
+            Error::InvalidTimeZoneSetting => {
                 write!(formatter, "{}", t!("time_zone.errors.invalid"))
             }
             Error::FailedToSetTimeZone(error) => {
