@@ -1,12 +1,39 @@
 #![no_std]
-#![cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+#![cfg(any(
+    target_os = "linux",
+    target_os = "macos",
+    target_os = "windows",
+    all(
+        target_os = "none",
+        any(
+            target_arch = "x86_64",
+            target_arch = "aarch64",
+            target_arch = "arm",
+            target_arch = "riscv32",
+            target_arch = "xtensa"
+        )
+    )
+))]
 
 // The `native-linked` runner drives the C entry on a stackful coroutine, which
-// desktop hosts provide on Linux (x86-64 and AArch64) only. On the other
-// desktop hosts this crate stays empty, as on every non-host target.
-#[cfg(all(
-    target_os = "linux",
-    any(target_arch = "x86_64", target_arch = "aarch64")
+// is supported on Linux (x86-64 and AArch64) and on bare-metal targets
+// (x86-64, AArch64, ARM, RISC-V 32, and Xtensa). On macOS, Windows, and Wasm
+// targets this crate stays empty.
+#[cfg(any(
+    all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+    all(
+        target_os = "none",
+        any(
+            target_arch = "x86_64",
+            target_arch = "aarch64",
+            target_arch = "arm",
+            target_arch = "riscv32",
+            target_arch = "xtensa"
+        )
+    )
 ))]
 mod linked {
     extern crate alloc;
@@ -14,6 +41,13 @@ mod linked {
     use alloc::{boxed::Box, string::String, vec::Vec};
     use core::num::NonZeroUsize;
     use executable::{ExecutableTrait, LinkedHome, LinkedOptions, Standard};
+
+    // Debug host builds need extra headroom for the ABI call chain; embedded
+    // firmware runs optimized builds with tighter RAM budgets.
+    #[cfg(target_os = "none")]
+    const STACK_SIZE: usize = 16 * 1024;
+    #[cfg(not(target_os = "none"))]
+    const STACK_SIZE: usize = 64 * 1024;
 
     #[allow(improper_ctypes)]
     unsafe extern "C" {
@@ -45,7 +79,7 @@ mod linked {
             executable::run_linked(
                 c_demo_main,
                 LinkedOptions::new()
-                    .stack_size(64 * 1024)
+                    .stack_size(STACK_SIZE)
                     .home(LinkedHome::User),
                 standard,
                 arguments,
@@ -55,8 +89,20 @@ mod linked {
     }
 }
 
-#[cfg(all(
-    target_os = "linux",
-    any(target_arch = "x86_64", target_arch = "aarch64")
+#[cfg(any(
+    all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+    all(
+        target_os = "none",
+        any(
+            target_arch = "x86_64",
+            target_arch = "aarch64",
+            target_arch = "arm",
+            target_arch = "riscv32",
+            target_arch = "xtensa"
+        )
+    )
 ))]
 pub use linked::*;
