@@ -281,6 +281,30 @@ jobs:
             done
             gh release upload "$tag" "$archive" "$archive.sha256" "$archive.pub" --repo "$GITHUB_REPOSITORY"
           done
+      - name: "Publish | Submit releases to package registry"
+        if: steps.release-plz.outputs.releases_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.REGISTRY_SUBMISSION_TOKEN }}
+          RELEASES: ${{ steps.release-plz.outputs.releases }}
+        run: |
+          set -euo pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::notice::REGISTRY_SUBMISSION_TOKEN is not configured; skipping automatic submission to xila-project/registry"
+            exit 0
+          fi
+          jq -c '.[]' <<< "$RELEASES" | while read -r release; do
+            crate="$(jq -r .package_name <<< "$release")"
+            tag="$(jq -r .tag <<< "$release")"
+            version="$(jq -r .version <<< "$release")"
+            name="${crate#xila-}"
+            archive_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/xila.${name}-${version}-wasm32-wasip1.xpk"
+            gh workflow run submit-package.yml \
+              --repo xila-project/registry \
+              -f "archive-url=$archive_url" \
+              -f "archive-sha256=$archive_url.sha256" \
+              -f "publisher=xila" \
+              -f "dry-run=false"
+          done
   release-pr:
     name: "Release / Version pull request"
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
