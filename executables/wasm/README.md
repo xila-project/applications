@@ -53,7 +53,8 @@ Disabling Wasmi's memory64 support in `memory_32` builds saves about 2 KiB.
 
 Every guest built by this repository (`mise run build:applications`, the
 `release-wasm` profile, host tests and the release packages all use the same
-build script, `executables/wasm_guest_build.rs`) is linked with 1-byte linear
+build script, the `xila-wasm-guest-build` crate in `tools/wasm_guest_build`)
+is linked with 1-byte linear
 memory pages (`--page-size=1`, the custom page sizes proposal) and a 32 KiB
 stack (`-zstack-size=32768`). The initial memory is then exactly the stack
 plus the data the module needs, instead of a multiple of 64 KiB.

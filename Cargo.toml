@@ -80,6 +80,9 @@ dashboard = { package = "xila-dashboard", path = "executables/dashboard" }
 home_assistant = { package = "xila-home-assistant", path = "executables/home_assistant" }
 shortcuts = { package = "xila-shortcuts", path = "executables/shortcuts" }
 
+# - Tools
+wasm_guest_build = { package = "xila-wasm-guest-build", path = "tools/wasm_guest_build" }
+
 # - External crates
 embedded-hal = { version = "1", default-features = false }
 miniserde = { version = "0.1", default-features = false }
@@ -132,6 +135,7 @@ members = [
   "executables/shortcuts",
   "executables/shell/command_line",
   "executables/shell/graphical",
+  "tools/wasm_guest_build",
 ]
 
 [patch.crates-io]

@@ -2239,13 +2239,12 @@ dependencies = [
  "critical-section",
  "embedded-i18n",
  "nanoexpr",
- "serde",
- "serde_json",
  "xila",
  "xila-drivers-core",
  "xila-task",
  "xila-testing",
  "xila-wasm",
+ "xila-wasm-guest-build",
 ]
 
 [[package]]
@@ -2253,12 +2252,11 @@ name = "xila-clock"
 version = "0.2.2"
 dependencies = [
  "embedded-i18n",
- "serde",
- "serde_json",
  "xila-audio",
  "xila-file-system",
  "xila-time-zone",
  "xila-wasm",
+ "xila-wasm-guest-build",
 ]
 
 [[package]]
@@ -2288,9 +2286,8 @@ version = "0.1.1"
 dependencies = [
  "embedded-i18n",
  "miniserde",
- "serde",
- "serde_json",
  "xila-wasm",
+ "xila-wasm-guest-build",
 ]
 
 [[package]]
@@ -2328,12 +2325,11 @@ name = "xila-digits"
 version = "0.2.2"
 dependencies = [
  "embedded-i18n",
- "serde",
- "serde_json",
  "xila-device",
  "xila-file-system",
  "xila-pixel-painter",
  "xila-wasm",
+ "xila-wasm-guest-build",
 ]
 
 [[package]]
@@ -2473,9 +2469,8 @@ version = "0.1.0"
 dependencies = [
  "embedded-i18n",
  "miniserde",
- "serde",
- "serde_json",
  "xila-wasm",
+ "xila-wasm-guest-build",
 ]
 
 [[package]]
@@ -2668,9 +2663,8 @@ name = "xila-pixel-painter"
 version = "0.2.2"
 dependencies = [
  "embedded-i18n",
- "serde",
- "serde_json",
  "xila-wasm",
+ "xila-wasm-guest-build",
 ]
 
 [[package]]
@@ -2706,11 +2700,10 @@ version = "0.1.0"
 dependencies = [
  "embedded-i18n",
  "miniserde",
- "serde",
- "serde_json",
  "xila-device",
  "xila-file-system",
  "xila-wasm",
+ "xila-wasm-guest-build",
 ]
 
 [[package]]
@@ -2739,11 +2732,10 @@ dependencies = [
  "embedded-i18n",
  "nanoaudio",
  "nanoaudio-synth",
- "serde",
- "serde_json",
  "xila-audio",
  "xila-file-system",
  "xila-wasm",
+ "xila-wasm-guest-build",
 ]
 
 [[package]]
@@ -2835,9 +2827,8 @@ name = "xila-text-editor"
 version = "0.2.2"
 dependencies = [
  "embedded-i18n",
- "serde",
- "serde_json",
  "xila-wasm",
+ "xila-wasm-guest-build",
 ]
 
 [[package]]
@@ -2922,6 +2913,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "xila-wasm-guest-build"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "xila-wasm-wasm-test"
 version = "0.1.0"
 
@@ -2932,8 +2931,6 @@ dependencies = [
  "critical-section",
  "embedded-i18n",
  "miniserde",
- "serde",
- "serde_json",
  "xila",
  "xila-drivers-core",
  "xila-file-system",
@@ -2942,6 +2939,7 @@ dependencies = [
  "xila-testing",
  "xila-virtual-file-system",
  "xila-wasm",
+ "xila-wasm-guest-build",
 ]
 
 [[package]]

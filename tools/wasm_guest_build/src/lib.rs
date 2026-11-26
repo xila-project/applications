@@ -7,9 +7,10 @@ struct ShortcutIcon {
     icon_color: [u8; 3],
 }
 
-fn main() {
+/// Shared build script of the Wasm guest applications, invoked from each
+/// application's own `build.rs`. Cargo reruns it when this crate changes.
+pub fn run() {
     let shortcut = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("shortcut.json");
-    println!("cargo:rerun-if-changed=../wasm_guest_build.rs");
     println!("cargo:rerun-if-changed={}", shortcut.display());
 
     if env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("wasm32") {
