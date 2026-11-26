@@ -120,57 +120,13 @@
         "offset": "UTC オフセット",
         "minutes": "分",
         "daylight_saving": "夏時間",
-        "shift": "夏時間のオフセット",
         "rules": "規則",
         "presets": {
           "european_union": "欧州連合",
-          "united_states": "アメリカ合衆国",
-          "custom": "カスタム"
+          "united_states": "アメリカ合衆国"
         },
-        "start": "開始",
-        "end": "終了",
-        "month": "月",
-        "week": "週",
-        "weekday": "曜日",
-        "time": "現地時刻",
-        "weeks": {
-          "first": "第 1",
-          "second": "第 2",
-          "third": "第 3",
-          "fourth": "第 4",
-          "last": "最終"
-        },
-        "standard_name": "標準時の略称 (任意)",
-        "daylight_name": "夏時間の略称 (任意)",
-        "names_hint": "3 から 7 文字の英字、数字、+ または -。例: CET と CEST。空の場合はオフセットを使用します (例: +01)。",
         "generated": "生成された TZ 文字列",
-        "apply": "このオフセットを使用",
-        "errors": {
-          "abbreviation": "略称は 3 から 7 文字の英字、数字、+ または - です。"
-        },
-        "months": {
-          "january": "1月",
-          "february": "2月",
-          "march": "3月",
-          "april": "4月",
-          "may": "5月",
-          "june": "6月",
-          "july": "7月",
-          "august": "8月",
-          "september": "9月",
-          "october": "10月",
-          "november": "11月",
-          "december": "12月"
-        },
-        "weekdays": {
-          "sunday": "日曜日",
-          "monday": "月曜日",
-          "tuesday": "火曜日",
-          "wednesday": "水曜日",
-          "thursday": "木曜日",
-          "friday": "金曜日",
-          "saturday": "土曜日"
-        }
+        "apply": "このオフセットを使用"
       }
     }
   },

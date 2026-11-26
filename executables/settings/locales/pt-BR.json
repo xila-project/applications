@@ -120,57 +120,13 @@
         "offset": "Deslocamento UTC",
         "minutes": "Minutos",
         "daylight_saving": "Horário de verão",
-        "shift": "Deslocamento de verão",
         "rules": "Regras",
         "presets": {
           "european_union": "União Europeia",
-          "united_states": "Estados Unidos",
-          "custom": "Personalizadas"
+          "united_states": "Estados Unidos"
         },
-        "start": "Início",
-        "end": "Fim",
-        "month": "Mês",
-        "week": "Semana",
-        "weekday": "Dia",
-        "time": "Hora local",
-        "weeks": {
-          "first": "Primeira",
-          "second": "Segunda",
-          "third": "Terceira",
-          "fourth": "Quarta",
-          "last": "Última"
-        },
-        "standard_name": "Abreviação padrão (opcional)",
-        "daylight_name": "Abreviação de verão (opcional)",
-        "names_hint": "De 3 a 7 letras, dígitos, + ou -, por exemplo CET e CEST. Vazia: o deslocamento é usado, por exemplo +01.",
         "generated": "String TZ gerada",
-        "apply": "Usar este deslocamento",
-        "errors": {
-          "abbreviation": "Uma abreviação tem de 3 a 7 letras, dígitos, + ou -."
-        },
-        "months": {
-          "january": "janeiro",
-          "february": "fevereiro",
-          "march": "março",
-          "april": "abril",
-          "may": "maio",
-          "june": "junho",
-          "july": "julho",
-          "august": "agosto",
-          "september": "setembro",
-          "october": "outubro",
-          "november": "novembro",
-          "december": "dezembro"
-        },
-        "weekdays": {
-          "sunday": "domingo",
-          "monday": "segunda-feira",
-          "tuesday": "terça-feira",
-          "wednesday": "quarta-feira",
-          "thursday": "quinta-feira",
-          "friday": "sexta-feira",
-          "saturday": "sábado"
-        }
+        "apply": "Usar este deslocamento"
       }
     }
   },

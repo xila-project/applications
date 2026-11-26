@@ -60,22 +60,21 @@ previous editor and builds the next one.
   default editor when it exists. When the stored name is not in the tables,
   no region is selected.
 - **UTC offset**, with the `time-zone-offset-form` feature (default on): a
-  form that builds the POSIX TZ string, so that nobody has to type one. It
-  takes the offset (UTC-12:00 to UTC+14:00, in steps of 15 minutes), an
-  optional daylight saving time with its shift (30 minutes, one hour or two
-  hours) and its rules, and optional abbreviations. The rule presets are
-  "European Union" (last Sunday of March to last Sunday of October at 01:00
-  UTC, written as the local times of the chosen offset) and "United States"
-  (second Sunday of March to first Sunday of November at 02:00 local time);
-  "Custom" takes the month, week (first to fourth, or last), weekday and time
-  (00:00 to 24:45 in steps of 15 minutes) of the start and of the end.
-  Without abbreviations, the numeric form of tzdata is used (`<+01>`). The
-  form shows the generated string and stores it without a name. It builds its
-  daylight saving and custom rule fields only when they are first turned on.
-  This is the default editor without a names feature.
+  lightweight form that builds the POSIX TZ string, so that nobody has to
+  type one. It takes the standard offset (UTC-12:00 to UTC+14:00, in steps of
+  15 minutes, written with the POSIX sign inversion and the numeric tzdata
+  abbreviation, `<+01>-1`) and an optional daylight saving time of one hour
+  with a rule preset: "European Union" (last Sunday of March to last Sunday
+  of October at 01:00 UTC, written as the local times of the chosen offset)
+  or "United States" (second Sunday of March to first Sunday of November at
+  02:00 local time), for example `<+01>-1<+02>,M3.5.0,M10.5.0/3` for Paris.
+  The form shows the generated string live and stores it without a name; its
+  preset dropdown is built only when daylight saving time is first turned
+  on. This is the default editor without a names feature.
 - **TZ string (advanced)**: a raw POSIX TZ string, checked while it is typed.
-  It also takes rule times that the form does not offer (negative, or above
-  24:45).
+  It also takes custom daylight saving rules, unusual shifts (30 minutes,
+  two hours) and abbreviations (CET, CEST) that the offset form does not
+  offer.
 
 The setting is stored by `xila::local_time::set` in
 `/configuration/system/time_zone.json`: only root and members of the

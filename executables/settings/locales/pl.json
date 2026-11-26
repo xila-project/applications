@@ -120,57 +120,13 @@
         "offset": "Przesunięcie UTC",
         "minutes": "Minuty",
         "daylight_saving": "Czas letni",
-        "shift": "Przesunięcie letnie",
         "rules": "Reguły",
         "presets": {
           "european_union": "Unia Europejska",
-          "united_states": "Stany Zjednoczone",
-          "custom": "Własne"
+          "united_states": "Stany Zjednoczone"
         },
-        "start": "Początek",
-        "end": "Koniec",
-        "month": "Miesiąc",
-        "week": "Tydzień",
-        "weekday": "Dzień",
-        "time": "Czas lokalny",
-        "weeks": {
-          "first": "Pierwszy",
-          "second": "Drugi",
-          "third": "Trzeci",
-          "fourth": "Czwarty",
-          "last": "Ostatni"
-        },
-        "standard_name": "Skrót czasu standardowego (opcjonalnie)",
-        "daylight_name": "Skrót czasu letniego (opcjonalnie)",
-        "names_hint": "Od 3 do 7 liter, cyfr, + lub -, na przykład CET i CEST. Puste: używane jest przesunięcie, na przykład +01.",
         "generated": "Wygenerowany ciąg TZ",
-        "apply": "Użyj tego przesunięcia",
-        "errors": {
-          "abbreviation": "Skrót ma od 3 do 7 liter, cyfr, + lub -."
-        },
-        "months": {
-          "january": "styczeń",
-          "february": "luty",
-          "march": "marzec",
-          "april": "kwiecień",
-          "may": "maj",
-          "june": "czerwiec",
-          "july": "lipiec",
-          "august": "sierpień",
-          "september": "wrzesień",
-          "october": "październik",
-          "november": "listopad",
-          "december": "grudzień"
-        },
-        "weekdays": {
-          "sunday": "niedziela",
-          "monday": "poniedziałek",
-          "tuesday": "wtorek",
-          "wednesday": "środa",
-          "thursday": "czwartek",
-          "friday": "piątek",
-          "saturday": "sobota"
-        }
+        "apply": "Użyj tego przesunięcia"
       }
     }
   },

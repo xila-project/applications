@@ -120,57 +120,13 @@
         "offset": "UTC offset",
         "minutes": "Minutes",
         "daylight_saving": "Daylight saving time",
-        "shift": "Daylight offset",
         "rules": "Rules",
         "presets": {
           "european_union": "European Union",
-          "united_states": "United States",
-          "custom": "Custom"
+          "united_states": "United States"
         },
-        "start": "Start",
-        "end": "End",
-        "month": "Month",
-        "week": "Week",
-        "weekday": "Day",
-        "time": "Local time",
-        "weeks": {
-          "first": "First",
-          "second": "Second",
-          "third": "Third",
-          "fourth": "Fourth",
-          "last": "Last"
-        },
-        "standard_name": "Standard abbreviation (optional)",
-        "daylight_name": "Daylight abbreviation (optional)",
-        "names_hint": "3 to 7 letters, digits, + or -, for example CET and CEST. When empty, the offset is used, for example +01.",
         "generated": "Generated TZ string",
-        "apply": "Use this offset",
-        "errors": {
-          "abbreviation": "An abbreviation has 3 to 7 letters, digits, + or -."
-        },
-        "months": {
-          "january": "January",
-          "february": "February",
-          "march": "March",
-          "april": "April",
-          "may": "May",
-          "june": "June",
-          "july": "July",
-          "august": "August",
-          "september": "September",
-          "october": "October",
-          "november": "November",
-          "december": "December"
-        },
-        "weekdays": {
-          "sunday": "Sunday",
-          "monday": "Monday",
-          "tuesday": "Tuesday",
-          "wednesday": "Wednesday",
-          "thursday": "Thursday",
-          "friday": "Friday",
-          "saturday": "Saturday"
-        }
+        "apply": "Use this offset"
       }
     }
   },

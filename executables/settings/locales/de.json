@@ -120,57 +120,13 @@
         "offset": "UTC-Versatz",
         "minutes": "Minuten",
         "daylight_saving": "Sommerzeit",
-        "shift": "Sommerzeit-Versatz",
         "rules": "Regeln",
         "presets": {
           "european_union": "Europäische Union",
-          "united_states": "Vereinigte Staaten",
-          "custom": "Eigene"
+          "united_states": "Vereinigte Staaten"
         },
-        "start": "Beginn",
-        "end": "Ende",
-        "month": "Monat",
-        "week": "Woche",
-        "weekday": "Tag",
-        "time": "Ortszeit",
-        "weeks": {
-          "first": "Erste",
-          "second": "Zweite",
-          "third": "Dritte",
-          "fourth": "Vierte",
-          "last": "Letzte"
-        },
-        "standard_name": "Abkürzung Normalzeit (optional)",
-        "daylight_name": "Abkürzung Sommerzeit (optional)",
-        "names_hint": "3 bis 7 Buchstaben, Ziffern, + oder -, zum Beispiel CET und CEST. Leer: der Versatz wird verwendet, zum Beispiel +01.",
         "generated": "Erzeugte TZ-Zeichenkette",
-        "apply": "Diesen Versatz verwenden",
-        "errors": {
-          "abbreviation": "Eine Abkürzung hat 3 bis 7 Buchstaben, Ziffern, + oder -."
-        },
-        "months": {
-          "january": "Januar",
-          "february": "Februar",
-          "march": "März",
-          "april": "April",
-          "may": "Mai",
-          "june": "Juni",
-          "july": "Juli",
-          "august": "August",
-          "september": "September",
-          "october": "Oktober",
-          "november": "November",
-          "december": "Dezember"
-        },
-        "weekdays": {
-          "sunday": "Sonntag",
-          "monday": "Montag",
-          "tuesday": "Dienstag",
-          "wednesday": "Mittwoch",
-          "thursday": "Donnerstag",
-          "friday": "Freitag",
-          "saturday": "Samstag"
-        }
+        "apply": "Diesen Versatz verwenden"
       }
     }
   },
