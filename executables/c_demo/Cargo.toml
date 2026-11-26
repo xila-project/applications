@@ -11,7 +11,14 @@ name = "c_demo"
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dependencies]
 abi_application = { workspace = true }
-executable.workspace = true
+executable = { workspace = true, features = ["native-linked"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))'.dev-dependencies]
+authentication = { workspace = true }
+file_system = { workspace = true }
+task = { workspace = true, features = ["test_harness"] }
+testing = { workspace = true }
+virtual_file_system = { workspace = true }
 
 [build-dependencies]
 cc = "1"
