@@ -5,6 +5,7 @@ pub mod execution;
 #[cfg(feature = "graphics")]
 pub mod graphics;
 pub mod integrity;
+mod linear_memory;
 mod main;
 mod registrable;
 mod store;

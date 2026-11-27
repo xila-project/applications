@@ -6,7 +6,7 @@ use alloc::{
 };
 use core::fmt::Write;
 use getargs_derive::GetArgs;
-use wasmi::{Caller, Engine, Linker, Module, Store};
+use wasmi::{Caller, Engine, Linker, Store};
 use xila::{
     executable::{ExecutableContext, Standard},
     file_system::{Kind, Path},
@@ -17,7 +17,7 @@ use xila::{
 use crate::host::{
     engine::Translation,
     error::{Error, Result},
-    integrity,
+    integrity, linear_memory,
     store::GlobalStore,
     wasi::{self, DirectoryVariant, FileSystemItem, FileVariant, Prestat, WasiContext},
 };
@@ -161,19 +161,27 @@ struct WasmArguments<'a> {
     translation: Translation,
 }
 
-pub async fn main(
-    standard: Standard<'static>,
-    arguments: Vec<String>,
-) -> core::result::Result<(), NonZeroUsize> {
-    execute_with_control(standard, arguments, Default::default()).await
-}
-
 /// Run one guest with an independently owned stop handle. Join this future
 /// before replacing its module or reclaiming its VFS and graphics resources.
 pub async fn execute_with_control(
+    standard: Standard<'static>,
+    arguments: Vec<String>,
+    control: xila::synchronization::Arc<super::ExecutionControl>,
+) -> core::result::Result<(), NonZeroUsize> {
+    execute(
+        standard,
+        arguments,
+        control,
+        super::DEFAULT_MEMORY_GROWTH_ALLOWANCE,
+    )
+    .await
+}
+
+pub(super) async fn execute(
     mut standard: Standard<'static>,
     arguments: Vec<String>,
     control: xila::synchronization::Arc<super::ExecutionControl>,
+    memory_growth_allowance: usize,
 ) -> core::result::Result<(), NonZeroUsize> {
     // - Admission: guests are untrusted, so they never run with an identity
     //   that a launcher granted, such as the Shell's `sudo`. Core marks the
@@ -212,6 +220,7 @@ pub async fn execute_with_control(
         arguments,
         guest_arguments.to_vec(),
         control,
+        memory_growth_allowance,
     )
     .await
     {
@@ -257,7 +266,8 @@ async fn read_file(path: &str, context: &'static ExecutableContext) -> Result<Ve
         return Err(Error::NotAWasmFile);
     }
 
-    let mut buffer = Vec::with_capacity(statistics.size as usize);
+    let capacity = (statistics.size as usize).saturating_add(linear_memory::SOURCE_HEADROOM);
+    let mut buffer = Vec::with_capacity(capacity);
 
     File::read_from_path(virtual_file_system, task, &path, &mut buffer).await?;
 
@@ -294,24 +304,12 @@ async fn read_executable(
     }
 }
 
-async fn load_module(
-    engine: &Engine,
-    path: &str,
-    developer_mode: bool,
-    context: &'static ExecutableContext,
-) -> Result<Module> {
-    // Verified once per load: the checked buffer is the one compiled here.
-    let source = read_executable(path, developer_mode, context).await?;
-    let module = Module::new(engine, &source)?;
-    drop(source);
-    Ok(module)
-}
-
 async fn main_inner(
     standard: Standard<'static>,
     arguments: WasmArguments<'_>,
     guest_arguments: Vec<String>,
     control: xila::synchronization::Arc<super::ExecutionControl>,
+    memory_growth_allowance: usize,
 ) -> Result<()> {
     let context = standard.context;
     let WasmArguments {
@@ -326,7 +324,8 @@ async fn main_inner(
 
     // Refuse an executable before provisioning anything on its behalf.
     let engine = Engine::new(&super::engine::configuration(translation));
-    let module = load_module(&engine, path, developer_mode, context).await?;
+    let source = read_executable(path, developer_mode, context).await?;
+    let (module, memory_plan) = linear_memory::compile(&engine, source, memory_growth_allowance)?;
 
     // Application directory provisioning is a convenience for the Wasm runner,
     // not a VFS permission override. The filesystem enforces ordinary UID/GID
@@ -381,6 +380,9 @@ async fn main_inner(
     let root_directory =
         DirectoryVariant::preopen(context.virtual_file_system, task, Path::from_str("/")).await;
 
+    let mut memory_buffer = memory_plan
+        .map(linear_memory::MemoryBuffer::allocate)
+        .transpose()?;
     let mut store = Store::new(
         &engine,
         GlobalStore {
@@ -475,6 +477,11 @@ async fn main_inner(
         },
     )?;
 
+    if let Some(memory_buffer) = memory_buffer.as_mut() {
+        // SAFETY: This links the buffer once. The store and linker are
+        // declared after the buffer and drop before it on every path.
+        unsafe { memory_buffer.link(&mut store, &mut linker) }?;
+    }
     store.set_fuel(instruction_limit.get() as u64)?;
     let start = match linker.instantiate_and_start(&mut store, &module) {
         Ok(instance) => instance.get_typed_func::<(), ()>(&store, START_FUNCTION_NAME)?,
