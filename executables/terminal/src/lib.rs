@@ -12,6 +12,7 @@ testing::instantiate_global_allocator!();
 
 xila::internationalization::i18n!("locales");
 
+mod command_input;
 mod device;
 mod error;
 mod executable;

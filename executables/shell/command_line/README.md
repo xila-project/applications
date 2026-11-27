@@ -4,6 +4,20 @@ The shell runs built-in commands and native or WebAssembly executables through X
 
 Run a VFS script with `shell -s PATH`; relative paths use the shell's current directory. `shell -c COMMAND` continues to parse one explicit command string, and other already-separated executable arguments remain literal. Script lines use the same parser and commands as interactive input, including chaining, redirection, expansion, comments, quoting and escaping.
 
+## Interactive editing
+
+Use Left, Right, Home and End to move the cursor. Backspace and Delete remove
+the character before or after the cursor. Ctrl+A and Ctrl+E move to the start
+and end of the line. Ctrl+U and Ctrl+K remove text before and after the cursor.
+Ctrl+W removes the preceding word. Up and Down recall commands from this session.
+Down past the newest command restores the line you were editing.
+
+The terminal editor accepts up to 512 bytes per command. The shell discards
+an overlong command on Enter. History defaults to eight commands. Set the
+`XILA_SHELL_HISTORY_CAPACITY` environment variable before launching the shell
+to select a capacity from 0 to 32. A capacity of 0 disables history. The
+shell omits blank lines and consecutive duplicate commands from history.
+
 ## Composing commands
 
 ```sh

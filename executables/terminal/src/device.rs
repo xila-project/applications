@@ -1,9 +1,10 @@
 use xila::{
     file_system::{
-        BaseOperations, CharacterDevice, Context, IoErrorKind, MountOperations, Operation,
-        Position, Result, Size, Waiter,
+        BaseOperations, CharacterDevice, Context, ControlCommand, ControlCommandIdentifier,
+        IoErrorKind, MountOperations, Operation, Position, Result, Size, Waiter,
+        character_device::{GET_TERMINAL_ATTRIBUTES, IS_A_TERMINAL, SET_TERMINAL_ATTRIBUTES},
     },
-    shared::utf8_chunks,
+    shared::{AnyByLayout, utf8_chunks},
 };
 
 use crate::terminal::Terminal;
@@ -75,6 +76,34 @@ impl BaseOperations for Terminal {
                 self.print(string).map_err(map_error)?;
             }
             Ok(buffer.len())
+        })
+    }
+    fn control(
+        &self,
+        _: &mut Context,
+        _: &mut core::task::Context<'_>,
+        command: ControlCommandIdentifier,
+        input: &AnyByLayout,
+        output: &mut AnyByLayout,
+    ) -> core::task::Poll<Result<()>> {
+        xila::file_system::ready(|| match command {
+            IS_A_TERMINAL::IDENTIFIER => {
+                *IS_A_TERMINAL::cast_output(output)? = 1;
+                Ok(())
+            }
+            GET_TERMINAL_ATTRIBUTES::IDENTIFIER => {
+                *GET_TERMINAL_ATTRIBUTES::cast_output(output)? =
+                    self.terminal_attributes().map_err(map_error)?;
+                Ok(())
+            }
+            SET_TERMINAL_ATTRIBUTES::IDENTIFIER => {
+                let attributes = *SET_TERMINAL_ATTRIBUTES::cast_input(input)?;
+                if !attributes.has_only_known_flags() {
+                    return Err(IoErrorKind::InvalidArgument);
+                }
+                self.set_terminal_attributes(attributes).map_err(map_error)
+            }
+            _ => Err(IoErrorKind::Unsupported),
         })
     }
     fn set_position(&self, _: &mut Context, _: Size, _: &Position) -> Result<Size> {

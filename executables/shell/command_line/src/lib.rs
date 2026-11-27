@@ -20,6 +20,8 @@ use xila::{
 mod commands;
 mod error;
 mod execution;
+mod interactive;
+mod line_editor;
 mod parser;
 mod resolver;
 mod sudo;
@@ -177,7 +179,7 @@ impl Shell {
         }
     }
 
-    async fn main_interactive(&mut self) -> Result<()> {
+    async fn main_stream(&mut self) -> Result<()> {
         let mut input = Vec::with_capacity(64);
         while self.running {
             let _ = OutputBuffer::default()
