@@ -18,6 +18,7 @@ use xila::{
     virtual_file_system::File,
 };
 mod commands;
+mod completion;
 mod error;
 mod execution;
 mod interactive;

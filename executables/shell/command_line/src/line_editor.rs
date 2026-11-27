@@ -1,6 +1,6 @@
 //! Bounded UTF-8 input and history for one interactive shell session.
 use alloc::{collections::VecDeque, string::String};
-use core::mem;
+use core::{mem, ops::Range};
 
 pub const MAXIMUM_LINE_BYTES: usize = 512;
 pub const DEFAULT_HISTORY_CAPACITY: usize = 8;
@@ -14,6 +14,7 @@ pub enum Action {
     Cancel,
     EndOfInput,
     Bell,
+    Complete,
 }
 
 /// Why the current line was rejected and cannot be submitted.
@@ -73,6 +74,18 @@ impl LineEditor {
 
     pub fn before_cursor(&self) -> &str {
         &self.line[..self.cursor]
+    }
+
+    pub fn replace(&mut self, range: Range<usize>, text: &str) -> Action {
+        if self.line.len() - range.len() + text.len() > MAXIMUM_LINE_BYTES {
+            return Action::Bell;
+        }
+        self.cursor = range.start + text.len();
+        self.line.replace_range(range, text);
+        // Editing the line clears a rejection and a pending UTF-8 sequence.
+        self.rejected = None;
+        self.character_length = 0;
+        Action::Redraw
     }
 
     pub fn finish(&mut self) -> Result<String, Rejection> {
@@ -254,6 +267,7 @@ impl LineEditor {
         match byte {
             1 => self.move_cursor(0),
             5 => self.move_cursor(self.line.len()),
+            b'\t' => Action::Complete,
             // Backspace still works on a rejected line.
             8 | 127 => self.remove(self.previous_character(), self.cursor),
             4 => self.remove(self.cursor, self.next_character()),
@@ -432,5 +446,16 @@ mod tests {
         assert_eq!(editor.line(), "a");
         assert_eq!(editor.feed(b'\r'), Action::Submit);
         assert_eq!(editor.finish().ok().as_deref(), Some("a"));
+    }
+
+    #[test]
+    fn replace_clears_a_rejection() {
+        let mut editor = LineEditor::new(0);
+        type_keys(&mut editor, "ec");
+        assert_eq!(editor.feed(0xFF), Action::Bell);
+        assert_eq!(editor.replace(0..2, "ls"), Action::Redraw);
+        assert_eq!(editor.line(), "ls");
+        assert_eq!(editor.feed(b'\r'), Action::Submit);
+        assert_eq!(editor.finish().ok().as_deref(), Some("ls"));
     }
 }

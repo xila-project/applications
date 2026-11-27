@@ -173,7 +173,7 @@ pub enum UserCommandKind {
 
 /// Names and help text shared by command resolution and `help`.
 /// Register new built-ins here so they are discoverable in the shell.
-const BUILTINS: &[(&str, UserCommandKind, &str)] = &[
+pub(super) const BUILTINS: &[(&str, UserCommandKind, &str)] = &[
     (
         "true",
         UserCommandKind::True,

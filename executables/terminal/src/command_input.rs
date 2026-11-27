@@ -15,6 +15,7 @@ struct State {
     attributes: TerminalAttributes,
     queued: VecDeque<u8>,
     updating_widget: bool,
+    completion_focus_requested: bool,
 }
 
 /// Map an `LV_EVENT_KEY` key code to the bytes queued for the shell.
@@ -48,6 +49,7 @@ impl CommandInput {
                 attributes: TerminalAttributes::INTERACTIVE,
                 queued: VecDeque::new(),
                 updating_widget: false,
+                completion_focus_requested: false,
             }),
         }
     }
@@ -82,6 +84,10 @@ impl CommandInput {
         destination.extend(state.queued.drain(..count));
     }
 
+    pub fn take_completion_focus_request(&self) -> bool {
+        mem::take(&mut self.state.borrow_mut().completion_focus_requested)
+    }
+
     /// The textarea owns the callbacks. The event loop and display updates
     /// access their state only while holding the graphics lock.
     pub unsafe fn attach(&self, input: *mut lvgl::lv_obj_t) {
@@ -98,6 +104,12 @@ impl CommandInput {
                 input,
                 Some(Self::on_input),
                 lv_event_code_t_LV_EVENT_INSERT,
+                pointer,
+            );
+            lv_obj_add_event_cb(
+                input,
+                Some(Self::on_input),
+                lv_event_code_t_LV_EVENT_DEFOCUSED,
                 pointer,
             );
         }
@@ -126,6 +138,17 @@ impl CommandInput {
                     input.queue(text.to_bytes());
                     let target = lv_event_get_target(event).cast();
                     lv_textarea_set_insert_replace(target, c"".as_ptr());
+                }
+                EventKind::Defocused => {
+                    // LVGL uses Tab to move focus before sending widget key events.
+                    let device = lv_indev_active();
+                    if !device.is_null()
+                        && lv_indev_get_type(device) == lv_indev_type_t_LV_INDEV_TYPE_KEYPAD
+                        && lv_indev_get_key(device) == lv_key_t_LV_KEY_NEXT
+                    {
+                        input.queue(b"\t");
+                        input.state.borrow_mut().completion_focus_requested = true;
+                    }
                 }
                 _ => {}
             }
