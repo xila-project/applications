@@ -185,6 +185,7 @@ impl Terminal {
             );
             lvgl::lv_obj_set_flex_grow(input, 1);
             lvgl::lv_textarea_set_one_line(input, true);
+            lvgl::lv_textarea_set_password_show_time(input, 0);
             lvgl::lv_obj_set_style_text_font(
                 input,
                 get_font_monospace_medium(),
@@ -512,6 +513,49 @@ mod setup_failure_tests {
             "graphics lock must be released after Terminal setup error"
         );
         assert_eq!(manager.get_window_count().await.unwrap(), baseline_windows);
+    }
+
+    #[xila::task::test(task_path = xila::task)]
+    async fn raw_terminal_forwards_keys_and_displays_the_shell_cursor() {
+        use xila::{file_system::character_device::TerminalAttributes, graphics::Key};
+
+        let manager = headless_graphics_manager().await;
+        let terminal = Terminal::new(manager).await.unwrap();
+        terminal
+            .set_terminal_attributes(TerminalAttributes::RAW)
+            .unwrap();
+
+        manager
+            .lock_function(|| unsafe {
+                let input = terminal.inner.try_read().unwrap().input;
+                let mut key = u32::from(Key::Left);
+                lvgl::lv_obj_send_event(
+                    input,
+                    lvgl::lv_event_code_t_LV_EVENT_KEY,
+                    (&raw mut key).cast(),
+                );
+                lvgl::lv_textarea_add_text(input, c"é".as_ptr());
+                Ok(())
+            })
+            .await
+            .unwrap();
+        terminal.handle_events().await.unwrap();
+        let mut keys = [0; 16];
+        let size = terminal.read_input(&mut keys).unwrap();
+        assert_eq!(&keys[..size], "\x1b[Dé".as_bytes());
+
+        terminal
+            .print("prompt$ \x1b7\x1b8\x1b[Jrésumé\x1b8ré")
+            .unwrap();
+        manager
+            .lock_function(|| unsafe {
+                let input = terminal.inner.try_read().unwrap().input;
+                assert_eq!(Terminal::get_input(input), "résumé");
+                assert_eq!(lvgl::lv_textarea_get_cursor_pos(input), 2);
+                Ok(())
+            })
+            .await
+            .unwrap();
     }
 
     #[xila::task::test(task_path = xila::task)]
