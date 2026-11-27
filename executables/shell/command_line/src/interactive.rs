@@ -106,8 +106,7 @@ impl Shell {
             let mut byte = [0; 1];
             // The position of the cursor in the line shown on the screen,
             // before this key: the redraw moves relative to it.
-            let mut displayed_position =
-                screen::position(&prompt, editor.before_cursor(), columns);
+            let mut displayed_position = screen::position(&prompt, editor.before_cursor(), columns);
             let action = match self.read_input_byte(&mut byte).await? {
                 Some(0) if !editor.line().is_empty() => Action::Submit,
                 Some(1) => editor.feed(byte[0]),

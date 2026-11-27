@@ -82,6 +82,9 @@ impl LineEditor {
         }
         self.cursor = range.start + text.len();
         self.line.replace_range(range, text);
+        // Editing the line clears a rejection and a pending UTF-8 sequence.
+        self.rejected = None;
+        self.character_length = 0;
         Action::Redraw
     }
 
@@ -443,5 +446,16 @@ mod tests {
         assert_eq!(editor.line(), "a");
         assert_eq!(editor.feed(b'\r'), Action::Submit);
         assert_eq!(editor.finish().ok().as_deref(), Some("a"));
+    }
+
+    #[test]
+    fn replace_clears_a_rejection() {
+        let mut editor = LineEditor::new(0);
+        type_keys(&mut editor, "ec");
+        assert_eq!(editor.feed(0xFF), Action::Bell);
+        assert_eq!(editor.replace(0..2, "ls"), Action::Redraw);
+        assert_eq!(editor.line(), "ls");
+        assert_eq!(editor.feed(b'\r'), Action::Submit);
+        assert_eq!(editor.finish().ok().as_deref(), Some("ls"));
     }
 }
