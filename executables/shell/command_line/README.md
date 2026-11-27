@@ -9,14 +9,24 @@ Run a VFS script with `shell -s PATH`; relative paths use the shell's current di
 Use Left, Right, Home and End to move the cursor. Backspace and Delete remove
 the character before or after the cursor. Ctrl+A and Ctrl+E move to the start
 and end of the line. Ctrl+U and Ctrl+K remove text before and after the cursor.
-Ctrl+W removes the preceding word. Up and Down recall commands from this session.
-Down past the newest command restores the line you were editing.
+Ctrl+W removes the preceding word. Ctrl+D deletes the character under the
+cursor and ends input on an empty line. Up and Down recall commands from this
+session. Down past the newest command restores the line you were editing.
+
+Input that is not valid UTF-8 is refused with a bell. Backspace and the other
+editing keys still work on a refused line, and Enter refuses the line with an
+invalid UTF-8 message instead of running it.
 
 The terminal editor accepts up to 512 bytes per command. The shell discards
 an overlong command on Enter. History defaults to eight commands. Set the
 `XILA_SHELL_HISTORY_CAPACITY` environment variable before launching the shell
 to select a capacity from 0 to 32. A capacity of 0 disables history. The
 shell omits blank lines and consecutive duplicate commands from history.
+
+The shell redraws the line with relative cursor movement, so a line that wraps
+past the bottom row still redraws correctly once the screen scrolls. It
+assumes an 80 column terminal, because no device control reports the terminal
+size yet.
 
 ## Composing commands
 

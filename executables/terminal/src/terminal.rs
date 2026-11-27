@@ -552,8 +552,9 @@ mod setup_failure_tests {
         assert_eq!(&keys[..size], "\x1b[Dé".as_bytes());
 
         terminal
-            .print("prompt$ \x1b7\x1b8\x1b[Jrésumé\x1b8ré".as_bytes())
+            .print("prompt$ \x1b7\r\x1b[8C\x1b[Jrésumé\r\x1b[8C".as_bytes())
             .unwrap();
+        terminal.print("ré".as_bytes()).unwrap();
         manager
             .lock_function(|| unsafe {
                 let input = terminal.inner.try_read().unwrap().input;
@@ -563,6 +564,38 @@ mod setup_failure_tests {
             })
             .await
             .unwrap();
+    }
+
+    #[xila::task::test(task_path = xila::task)]
+    async fn key_events_queue_full_unicode_code_points_as_utf8() {
+        use xila::file_system::character_device::TerminalAttributes;
+
+        let manager = headless_graphics_manager().await;
+        let terminal = Terminal::new(manager).await.unwrap();
+        terminal
+            .set_terminal_attributes(TerminalAttributes::RAW)
+            .unwrap();
+
+        manager
+            .lock_function(|| unsafe {
+                let input = terminal.inner.try_read().unwrap().input;
+                // LVGL delivers full Unicode code points on LV_EVENT_KEY.
+                for key_code in [0xE9, 0x754C] {
+                    let mut key = key_code;
+                    lvgl::lv_obj_send_event(
+                        input,
+                        lvgl::lv_event_code_t_LV_EVENT_KEY,
+                        (&raw mut key).cast(),
+                    );
+                }
+                Ok(())
+            })
+            .await
+            .unwrap();
+        terminal.handle_events().await.unwrap();
+        let mut keys = [0; 16];
+        let size = terminal.read_input(&mut keys).unwrap();
+        assert_eq!(&keys[..size], "é界".as_bytes());
     }
 
     #[xila::task::test(task_path = xila::task)]

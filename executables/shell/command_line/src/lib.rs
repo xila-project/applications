@@ -24,6 +24,7 @@ mod interactive;
 mod line_editor;
 mod parser;
 mod resolver;
+mod screen;
 mod sudo;
 mod tokenizer;
 use commands::CommandContext;

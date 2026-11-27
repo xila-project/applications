@@ -17,6 +17,30 @@ struct State {
     updating_widget: bool,
 }
 
+/// Map an `LV_EVENT_KEY` key code to the bytes queued for the shell.
+///
+/// LVGL delivers full Unicode code points on `LV_EVENT_KEY`, so a character
+/// above U+00FF arrives as its code point: queue its UTF-8 encoding instead of
+/// truncating the code point to one byte.
+fn key_to_bytes(key_code: u32, character: &mut [u8; 4]) -> &[u8] {
+    match Key::from(key_code) {
+        Key::Up => b"\x1b[A",
+        Key::Down => b"\x1b[B",
+        Key::Right => b"\x1b[C",
+        Key::Left => b"\x1b[D",
+        Key::Home => b"\x1b[H",
+        Key::End => b"\x1b[F",
+        Key::Delete => b"\x1b[3~",
+        Key::Backspace => b"\x08",
+        Key::Enter => b"\n",
+        Key::Escape => b"\x1b",
+        _ => match char::from_u32(key_code) {
+            Some(value) => value.encode_utf8(character).as_bytes(),
+            None => &[],
+        },
+    }
+}
+
 impl CommandInput {
     pub fn new() -> Self {
         Self {
@@ -91,25 +115,8 @@ impl CommandInput {
             match EventKind::from_lvgl_code(lv_event_get_code(event)) {
                 EventKind::Key => {
                     let key_code = lv_event_get_key(event);
-                    let key = Key::from(key_code);
-                    let character;
-                    let bytes: &[u8] = match key {
-                        Key::Up => b"\x1b[A",
-                        Key::Down => b"\x1b[B",
-                        Key::Right => b"\x1b[C",
-                        Key::Left => b"\x1b[D",
-                        Key::Home => b"\x1b[H",
-                        Key::End => b"\x1b[F",
-                        Key::Delete => b"\x1b[3~",
-                        Key::Backspace => b"\x08",
-                        Key::Enter => b"\n",
-                        Key::Escape => b"\x1b",
-                        Key::Character(byte) if u32::from(byte) == key_code => {
-                            character = [byte];
-                            &character
-                        }
-                        _ => &[],
-                    };
+                    let mut character = [0; 4];
+                    let bytes = key_to_bytes(key_code, &mut character);
                     input.queue(bytes);
                     lv_event_stop_processing(event);
                     lv_event_stop_bubbling(event);
@@ -131,12 +138,23 @@ enum Escape {
     #[default]
     None,
     Start,
-    Control(Option<char>),
+    /// A `CSI` sequence. `parameter` is set once a parameter byte was seen;
+    /// `two` remembers a lone `2` parameter, as in `CSI 2 J`.
+    Control {
+        parameter: bool,
+        two: bool,
+    },
 }
 
 /// Track the command text separately so the textarea can display its cursor.
 /// ESC 7 starts command output, ESC 8 returns to its start, and CSI J clears
 /// the old command. A newline commits the command text to the scrollback.
+///
+/// The shell redraws its line with relative cursor movement: `\r`, `CSI n A`,
+/// `CSI n C` and `CSI J`. While the edit is tracked, `\r` moves the edit
+/// cursor to the start of the line, and the other movements are consumed
+/// without effect, so the text that follows overwrites the line from its
+/// start. A newline commits the command text to the scrollback.
 #[derive(Default)]
 pub(crate) struct CommandOutput {
     edit: Option<(alloc::string::String, usize)>,
@@ -164,21 +182,44 @@ impl CommandOutput {
                         *cursor = 0;
                     }
                 }
-                (Escape::Start, '[') => self.escape = Escape::Control(None),
-                (Escape::Control(None), '2') => self.escape = Escape::Control(Some('2')),
-                (Escape::Control(Some('2')), 'J') => scrollback.clear(),
-                (Escape::Control(None), 'J') if raw => {
+                (Escape::Start, '[') => {
+                    self.escape = Escape::Control {
+                        parameter: false,
+                        two: false,
+                    }
+                }
+                (Escape::Control { parameter, two }, byte)
+                    if ('\u{30}'..='\u{3f}').contains(&byte) =>
+                {
+                    // Parameter bytes stay in the sequence; the final byte ends it.
+                    self.escape = Escape::Control {
+                        parameter: true,
+                        two: two || (!parameter && byte == '2'),
+                    };
+                }
+                (
+                    Escape::Control {
+                        parameter: false, ..
+                    },
+                    'J',
+                ) if raw => {
                     if let Some((text, cursor)) = &mut self.edit {
                         text.truncate(*cursor);
                     }
                 }
+                (Escape::Control { two: true, .. }, 'J') => scrollback.clear(),
                 (Escape::None, '\n') => {
                     if let Some((text, _)) = self.edit.take() {
                         scrollback.push_str(&text);
                     }
                     scrollback.push('\n');
                 }
-                (Escape::None, '\r' | '\x07' | '\0') => {}
+                (Escape::None, '\r') => {
+                    if let Some((_, cursor)) = &mut self.edit {
+                        *cursor = 0;
+                    }
+                }
+                (Escape::None, '\x07' | '\0') => {}
                 (Escape::None, character) => {
                     if let Some((text, cursor)) = &mut self.edit {
                         let replaced_bytes =
@@ -203,6 +244,28 @@ mod tests {
     use super::*;
 
     #[test]
+    fn key_events_encode_full_unicode_code_points() {
+        let mut character = [0; 4];
+        // Named keys keep their escape sequences.
+        assert_eq!(
+            key_to_bytes(u32::from(Key::Left), &mut character),
+            b"\x1b[D"
+        );
+        assert_eq!(key_to_bytes(u32::from(Key::Enter), &mut character), b"\n");
+        // U+00E9 arrives as its code point and is queued as UTF-8, not as the
+        // single byte 0xE9.
+        assert_eq!(key_to_bytes(0xE9, &mut character), "é".as_bytes());
+        // Code points above U+00FF are not truncated to one byte.
+        assert_eq!(key_to_bytes(0x754C, &mut character), "界".as_bytes());
+        assert_eq!(
+            key_to_bytes(0x1F600, &mut character),
+            "\u{1F600}".as_bytes()
+        );
+        // Surrogates are not characters and are dropped.
+        assert_eq!(key_to_bytes(0xD800, &mut character), &[]);
+    }
+
+    #[test]
     fn command_redraw_keeps_the_prompt_and_positions_the_cursor() {
         let mut output = CommandOutput::default();
         let mut scrollback = alloc::string::String::new();
@@ -213,5 +276,21 @@ mod tests {
         output.write("\x1b8\x1b[J界な\r\n", &mut scrollback, true);
         assert_eq!(output.edit(), None);
         assert_eq!(scrollback, "prompt$ 界な\n");
+    }
+
+    #[test]
+    fn relative_redraw_stream_replaces_the_line_and_places_the_cursor() {
+        let mut output = CommandOutput::default();
+        let mut scrollback = alloc::string::String::new();
+        output.write("prompt$ \x1b7", &mut scrollback, true);
+        // Carriage return, right to the start of the line, erase, the new
+        // line, then back to the start and the text before the cursor.
+        output.write("\r\x1b[8C\x1b[Jabc\r\x1b[8Ca", &mut scrollback, true);
+        assert_eq!(output.edit(), Some(("abc", 1)));
+        assert_eq!(scrollback, "prompt$ ");
+        // Submitting redraws the line at the end of the input and commits it.
+        output.write("\r\x1b[8C\x1b[Jabc\r\n", &mut scrollback, true);
+        assert_eq!(output.edit(), None);
+        assert_eq!(scrollback, "prompt$ abc\n");
     }
 }

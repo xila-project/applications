@@ -1,7 +1,9 @@
 use crate::{
     OutputBuffer, Result, Shell, execution,
-    line_editor::{Action, DEFAULT_HISTORY_CAPACITY, LineEditor},
+    line_editor::{Action, DEFAULT_HISTORY_CAPACITY, LineEditor, Rejection},
+    screen,
 };
+use alloc::string::String;
 use xila::file_system::character_device::{
     GET_TERMINAL_ATTRIBUTES, IS_A_TERMINAL, SET_TERMINAL_ATTRIBUTES, TerminalAttributes,
 };
@@ -43,20 +45,28 @@ impl Shell {
             let result = self.edit_command(&mut editor).await;
             self.restore_terminal_attributes(saved).await;
             match result? {
-                Action::Submit => {
-                    if let Some(source) = editor.finish() {
+                Action::Submit => match editor.finish() {
+                    Ok(source) => {
                         if let Err(error) = self.execute_line(&source).await {
                             self.last_status = 2;
                             self.diagnostic(error).await;
                         }
-                    } else {
+                    }
+                    Err(Rejection::TooLong) => {
                         self.last_status = 2;
                         self.diagnostic(xila::internationalization::t!(
                             "execution.errors.command_line_too_long"
                         ))
                         .await;
                     }
-                }
+                    Err(Rejection::InvalidUtf8) => {
+                        self.last_status = 2;
+                        self.diagnostic(xila::internationalization::t!(
+                            "errors.invalid_utf_8_input"
+                        ))
+                        .await;
+                    }
+                },
                 Action::Cancel => editor.discard(),
                 _ => self.running = false,
             }
@@ -66,18 +76,23 @@ impl Shell {
 
     async fn edit_command(&mut self, editor: &mut LineEditor) -> Result<Action> {
         let mut output = OutputBuffer::default();
-        output
-            .write(
-                self.standard.out(),
-                format_args!(
-                    "{}@{}:{}$ \x1b7",
-                    self.user, self.host, self.current_directory
-                ),
-            )
-            .await?;
+        let prompt = alloc::format!("{}@{}:{}$ ", self.user, self.host, self.current_directory);
+        // No device control reports the terminal size yet, so the redraw
+        // assumes 80 columns.
+        let columns = screen::ASSUMED_TERMINAL_COLUMNS;
+        // ESC 7 marks the start of the edited line for the graphical terminal.
+        // On a serial console it only saves the cursor position, which the
+        // redraw never restores. Prompt write errors stay non-fatal, as in
+        // stream mode: the input read reports a broken terminal instead.
+        let _ = output
+            .write(self.standard.out(), format_args!("{prompt}\x1b7"))
+            .await;
         let _ = self.standard.out().flush().await;
         loop {
             let mut byte = [0; 1];
+            // The line shown on the screen, before this key: the redraw moves
+            // relative to its cursor.
+            let displayed_columns = screen::width(editor.before_cursor());
             let action = match self.read_input_byte(&mut byte).await? {
                 Some(0) if !editor.line().is_empty() => Action::Submit,
                 Some(1) => editor.feed(byte[0]),
@@ -86,39 +101,45 @@ impl Shell {
             match action {
                 Action::None => continue,
                 Action::Redraw => {
-                    // Restore the position after the prompt. Erase any old text, including
-                    // wrapped rows. Replay the prefix to place the cursor inside the line.
-                    let prefix = if editor.before_cursor().len() == editor.line().len() {
-                        ""
-                    } else {
-                        "\x1b8"
-                    };
-                    let before_cursor = if prefix.is_empty() {
-                        ""
-                    } else {
-                        editor.before_cursor()
-                    };
-                    output
-                        .write(
-                            self.standard.out(),
-                            format_args!("\x1b8\x1b[J{}{prefix}{before_cursor}", editor.line()),
-                        )
-                        .await?;
+                    let mut sequence = String::new();
+                    screen::redraw(
+                        &mut sequence,
+                        &prompt,
+                        displayed_columns,
+                        editor.line(),
+                        editor.before_cursor().len(),
+                        columns,
+                    );
+                    let _ = output
+                        .write(self.standard.out(), format_args!("{sequence}"))
+                        .await;
                 }
                 Action::Submit => {
-                    output
-                        .write(
-                            self.standard.out(),
-                            format_args!("\x1b8{}\n", editor.line()),
-                        )
-                        .await?;
+                    let mut sequence = String::new();
+                    screen::redraw(
+                        &mut sequence,
+                        &prompt,
+                        displayed_columns,
+                        editor.line(),
+                        editor.line().len(),
+                        columns,
+                    );
+                    sequence.push_str("\r\n");
+                    let _ = output
+                        .write(self.standard.out(), format_args!("{sequence}"))
+                        .await;
                     return Ok(action);
                 }
                 Action::Cancel | Action::EndOfInput => {
-                    execution::write_all(self.standard.out(), b"\x1b8\x1b[J\n").await?;
+                    let mut sequence = String::new();
+                    screen::erase_line(&mut sequence, &prompt, displayed_columns, columns);
+                    sequence.push_str("\r\n");
+                    let _ = execution::write_all(self.standard.out(), sequence.as_bytes()).await;
                     return Ok(action);
                 }
-                Action::Bell => execution::write_all(self.standard.out(), b"\x07").await?,
+                Action::Bell => {
+                    let _ = execution::write_all(self.standard.out(), b"\x07").await;
+                }
             }
             let _ = self.standard.out().flush().await;
         }

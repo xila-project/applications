@@ -16,6 +16,15 @@ pub enum Action {
     Bell,
 }
 
+/// Why the current line was rejected and cannot be submitted.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Rejection {
+    /// The line grew past [`MAXIMUM_LINE_BYTES`].
+    TooLong,
+    /// The input was not valid UTF-8.
+    InvalidUtf8,
+}
+
 #[derive(Default)]
 enum Escape {
     #[default]
@@ -38,7 +47,7 @@ pub struct LineEditor {
     character: [u8; 4],
     character_length: usize,
     previous_was_carriage_return: bool,
-    rejected: bool,
+    rejected: Option<Rejection>,
 }
 
 impl LineEditor {
@@ -54,7 +63,7 @@ impl LineEditor {
             character: [0; 4],
             character_length: 0,
             previous_was_carriage_return: false,
-            rejected: false,
+            rejected: None,
         }
     }
 
@@ -66,15 +75,15 @@ impl LineEditor {
         &self.line[..self.cursor]
     }
 
-    pub fn finish(&mut self) -> Option<String> {
+    pub fn finish(&mut self) -> Result<String, Rejection> {
         self.cursor = 0;
         self.recalled = None;
         self.draft.clear();
         self.escape = Escape::None;
         self.character_length = 0;
         let line = mem::take(&mut self.line);
-        if mem::take(&mut self.rejected) {
-            return None;
+        if let Some(rejection) = mem::take(&mut self.rejected) {
+            return Err(rejection);
         }
         if self.capacity != 0 && !line.trim().is_empty() && self.history.back() != Some(&line) {
             if self.history.len() == self.capacity {
@@ -82,13 +91,13 @@ impl LineEditor {
             }
             self.history.push_back(line.clone());
         }
-        Some(line)
+        Ok(line)
     }
 
     pub fn discard(&mut self) {
         self.line.clear();
-        self.rejected = false;
-        self.finish();
+        self.rejected = None;
+        let _ = self.finish();
     }
 
     fn recall(&mut self, previous: bool) -> Action {
@@ -146,6 +155,9 @@ impl LineEditor {
         }
         self.line.replace_range(start..end, "");
         self.cursor = start;
+        // Editing the line clears a rejection: the refused bytes were never
+        // inserted, so the line itself is valid.
+        self.rejected = None;
         Action::Redraw
     }
 
@@ -170,17 +182,20 @@ impl LineEditor {
         match byte {
             b'\r' | b'\n' => {
                 self.previous_was_carriage_return = byte == b'\r';
-                self.rejected |= self.character_length != 0;
+                if self.character_length != 0 && self.rejected.is_none() {
+                    self.rejected = Some(Rejection::InvalidUtf8);
+                }
                 return Action::Submit;
             }
             3 => return Action::Cancel,
-            4 if self.line.is_empty() && !self.rejected => return Action::EndOfInput,
+            // Ctrl+D ends input only on an empty line; elsewhere it deletes
+            // the character under the cursor, as the Delete key does.
+            4 if self.line.is_empty() && self.rejected.is_none() => return Action::EndOfInput,
             27 => {
                 self.escape = Escape::Start;
                 self.character_length = 0;
                 return Action::None;
             }
-            _ if self.rejected => return Action::None,
             _ => {}
         }
 
@@ -228,7 +243,9 @@ impl LineEditor {
         match byte {
             1 => self.move_cursor(0),
             5 => self.move_cursor(self.line.len()),
+            // Backspace still works on a rejected line.
             8 | 127 => self.remove(self.previous_character(), self.cursor),
+            4 => self.remove(self.cursor, self.next_character()),
             11 => self.remove(self.cursor, self.line.len()),
             21 => self.remove(0, self.cursor),
             23 => {
@@ -239,6 +256,7 @@ impl LineEditor {
                     .map_or(0, |index| self.next_boundary(index));
                 self.remove(start, self.cursor)
             }
+            32..=126 | 128..=255 if self.rejected.is_some() => Action::None,
             32..=126 | 128..=255 => self.insert_byte(byte),
             _ => Action::None,
         }
@@ -259,9 +277,14 @@ impl LineEditor {
                 Action::Redraw
             }
             Err(error) if error.error_len().is_none() => Action::None,
-            _ => {
+            Err(_) => {
                 self.character_length = 0;
-                self.rejected = true;
+                self.rejected = Some(Rejection::InvalidUtf8);
+                Action::Bell
+            }
+            Ok(_) => {
+                self.character_length = 0;
+                self.rejected = Some(Rejection::TooLong);
                 Action::Bell
             }
         }
@@ -304,7 +327,7 @@ mod tests {
         let mut editor = LineEditor::new(2);
         for command in ["one", "two", "two", " ", "three"] {
             type_keys(&mut editor, command);
-            assert_eq!(editor.finish().as_deref(), Some(command));
+            assert_eq!(editor.finish().ok().as_deref(), Some(command));
         }
         type_keys(&mut editor, "draft\x1b[A\x1bOA\x1b[A");
         assert_eq!(editor.line(), "two");
@@ -327,10 +350,56 @@ mod tests {
         assert_eq!(editor.feed(b'x'), Action::Bell);
         assert_eq!(editor.line().len(), MAXIMUM_LINE_BYTES);
         assert_eq!(editor.feed(b'\r'), Action::Submit);
-        assert_eq!(editor.finish(), None);
+        assert_eq!(editor.finish(), Err(Rejection::TooLong));
         assert_eq!(editor.feed(b'\n'), Action::None);
         type_keys(&mut editor, "next");
-        assert_eq!(editor.finish().as_deref(), Some("next"));
+        assert_eq!(editor.finish().ok().as_deref(), Some("next"));
         assert!(editor.history.is_empty());
+    }
+
+    #[test]
+    fn control_d_deletes_under_the_cursor_and_ends_empty_input() {
+        let mut editor = LineEditor::new(0);
+        type_keys(&mut editor, "ab");
+        // At the end of the line there is no character under the cursor.
+        assert_eq!(editor.feed(4), Action::None);
+        assert_eq!(editor.line(), "ab");
+        type_keys(&mut editor, "\x1b[D\x04");
+        assert_eq!(editor.line(), "a");
+        type_keys(&mut editor, "\x1b[D\x04");
+        assert_eq!(editor.line(), "");
+        assert_eq!(editor.feed(4), Action::EndOfInput);
+    }
+
+    #[test]
+    fn invalid_utf8_rejects_the_line_but_backspace_recovers() {
+        let mut editor = LineEditor::new(0);
+        type_keys(&mut editor, "ok");
+        assert_eq!(editor.feed(0xFF), Action::Bell);
+        // While the line is rejected, further input is refused.
+        assert_eq!(editor.feed(b'x'), Action::None);
+        assert_eq!(editor.line(), "ok");
+        // Backspace still works and clears the rejection.
+        assert_eq!(editor.feed(8), Action::Redraw);
+        assert_eq!(editor.line(), "o");
+        assert_eq!(editor.feed(b'\r'), Action::Submit);
+        assert_eq!(editor.finish().ok().as_deref(), Some("o"));
+    }
+
+    #[test]
+    fn a_rejected_line_reports_why() {
+        let mut editor = LineEditor::new(0);
+        // An incomplete UTF-8 sequence at Enter is invalid input.
+        assert_eq!(editor.feed(0xC3), Action::None);
+        assert_eq!(editor.feed(b'\r'), Action::Submit);
+        assert_eq!(editor.finish(), Err(Rejection::InvalidUtf8));
+
+        let mut editor = LineEditor::new(0);
+        for _ in 0..MAXIMUM_LINE_BYTES {
+            editor.feed(b'x');
+        }
+        assert_eq!(editor.feed(b'x'), Action::Bell);
+        assert_eq!(editor.feed(b'\r'), Action::Submit);
+        assert_eq!(editor.finish(), Err(Rejection::TooLong));
     }
 }
