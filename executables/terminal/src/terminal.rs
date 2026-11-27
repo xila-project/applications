@@ -20,6 +20,7 @@ struct TerminalWidgets {
     input: *mut lvgl::lv_obj_t,
     send: *mut lvgl::lv_obj_t,
     clear: *mut lvgl::lv_obj_t,
+    complete: *mut lvgl::lv_obj_t,
 }
 
 pub(crate) struct Inner {
@@ -29,6 +30,7 @@ pub(crate) struct Inner {
     input: *mut lvgl::lv_obj_t,
     send: *mut lvgl::lv_obj_t,
     clear: *mut lvgl::lv_obj_t,
+    complete: *mut lvgl::lv_obj_t,
     validated_input: VecDeque<u8>,
     command_input: Box<CommandInput>,
     command_output: CommandOutput,
@@ -79,6 +81,7 @@ impl Terminal {
                 input: widgets.input,
                 send: widgets.send,
                 clear: widgets.clear,
+                complete: widgets.complete,
                 validated_input: VecDeque::with_capacity(128),
                 command_input,
                 command_output: CommandOutput::default(),
@@ -156,7 +159,7 @@ impl Terminal {
         };
 
         // Command bar: the field, then Clear and the primary Send action.
-        let (input, send, clear) = unsafe {
+        let (input, send, clear, complete) = unsafe {
             let bar = lvgl::lv_obj_create(window.as_object_mutable());
             if bar.is_null() {
                 return Err(crate::error::Error::FailedToCreateObject);
@@ -199,9 +202,14 @@ impl Terminal {
                 clear,
                 lvgl::lv_theme_shadcn_variant_t_LV_THEME_SHADCN_VARIANT_OUTLINE,
             );
+            let complete = Self::icon_button(bar, lvgl::LV_SYMBOL_LIST)?;
+            lvgl::lv_theme_shadcn_set_variant(
+                complete,
+                lvgl::lv_theme_shadcn_variant_t_LV_THEME_SHADCN_VARIANT_OUTLINE,
+            );
             let send = Self::icon_button(bar, lvgl::LV_SYMBOL_NEW_LINE)?;
 
-            (input, send, clear)
+            (input, send, clear, complete)
         };
 
         Ok(TerminalWidgets {
@@ -210,6 +218,7 @@ impl Terminal {
             input,
             send,
             clear,
+            complete,
         })
     }
 
@@ -378,6 +387,12 @@ impl Terminal {
                     EventKind::Clicked if event.is_target(inner.send) => {
                         Self::submit(&mut inner)?;
                     }
+                    EventKind::Clicked if event.is_target(inner.complete) => {
+                        if !inner.command_input.attributes().is_canonical() {
+                            inner.command_input.queue(b"\t");
+                        }
+                        unsafe { lvgl::lv_group_focus_obj(inner.input) };
+                    }
                     EventKind::Clicked if event.is_target(inner.clear) => {
                         // Only the scrollback is dropped; the shell keeps
                         // running and its current line, the prompt, stays.
@@ -390,11 +405,15 @@ impl Terminal {
                 }
             }
             let Inner {
+                input,
                 command_input,
                 validated_input,
                 ..
             } = &mut *inner;
             command_input.drain_into(validated_input);
+            if command_input.take_completion_focus_request() {
+                unsafe { lvgl::lv_group_focus_obj(*input) };
+            }
             !validated_input.is_empty()
         });
 
