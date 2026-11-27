@@ -44,7 +44,8 @@ One match completes the word. If several matches share a prefix, the first
 Tab fills in that prefix, replacing only the text before the cursor. Press Tab
 again to list up to 12 matches. The list reports the number of additional
 matches collected. If nothing matches, the shell rings the bell and leaves the
-line as typed. If the search reaches its time, directory, entry or memory
+line as typed. Tab is also ignored inside a comment, on a variable or inside
+an operator. If the search reaches its time, directory, entry or memory
 limit, the list can be incomplete and the shell leaves the word as typed.
 
 ## Composing commands
