@@ -7,7 +7,7 @@ Preserve the xila-wasm host runtime, guest API, ABI translation tests, and guest
 ## Releases
 
 Applications version independently and release signed `.xpk` bundles under
-`xila.<name>-vX.Y.Z`. Before 1.0, a breaking change bumps the minor version and
+`dev.xila.<name>-vX.Y.Z`. Before 1.0, a breaking change bumps the minor version and
 compatible changes bump the patch. Each bundle declares its minimum Xila
 version as `major.minor`. Before Xila 1.0, the running and declared minor
 versions must match. From 1.0 onward, the major versions must match and the

@@ -5,18 +5,18 @@ builder. It deliberately has no graphical interface, host filesystem access
 or launcher registration.
 
 ```text
-package install xila.clock
-package install xila.clock@0.1.0 --repository xila
+package install dev.xila.clock
+package install dev.xila.clock@0.1.0 --repository xila
 package install /temporary/clock.xpk
 package install /temporary/clock.xpk --public-key /temporary/developer.pub
 package install /temporary/clock.xpk --allow-untrusted
-package upgrade xila.clock
+package upgrade dev.xila.clock
 package upgrade /temporary/clock-0.2.0.xpk
-package remove xila.clock
+package remove dev.xila.clock
 package recover
 package list
-package info xila.clock
-package info xila.clock@0.2.0 --repository xila
+package info dev.xila.clock
+package info dev.xila.clock@0.2.0 --repository xila
 package search clock
 package repository add community https://registry.xila.example
 package repository list
@@ -114,9 +114,19 @@ world-writable. `package list` and `package repository list` need no
 privilege.
 
 Application entrypoints are installed at e.g.
-`/applications/bundles/xila.clock/executables/clock.wasm` and can be run
+`/applications/bundles/dev.xila.clock/executables/clock.wasm` and can be run
 through the existing Xila Wasm executable. There is no dependency solver,
 capability grant prompt or launcher shortcut registration yet.
 
 The application must be explicitly registered in each native platform's
 `mount_executables!` invocation (see xila-project/platforms).
+
+## Packages with legacy identifiers
+
+The `dev.xila.<name>` package has a separate installation and upgrade
+origin from `xila.<name>`. An upgrade of `xila.<name>` still looks for
+versions of that identifier in its original repository. Install the new
+identifier separately. The device keeps existing data under
+`<home>/applications/xila.<name>` and uses a separate data directory
+for the new installation. Save or export data you need before you remove
+the old package.

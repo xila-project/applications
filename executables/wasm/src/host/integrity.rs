@@ -404,16 +404,16 @@ mod tests {
     #[test]
     fn classifies_installed_package_executables() {
         assert_eq!(
-            classify("/applications/bundles/xila.clock/executables/clock.wasm"),
+            classify("/applications/bundles/dev.xila.clock/executables/clock.wasm"),
             Ok(Origin::Package {
-                identifier: "xila.clock",
+                identifier: "dev.xila.clock",
                 executable: "executables/clock.wasm",
             })
         );
         for unmanaged in [
             "/temporary/clock.wasm",
             "/applications/executables/clock.wasm",
-            "/applications/bundlesx/xila.clock/executables/clock.wasm",
+            "/applications/bundlesx/dev.xila.clock/executables/clock.wasm",
             "/applications/bundles",
         ] {
             assert_eq!(classify(unmanaged), Ok(Origin::Unmanaged), "{unmanaged}");
@@ -424,12 +424,12 @@ mod tests {
     fn aliases_cannot_leave_the_managed_category() {
         for alias in [
             "clock.wasm",
-            "applications/bundles/xila.clock/executables/clock.wasm",
-            "//applications/bundles/xila.clock/executables/clock.wasm",
-            "/applications//bundles/xila.clock/executables/clock.wasm",
-            "/applications/./bundles/xila.clock/executables/clock.wasm",
-            "/applications/x/../bundles/xila.clock/executables/clock.wasm",
-            "/applications/bundles/xila.clock/executables/clock.wasm/",
+            "applications/bundles/dev.xila.clock/executables/clock.wasm",
+            "//applications/bundles/dev.xila.clock/executables/clock.wasm",
+            "/applications//bundles/dev.xila.clock/executables/clock.wasm",
+            "/applications/./bundles/dev.xila.clock/executables/clock.wasm",
+            "/applications/x/../bundles/dev.xila.clock/executables/clock.wasm",
+            "/applications/bundles/dev.xila.clock/executables/clock.wasm/",
         ] {
             assert_eq!(
                 classify(alias),
@@ -446,10 +446,10 @@ mod tests {
             Err(IntegrityError::NotInstalled)
         );
         for path in [
-            "/applications/bundles/xila.clock",
-            "/applications/bundles/xila.clock/.xila/manifest.json",
-            "/applications/bundles/xila.clock/clock.wasm",
-            "/applications/bundles/xila.clock/executables/nested/clock.wasm",
+            "/applications/bundles/dev.xila.clock",
+            "/applications/bundles/dev.xila.clock/.xila/manifest.json",
+            "/applications/bundles/dev.xila.clock/clock.wasm",
+            "/applications/bundles/dev.xila.clock/executables/nested/clock.wasm",
         ] {
             assert_eq!(
                 classify(path),

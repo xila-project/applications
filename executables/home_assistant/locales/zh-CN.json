@@ -68,7 +68,7 @@
     "title": "设置",
     "token": "长期访问令牌",
     "token_help_create": "在 Home Assistant 中创建令牌：个人资料，然后安全，然后长期访问令牌。",
-    "token_help_terminal": "或在 Xila 终端中：echo '<token>' > /users/<user>/applications/xila.home-assistant/configuration/token",
+    "token_help_terminal": "或在 Xila 终端中：echo '<token>' > /users/<user>/applications/dev.xila.home-assistant/configuration/token",
     "token_hint": "按“显示”可输入或修改。",
     "too_many_entities": "最多显示 {count} 个实体：请先移除一个",
     "up": "上移",

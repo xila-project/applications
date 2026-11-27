@@ -186,7 +186,7 @@ mod tests {
         Manifest {
             schema: None,
             format_version: FORMAT_VERSION,
-            name: "xila.clock".into(),
+            name: "dev.xila.clock".into(),
             version: "0.1.0".into(),
             target: "wasm32-wasip1".into(),
             xila_version: XilaVersion::new(0, 1),
@@ -217,7 +217,7 @@ mod tests {
         RegistryEntry {
             schema: None,
             format_version: REGISTRY_FORMAT_VERSION,
-            name: "xila.clock".into(),
+            name: "dev.xila.clock".into(),
             version: "0.2.0".into(),
             target: "wasm32-wasip1".into(),
             xila_version: XilaVersion::new(0, 1),
@@ -246,12 +246,12 @@ mod tests {
             schema: None,
             format_version: 1,
             repository: Some("xila".into()),
-            name: "xila.clock".into(),
+            name: "dev.xila.clock".into(),
             version: "0.1.0".into(),
             archive_sha256: "d".repeat(64),
         };
         let lines = installed(&manifest(), Some(&origin));
-        assert_eq!(lines[0], "name:           xila.clock");
+        assert_eq!(lines[0], "name:           dev.xila.clock");
         assert_eq!(value(&lines, "version:"), Some("0.1.0"));
         assert_eq!(value(&lines, "display name:"), Some("Clock"));
         assert_eq!(value(&lines, "summary:"), Some("A clock"));
@@ -307,7 +307,7 @@ mod tests {
                 offer("empty", Ok(None)),
                 offer("xila", Ok(Some(entry()))),
             ],
-            "xila.clock",
+            "dev.xila.clock",
             None,
         );
         assert_eq!(
@@ -323,24 +323,28 @@ mod tests {
                 offer("offline", Err("down".into())),
                 offer("empty", Ok(None)),
             ],
-            "xila.clock",
+            "dev.xila.clock",
             None,
         );
         assert_eq!(warnings.len(), 1);
         assert_eq!(
             result.unwrap_err(),
-            "xila.clock not found for this device in the repositories that could be checked"
+            "dev.xila.clock not found for this device in the repositories that could be checked"
         );
-        let (_, result) = offered(&[offer("offline", Err("down".into()))], "xila.clock", None);
+        let (_, result) = offered(
+            &[offer("offline", Err("down".into()))],
+            "dev.xila.clock",
+            None,
+        );
         assert_eq!(
             result.unwrap_err(),
-            "cannot look up xila.clock: no configured repository could be checked"
+            "cannot look up dev.xila.clock: no configured repository could be checked"
         );
-        let (warnings, result) = offered(&[offer("empty", Ok(None))], "xila.clock", None);
+        let (warnings, result) = offered(&[offer("empty", Ok(None))], "dev.xila.clock", None);
         assert!(warnings.is_empty());
         assert_eq!(
             result.unwrap_err(),
-            "xila.clock not found for this device in the configured repositories"
+            "dev.xila.clock not found for this device in the configured repositories"
         );
     }
 }

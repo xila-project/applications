@@ -181,7 +181,7 @@ the clock (recorded with the real-time clock source); both are root only.
 
 `sudo [-u USER] COMMAND [ARGUMENT]...` runs one external command as root, or
 as `USER`, for example
-`sudo /applications/executables/package install xila.text-editor`.
+`sudo /applications/executables/package install dev.xila.text-editor`.
 
 - Only members of the `administrator` group may use it. Anyone else is refused
   before any prompt. A root caller is not prompted.

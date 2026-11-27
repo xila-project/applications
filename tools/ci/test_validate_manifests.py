@@ -48,7 +48,7 @@ def write_fixture(
         json.dumps(
             {
                 "format_version": 2,
-                "name": f"xila.{application.replace('_', '-')}",
+                "name": f"dev.xila.{application.replace('_', '-')}",
                 "version": version,
                 "target": "wasm32-wasip1",
                 "xila_version": "0.1",

@@ -10,7 +10,7 @@ Editor/CI schema:
 (public `$schema` URI:
 `https://raw.githubusercontent.com/xila-project/applications/main/schemas/shell-shortcut.schema.json`).
 
-Example placed at `/applications/bundles/xila.calculator/shortcut.json`:
+Example placed at `/applications/bundles/dev.xila.calculator/shortcut.json`:
 
 ```json
 {

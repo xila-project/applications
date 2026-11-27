@@ -275,7 +275,7 @@ jobs:
             tag="$(jq -r .tag <<< "$release")"
             version="$(jq -r .version <<< "$release")"
             name="${crate#xila-}"
-            archive="$BUNDLES/package-${name//-/_}/xila.$name-$version-wasm32-wasip1.xpk"
+            archive="$BUNDLES/package-${name//-/_}/dev.xila.$name-$version-wasm32-wasip1.xpk"
             for file in "$archive" "$archive.sha256" "$archive.pub"; do
               test -f "$file" || { echo "::error::missing $file for $tag"; exit 1; }
             done
@@ -297,7 +297,7 @@ jobs:
             tag="$(jq -r .tag <<< "$release")"
             version="$(jq -r .version <<< "$release")"
             name="${crate#xila-}"
-            archive_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/xila.${name}-${version}-wasm32-wasip1.xpk"
+            archive_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/dev.xila.${name}-${version}-wasm32-wasip1.xpk"
             gh workflow run submit-package.yml \
               --repo xila-project/registry \
               -f "archive-url=$archive_url" \
