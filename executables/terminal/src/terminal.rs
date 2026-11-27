@@ -1,10 +1,14 @@
-use crate::error::{Error, Result};
-use alloc::{collections::vec_deque::VecDeque, string::String};
+use crate::{
+    command_input::{CommandInput, CommandOutput},
+    error::{Error, Result},
+};
+use alloc::{boxed::Box, collections::vec_deque::VecDeque, string::String};
 use core::ffi::CStr;
+use xila::file_system::character_device::TerminalAttributes;
 use xila::graphics::OwnedWindow;
 use xila::graphics::fonts::get_font_monospace_medium;
 use xila::graphics::{
-    self, Color, EventKind, Key,
+    self, Color, EventKind,
     lvgl::{self, lv_obj_t},
 };
 use xila::internationalization::t;
@@ -26,10 +30,13 @@ pub(crate) struct Inner {
     send: *mut lvgl::lv_obj_t,
     clear: *mut lvgl::lv_obj_t,
     validated_input: VecDeque<u8>,
+    command_input: Box<CommandInput>,
+    command_output: CommandOutput,
 }
 
 pub struct Terminal {
     pub(crate) input_waiters: xila::file_system::WaitQueue<16>,
+    pub(crate) graphics_waiters: xila::file_system::WaitQueue<16>,
     pub(crate) input_closed: portable_atomic::AtomicBool,
     inner: RwLock<CriticalSectionRawMutex, Inner>,
     graphics_manager: &'static graphics::Manager,
@@ -40,9 +47,6 @@ unsafe impl Send for Terminal {}
 unsafe impl Sync for Terminal {}
 
 impl Terminal {
-    const CLEAR: &'static str = "\x1B[2J";
-    const HOME: &'static str = "\x1B[H";
-
     pub async fn new(graphics_manager: &'static graphics::Manager) -> Result<Self> {
         Self::new_with(graphics_manager, Self::build_widgets).await
     }
@@ -66,6 +70,8 @@ impl Terminal {
                 }
             };
 
+            let command_input = Box::new(CommandInput::new());
+            unsafe { command_input.attach(widgets.input) };
             Inner {
                 window,
                 buffer: widgets.buffer,
@@ -74,11 +80,14 @@ impl Terminal {
                 send: widgets.send,
                 clear: widgets.clear,
                 validated_input: VecDeque::with_capacity(128),
+                command_input,
+                command_output: CommandOutput::default(),
             }
         });
 
         Ok(Self {
             input_waiters: xila::file_system::WaitQueue::new(),
+            graphics_waiters: xila::file_system::WaitQueue::new(),
             input_closed: portable_atomic::AtomicBool::new(false),
             inner: RwLock::new(inner),
             graphics_manager,
@@ -178,6 +187,7 @@ impl Terminal {
             );
             lvgl::lv_obj_set_flex_grow(input, 1);
             lvgl::lv_textarea_set_one_line(input, true);
+            lvgl::lv_textarea_set_password_show_time(input, 0);
             lvgl::lv_obj_set_style_text_font(
                 input,
                 get_font_monospace_medium(),
@@ -223,38 +233,21 @@ impl Terminal {
         }
     }
 
-    pub fn print(&self, text: &str) -> Result<()> {
+    pub(crate) fn print(&self, bytes: &[u8]) -> Result<()> {
         let mut inner = self.inner.try_write().map_err(|_| Error::WouldBlock)?;
         let _lock = self.graphics_manager.try_lock().ok_or(Error::WouldBlock)?;
 
-        Self::print_internal(&mut inner, text)?;
-
+        for text in xila::shared::utf8_chunks(bytes) {
+            Self::print_internal(&mut inner, text)?;
+        }
         Ok(())
     }
 
-    fn get_start_index(buffer: &mut String, text: &str) {
-        let start_index = if let Some(last_clear) = text.rfind(Self::CLEAR) {
-            buffer.clear();
-            last_clear + Self::CLEAR.len()
-        } else {
-            0
-        };
-
-        let start_index = if let Some(last_home) = text.rfind(Self::HOME) {
-            start_index.max(last_home + Self::HOME.len())
-        } else {
-            start_index
-        };
-
-        let text = &text[start_index..];
-
-        buffer.push_str(text);
-    }
-
     fn print_internal(inner: &mut Inner, text: &str) -> Result<()> {
-        inner.buffer.pop(); // Remove the trailing null character
-
-        Self::get_start_index(&mut inner.buffer, text);
+        inner.buffer.pop(); // Remove the trailing null character.
+        let raw = !inner.command_input.attributes().is_canonical();
+        let was_editing = inner.command_output.edit().is_some();
+        inner.command_output.write(text, &mut inner.buffer, raw);
         inner.buffer.push('\0');
 
         unsafe {
@@ -263,8 +256,46 @@ impl Terminal {
                 inner.buffer.as_ptr() as *const core::ffi::c_char,
             );
             Self::show_last_line(inner.display);
+
+            let edit = inner.command_output.edit();
+            if edit.is_some() || was_editing {
+                let (line, cursor) = edit.unwrap_or(("", 0));
+                let mut terminated = String::from(line);
+                terminated.push('\0');
+                inner.command_input.updating_widget(|| {
+                    lvgl::lv_textarea_set_text(inner.input, terminated.as_ptr().cast());
+                    lvgl::lv_textarea_set_cursor_pos(inner.input, cursor as i32);
+                });
+            }
         }
 
+        Ok(())
+    }
+
+    pub(crate) fn terminal_attributes(&self) -> Result<TerminalAttributes> {
+        let inner = self.inner.try_read().map_err(|_| Error::WouldBlock)?;
+        // LVGL callbacks access the same input state under the graphics lock.
+        let _lock = self.graphics_manager.try_lock().ok_or(Error::WouldBlock)?;
+        Ok(inner.command_input.attributes())
+    }
+
+    pub(crate) fn set_terminal_attributes(&self, attributes: TerminalAttributes) -> Result<()> {
+        let mut inner = self.inner.try_write().map_err(|_| Error::WouldBlock)?;
+        let _lock = self.graphics_manager.try_lock().ok_or(Error::WouldBlock)?;
+        let saved = inner.command_input.attributes();
+        inner.command_input.set_attributes(attributes);
+        if saved.is_canonical() != attributes.is_canonical() {
+            inner.command_output.reset();
+            inner.command_input.updating_widget(|| unsafe {
+                lvgl::lv_textarea_set_text(inner.input, c"".as_ptr());
+            });
+        }
+        unsafe {
+            lvgl::lv_textarea_set_password_mode(
+                inner.input,
+                attributes.is_canonical() && !attributes.is_echo_enabled(),
+            );
+        }
         Ok(())
     }
 
@@ -277,23 +308,6 @@ impl Terminal {
     /// `display` must be live and the caller must hold the LVGL lock.
     unsafe fn show_last_line(display: *mut lvgl::lv_obj_t) {
         unsafe { lvgl::lv_obj_scroll_to_view(display, false) };
-    }
-
-    async fn print_line_internal(inner: &mut Inner, text: &str) -> Result<()> {
-        inner.buffer.pop(); // Remove the trailing null character
-
-        Self::get_start_index(&mut inner.buffer, text);
-        inner.buffer.push_str("\n\0");
-
-        unsafe {
-            lvgl::lv_label_set_text_static(
-                inner.display,
-                inner.buffer.as_ptr() as *const core::ffi::c_char,
-            );
-            Self::show_last_line(inner.display);
-        }
-
-        Ok(())
     }
 
     pub fn read_input(&self, buffer: &mut [u8]) -> Result<usize> {
@@ -322,23 +336,21 @@ impl Terminal {
         }
     }
 
-    /// Echoes the typed line and queues it, with its newline, for the reader.
-    async fn submit(inner: &mut Inner) -> Result<()> {
-        let text = Self::get_input(inner.input);
-
-        Self::print_line_internal(inner, text).await?;
-
-        let text = Self::get_input(inner.input);
-
-        inner.validated_input.extend(text.as_bytes());
-        inner.validated_input.push_back(b'\n');
-
-        unsafe {
-            lvgl::lv_textarea_set_text(inner.input, c"".as_ptr());
-            // A click on Send moves the focus to the button; typing continues
-            // in the field.
-            lvgl::lv_group_focus_obj(inner.input);
+    fn submit(inner: &mut Inner) -> Result<()> {
+        let attributes = inner.command_input.attributes();
+        if attributes.is_canonical() {
+            let text = Self::get_input(inner.input);
+            inner.validated_input.extend(text.as_bytes());
+            inner.validated_input.push_back(b'\n');
+            if attributes.is_echo_enabled() {
+                Self::print_internal(inner, text)?;
+            }
+            Self::print_internal(inner, "\n")?;
+            unsafe { lvgl::lv_textarea_set_text(inner.input, c"".as_ptr()) };
+        } else {
+            inner.command_input.queue(b"\n");
         }
+        unsafe { lvgl::lv_group_focus_obj(inner.input) };
         Ok(())
     }
 
@@ -349,9 +361,8 @@ impl Terminal {
 
     pub async fn handle_events(&self) -> Result<bool> {
         let mut running = true;
-        let mut notify_input = false;
 
-        graphics::lock!(self.graphics_manager, {
+        let notify_input = graphics::lock!(self.graphics_manager, {
             let mut inner = self.inner.write().await;
 
             while let Some(event) = inner.window.pop_event() {
@@ -361,15 +372,11 @@ impl Terminal {
                     {
                         running = false;
                     }
-                    EventKind::Key => {
-                        if let Some(Key::Enter) = event.key {
-                            Self::submit(&mut inner).await?;
-                            notify_input = true;
-                        }
+                    EventKind::Ready if event.is_target(inner.input) => {
+                        Self::submit(&mut inner)?;
                     }
                     EventKind::Clicked if event.is_target(inner.send) => {
-                        Self::submit(&mut inner).await?;
-                        notify_input = true;
+                        Self::submit(&mut inner)?;
                     }
                     EventKind::Clicked if event.is_target(inner.clear) => {
                         // Only the scrollback is dropped; the shell keeps
@@ -382,6 +389,13 @@ impl Terminal {
                     _ => {}
                 }
             }
+            let Inner {
+                command_input,
+                validated_input,
+                ..
+            } = &mut *inner;
+            command_input.drain_into(validated_input);
+            !validated_input.is_empty()
         });
 
         if !running {
@@ -391,6 +405,8 @@ impl Terminal {
         if notify_input || !running {
             self.input_waiters.wake_all();
         }
+        // Writers and control calls can retry now that the graphics lock is free.
+        self.graphics_waiters.wake_all();
         Ok(running)
     }
 }
@@ -507,11 +523,89 @@ mod setup_failure_tests {
     }
 
     #[xila::task::test(task_path = xila::task)]
+    async fn raw_terminal_forwards_keys_and_displays_the_shell_cursor() {
+        use xila::{file_system::character_device::TerminalAttributes, graphics::Key};
+
+        let manager = headless_graphics_manager().await;
+        let terminal = Terminal::new(manager).await.unwrap();
+        terminal
+            .set_terminal_attributes(TerminalAttributes::RAW)
+            .unwrap();
+
+        manager
+            .lock_function(|| unsafe {
+                let input = terminal.inner.try_read().unwrap().input;
+                let mut key = u32::from(Key::Left);
+                lvgl::lv_obj_send_event(
+                    input,
+                    lvgl::lv_event_code_t_LV_EVENT_KEY,
+                    (&raw mut key).cast(),
+                );
+                lvgl::lv_textarea_add_text(input, c"é".as_ptr());
+                Ok(())
+            })
+            .await
+            .unwrap();
+        terminal.handle_events().await.unwrap();
+        let mut keys = [0; 16];
+        let size = terminal.read_input(&mut keys).unwrap();
+        assert_eq!(&keys[..size], "\x1b[Dé".as_bytes());
+
+        terminal
+            .print("prompt$ \x1b7\r\x1b[8C\x1b[Jrésumé\r\x1b[8C".as_bytes())
+            .unwrap();
+        terminal.print("ré".as_bytes()).unwrap();
+        manager
+            .lock_function(|| unsafe {
+                let input = terminal.inner.try_read().unwrap().input;
+                assert_eq!(Terminal::get_input(input), "résumé");
+                assert_eq!(lvgl::lv_textarea_get_cursor_pos(input), 2);
+                Ok(())
+            })
+            .await
+            .unwrap();
+    }
+
+    #[xila::task::test(task_path = xila::task)]
+    async fn key_events_queue_full_unicode_code_points_as_utf8() {
+        use xila::file_system::character_device::TerminalAttributes;
+
+        let manager = headless_graphics_manager().await;
+        let terminal = Terminal::new(manager).await.unwrap();
+        terminal
+            .set_terminal_attributes(TerminalAttributes::RAW)
+            .unwrap();
+
+        manager
+            .lock_function(|| unsafe {
+                let input = terminal.inner.try_read().unwrap().input;
+                // LVGL delivers full Unicode code points on LV_EVENT_KEY.
+                for key_code in [0xE9, 0x754C] {
+                    let mut key = key_code;
+                    lvgl::lv_obj_send_event(
+                        input,
+                        lvgl::lv_event_code_t_LV_EVENT_KEY,
+                        (&raw mut key).cast(),
+                    );
+                }
+                Ok(())
+            })
+            .await
+            .unwrap();
+        terminal.handle_events().await.unwrap();
+        let mut keys = [0; 16];
+        let size = terminal.read_input(&mut keys).unwrap();
+        assert_eq!(&keys[..size], "é界".as_bytes());
+    }
+
+    #[xila::task::test(task_path = xila::task)]
     async fn printing_shows_the_last_line_without_animating_the_scroll() {
         let manager = headless_graphics_manager().await;
         let terminal = Terminal::new(manager).await.unwrap();
         for line in 0..40 {
-            terminal.print(&std::format!("line {line}\n")).unwrap();
+            terminal
+                .print(std::format!("line {line}\n").as_bytes())
+                .unwrap();
         }
         manager
             .lock_function(|| unsafe {
