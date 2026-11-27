@@ -118,6 +118,8 @@ pub enum Error<'a> {
     /// The privileged manual UTC set failed.
     #[cfg(feature = "time-commands")]
     ManualTime(xila::time::manual::ManualError),
+    #[cfg(feature = "crash-command")]
+    CrashReports(virtual_file_system::IoErrorKind),
 }
 
 impl<A: getargs::Argument> From<getargs::Error<A>> for Error<'_> {
@@ -340,6 +342,10 @@ impl Display for Error<'_> {
                     "{}",
                     t!("errors.option_does_not_require_a_value")
                 )
+            }
+            #[cfg(feature = "crash-command")]
+            Error::CrashReports(error) => {
+                write!(formatter, "{}", t!("errors.crash_reports", arg0 = error))
             }
             Error::InvalidArgument => {
                 write!(formatter, "{}", t!("errors.invalid_argument"))

@@ -27,6 +27,7 @@
     "argument_parsing_error": "参数解析错误：{arg0}",
     "authentication_failed": "身份验证失败：{arg0}",
     "before_build_date": "时间早于固件的构建日期。",
+    "crash_reports": "无法访问崩溃报告：{arg0}",
     "failed_to_control_device": "无法发送控制命令：{arg0}",
     "failed_to_create_directory": "创建目录失败：{arg0}",
     "failed_to_create_socket": "创建套接字失败：{arg0}",

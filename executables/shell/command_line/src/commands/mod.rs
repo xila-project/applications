@@ -6,6 +6,8 @@ mod civil_time;
 mod clear;
 mod concatenate;
 mod cp;
+#[cfg(feature = "crash-command")]
+mod crash;
 #[cfg(feature = "time-commands")]
 mod date;
 mod directory;
@@ -128,6 +130,8 @@ pub enum UserCommandKind {
     Clear,
     Chmod,
     Concatenate,
+    #[cfg(feature = "crash-command")]
+    Crash,
     Grep,
     Statistics,
     CreateDirectory,
@@ -217,6 +221,8 @@ const BUILTINS: &[(&str, UserCommandKind, &str)] = &[
         "Usage: readlink LINK\nPrint a symbolic link target.",
     ),
     ("clear", UserCommandKind::Clear, clear::ClearArguments::HELP),
+    #[cfg(feature = "crash-command")]
+    ("crash", UserCommandKind::Crash, crash::CrashArguments::HELP),
     (
         "cat",
         UserCommandKind::Concatenate,
@@ -370,6 +376,8 @@ where
         UserCommandKind::Echo => EchoCommand.execute(context, options, paths).await,
         UserCommandKind::List => ListCommand.execute(context, options, paths).await,
         UserCommandKind::Clear => ClearCommand.execute(context, options, paths).await,
+        #[cfg(feature = "crash-command")]
+        UserCommandKind::Crash => crash::CrashCommand.execute(context, options, paths).await,
         UserCommandKind::Chmod => ChmodCommand.execute(context, options, paths).await,
         UserCommandKind::Concatenate => ConcatenateCommand.execute(context, options, paths).await,
         UserCommandKind::Grep => grep::GrepCommand.execute(context, options, paths).await,

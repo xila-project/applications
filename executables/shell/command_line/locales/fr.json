@@ -28,6 +28,7 @@
     "argument_parsing_error": "Erreur d’analyse des arguments : {arg0}",
     "authentication_failed": "Échec de l’authentification : {arg0}",
     "before_build_date": "L’heure est antérieure à la date de compilation du micrologiciel.",
+    "crash_reports": "Impossible d’accéder aux rapports de plantage : {arg0}",
     "failed_to_control_device": "Échec de l’envoi de la commande de contrôle : {arg0}",
     "failed_to_create_directory": "Échec de la création du répertoire : {arg0}",
     "failed_to_create_socket": "Échec de la création du socket : {arg0}",

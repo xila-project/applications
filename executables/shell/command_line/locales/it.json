@@ -28,6 +28,7 @@
     "argument_parsing_error": "Errore nell'analisi degli argomenti: {arg0}",
     "authentication_failed": "Autenticazione non riuscita: {arg0}",
     "before_build_date": "L’orario è precedente alla data di compilazione del firmware.",
+    "crash_reports": "Impossibile accedere ai rapporti di arresto anomalo: {arg0}",
     "failed_to_control_device": "Impossibile inviare il comando di controllo: {arg0}",
     "failed_to_create_directory": "Impossibile creare la directory: {arg0}",
     "failed_to_create_socket": "Impossibile creare il socket: {arg0}",
