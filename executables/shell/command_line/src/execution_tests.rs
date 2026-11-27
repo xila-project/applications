@@ -2974,3 +2974,34 @@ async fn crash_command_lists_shows_exports_and_clears_a_report() {
             .is_empty()
     );
 }
+
+#[cfg(feature = "crash-command")]
+#[xila::task::test(task_path = xila::task)]
+async fn crash_command_skips_an_unreadable_report() {
+    use xila::crash::{Architecture, Header, Limits, RecordKind, Writer};
+
+    let mut shell = shell().await;
+    let mut slot = [0; 512];
+    let header = Header {
+        program_counter: 0x1234,
+        task_name: "Test",
+        ..Header::new(RecordKind::KernelPanic, Architecture::XtensaEsp32S3)
+    };
+    let original = Writer::new(&mut slot, &header, Limits::ESPRESSIF)
+        .unwrap()
+        .finish(format_args!("Test crash"), &[], |_| Some(0));
+    xila::crash::import(shell.context.virtual_file_system, original, 128 * 1024)
+        .await
+        .unwrap();
+    write_file(&shell, "/system/crashes/2-kernel.xcr", b"not a report").await;
+
+    assert_eq!(shell.execute_line("crash").await.unwrap(), 0);
+    let output = contents(&shell, "/shell-output").await;
+    assert!(output.contains("1-kernel.xcr KernelPanic"));
+    assert!(!output.contains("2-kernel.xcr"));
+    let errors = contents(&shell, "/shell-errors").await;
+    assert!(
+        errors.contains("crash: warning: skipping unreadable report 2-kernel.xcr"),
+        "unexpected standard error: {errors}"
+    );
+}

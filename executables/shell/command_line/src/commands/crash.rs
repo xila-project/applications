@@ -1,3 +1,4 @@
+use alloc::format;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use getargs_derive::{GetArgs, ValueEnum};
 use xila::{
@@ -61,10 +62,20 @@ impl UserCommand for CrashCommand {
                     .await
                     .map_err(Error::CrashReports)?;
                 for identifier in reports.into_iter().rev() {
-                    let bytes = crash::read(filesystem, task, identifier)
-                        .await
-                        .map_err(Error::CrashReports)?;
-                    let record = decode(&bytes)?;
+                    let bytes = match crash::read(filesystem, task, identifier).await {
+                        Ok(bytes) => bytes,
+                        Err(error) => {
+                            warn_skipped(context, identifier, error).await;
+                            continue;
+                        }
+                    };
+                    let record = match Record::read(&bytes) {
+                        Ok(record) if record.bytes().len() == bytes.len() => record,
+                        _ => {
+                            warn_skipped(context, identifier, IoErrorKind::CorruptData).await;
+                            continue;
+                        }
+                    };
                     let header = record.header;
                     let message = record.message;
                     let end = message.floor_char_boundary(80);
@@ -112,6 +123,19 @@ impl UserCommand for CrashCommand {
 
 fn decode(bytes: &[u8]) -> Result<Record<'_>> {
     Record::read(bytes).map_err(|_| Error::CrashReports(IoErrorKind::CorruptData))
+}
+
+/// Report an unreadable entry on standard error and let the listing continue.
+async fn warn_skipped<C: CommandContext>(
+    context: &mut C,
+    identifier: ReportIdentifier,
+    reason: IoErrorKind,
+) {
+    let _ = crate::execution::write_all(
+        context.standard().error(),
+        format!("crash: warning: skipping unreadable report {identifier}: {reason}\n").as_bytes(),
+    )
+    .await;
 }
 
 async fn show<C: CommandContext>(
