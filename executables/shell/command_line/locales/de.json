@@ -28,6 +28,7 @@
     "argument_parsing_error": "Fehler beim Verarbeiten der Argumente: {arg0}",
     "authentication_failed": "Authentifizierung fehlgeschlagen: {arg0}",
     "before_build_date": "Die Zeit liegt vor dem Erstellungsdatum der Firmware.",
+    "crash_reports": "Zugriff auf Absturzberichte fehlgeschlagen: {arg0}",
     "failed_to_control_device": "Steuerbefehl konnte nicht gesendet werden: {arg0}",
     "failed_to_create_directory": "Verzeichnis konnte nicht erstellt werden: {arg0}",
     "failed_to_create_socket": "Socket konnte nicht erstellt werden: {arg0}",

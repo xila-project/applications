@@ -30,6 +30,7 @@
     "argument_parsing_error": "Błąd parsowania argumentów: {arg0}",
     "authentication_failed": "Uwierzytelnianie nie powiodło się: {arg0}",
     "before_build_date": "Czas jest wcześniejszy niż data kompilacji oprogramowania.",
+    "crash_reports": "Nie można uzyskać dostępu do raportów o awariach: {arg0}",
     "failed_to_control_device": "Nie udało się wysłać polecenia sterującego: {arg0}",
     "failed_to_create_directory": "Nie udało się utworzyć katalogu: {arg0}",
     "failed_to_create_socket": "Nie udało się utworzyć gniazda: {arg0}",

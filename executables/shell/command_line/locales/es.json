@@ -28,6 +28,7 @@
     "argument_parsing_error": "Error al analizar los argumentos: {arg0}",
     "authentication_failed": "Error de autenticación: {arg0}",
     "before_build_date": "La hora es anterior a la fecha de compilación del firmware.",
+    "crash_reports": "No se puede acceder a los informes de fallos: {arg0}",
     "failed_to_control_device": "No se pudo enviar el comando de control: {arg0}",
     "failed_to_create_directory": "No se pudo crear el directorio: {arg0}",
     "failed_to_create_socket": "No se pudo crear el socket: {arg0}",

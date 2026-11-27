@@ -28,6 +28,7 @@
     "argument_parsing_error": "引数の解析に失敗しました: {arg0}",
     "authentication_failed": "認証に失敗しました: {arg0}",
     "before_build_date": "時刻がファームウェアのビルド日より前です。",
+    "crash_reports": "クラッシュレポートにアクセスできません: {arg0}",
     "failed_to_control_device": "制御コマンドを送信できませんでした: {arg0}",
     "failed_to_create_directory": "ディレクトリの作成に失敗しました: {arg0}",
     "failed_to_create_socket": "ソケットの作成に失敗しました: {arg0}",
