@@ -138,7 +138,10 @@ async fn picker_validates_modes_handles_memory_and_parent_lifetime() {
     )
     .unwrap();
     assert_eq!(memory.read::<i32>(GuestPointer::new(8)), Some(-1));
-    let native = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let native = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     {
         let _guard = manager.synchronous_lock();
         unsafe {
@@ -502,7 +505,13 @@ async fn picker_validates_modes_handles_memory_and_parent_lifetime() {
         ),
         Err(GraphicsError::InvalidHandle)
     );
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
     {
         let _guard = manager.synchronous_lock();
         // Two retained completed pickers are deleted in creation order; the

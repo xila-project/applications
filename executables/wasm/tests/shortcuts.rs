@@ -238,8 +238,16 @@ unsafe fn dump_labels(root: *mut lvgl::lv_obj_t, out: &mut Vec<String>) {
 
 async fn wait_label(manager: &Manager, text: &str) {
     for _ in 0..1000 {
-        if manager.get_window_count().await.unwrap() != 0 {
-            let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+        if manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap()
+            != 0
+        {
+            let root = manager
+                .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+                .await
+                .unwrap() as *mut lvgl::lv_obj_t;
             let found = {
                 let _lock = manager.synchronous_lock();
                 unsafe { find_label(root, text) }
@@ -250,7 +258,10 @@ async fn wait_label(manager: &Manager, text: &str) {
         }
         xila::task::sleep(Duration::from_millis(10)).await;
     }
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let mut labels = Vec::new();
     let _lock = manager.synchronous_lock();
     unsafe { dump_labels(root, &mut labels) };
@@ -272,8 +283,16 @@ async fn wait_messages(device: &ScriptedHumanInterface, count: usize) -> Vec<[u8
 /// state, as the guest applies it at the end of its start sequence.
 async fn wait_button_disabled(manager: &Manager, caption: &str) -> bool {
     for _ in 0..1000 {
-        if manager.get_window_count().await.unwrap() != 0 {
-            let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+        if manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap()
+            != 0
+        {
+            let root = manager
+                .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+                .await
+                .unwrap() as *mut lvgl::lv_obj_t;
             let disabled = {
                 let _lock = manager.synchronous_lock();
                 unsafe {
@@ -293,7 +312,10 @@ async fn wait_button_disabled(manager: &Manager, caption: &str) -> bool {
 
 /// Taps the button whose caption is `caption`.
 async fn tap(manager: &Manager, caption: &str) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let button = find_button(root, caption);
@@ -320,7 +342,10 @@ async fn pump_lvgl(manager: &Manager) {
 /// Switches to the mouse pad tab and drags on the pad by (`dx`, `dy`)
 /// pixels, as a finger would: move to the pad center, press, move, release.
 async fn drag_on_pad(manager: &Manager, dx: i32, dy: i32) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let (center_x, center_y) = {
         let _lock = manager.synchronous_lock();
         unsafe {
@@ -363,7 +388,10 @@ async fn drag_on_pad(manager: &Manager, dx: i32, dy: i32) {
 /// Selects a value on the first dropdown of the window, as the settings tab
 /// builds it first, and reports the change to the guest.
 async fn select_dropdown(manager: &Manager, value: u32) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let dropdown = find_class(root, &raw const lvgl::lv_dropdown_class);
@@ -379,7 +407,10 @@ async fn select_dropdown(manager: &Manager, value: u32) {
 
 /// The media control glyphs must exist in the icon font the buttons use.
 async fn assert_media_glyphs(manager: &Manager) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let button = find_button(root, "\u{F04C}");
@@ -398,8 +429,14 @@ async fn assert_media_glyphs(manager: &Manager) {
 }
 
 async fn send_close(manager: &Manager) {
-    let root = manager.get_window_identifier(0).await.unwrap();
-    manager.send_window_close_request(root).await.unwrap();
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap();
+    manager
+        .with_lvgl(|lvgl| manager.send_window_close_request(lvgl, root))
+        .await
+        .unwrap();
 }
 
 async fn wait_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
@@ -409,7 +446,13 @@ async fn wait_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
             poll_fn(|context| Poll::Ready(join.as_mut().poll(context))).await
         {
             assert_eq!(status, 0);
-            assert_eq!(manager.get_window_count().await.unwrap(), 0);
+            assert_eq!(
+                manager
+                    .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                    .await
+                    .unwrap(),
+                0
+            );
             return;
         }
         xila::task::sleep(Duration::from_millis(10)).await;

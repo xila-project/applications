@@ -41,26 +41,32 @@ async fn create_debug_window(
 
 async fn create_debug_window_with(
     graphics: &'static graphics::Manager,
-    build: impl FnOnce(&mut graphics::OwnedWindow) -> Result<(), NonZeroUsize>,
+    build: impl FnOnce(
+        &mut graphics::OwnedWindow,
+        &mut graphics::GraphicsGuard<'_>,
+    ) -> Result<(), NonZeroUsize>,
 ) -> Result<graphics::OwnedWindow, NonZeroUsize> {
-    graphics::lock!(graphics, {
-        let mut window = graphics.create_window().await.map_err(|_| code(1))?;
-        if let Err(error) = build(&mut window) {
-            // SAFETY: the graphics lock is held, and this function owns
-            // `window`. Delete it directly so `OwnedWindow::drop` does not
-            // deadlock on the non-re-entrant lock already held here.
-            unsafe {
-                graphics::lvgl::lv_obj_delete(window.into_raw().as_ptr().cast());
-            }
-            return Err(error);
-        }
-        Ok(window)
-    })
+    let mut guard = graphics.lock().await;
+    let mut window = guard
+        .with_lvgl(|lvgl| graphics.create_window(lvgl).map_err(|_| code(1)))
+        .map_err(|_| code(1))??;
+    if let Err(error) = build(&mut window, &mut guard) {
+        // Delete the window in the current session instead of letting
+        // `OwnedWindow::drop` queue it behind the held lock.
+        let _ = guard.with_lvgl(|lvgl| window.delete(lvgl));
+        return Err(error);
+    }
+    Ok(window)
 }
 
-fn build_debug_window(window: &mut graphics::OwnedWindow) -> Result<(), NonZeroUsize> {
-    window.set_icon("Db", WINDOW_ICON_COLOR);
-    let label = unsafe { graphics::lvgl::lv_label_create(window.as_object_mutable()) };
+fn build_debug_window(
+    window: &mut graphics::OwnedWindow,
+    guard: &mut graphics::GraphicsGuard<'_>,
+) -> Result<(), NonZeroUsize> {
+    guard
+        .with_lvgl(|lvgl| window.set_icon(lvgl, "Db", WINDOW_ICON_COLOR))
+        .map_err(|_| code(1))?;
+    let label = unsafe { graphics::lvgl::lv_label_create(window.as_object()) };
     if label.is_null() {
         return Err(code(1));
     }
@@ -110,16 +116,21 @@ async fn run(standard: Standard<'static>, arguments: Vec<String>) -> Result<(), 
     let mut should_close = false;
     loop {
         if let Some(window) = window.as_mut() {
-            graphics::lock!(graphics, {
-                while let Some(event) = window.pop_event() {
-                    if matches!(event.code, EventKind::Delete | EventKind::CloseRequested)
-                        && event.is_target(window.as_object())
-                    {
-                        should_close = true;
-                        break;
+            let mut guard = graphics.lock().await;
+            should_close = guard
+                .with_lvgl(|lvgl| {
+                    let mut close = false;
+                    while let Some(event) = window.pop_event(lvgl) {
+                        if matches!(event.code, EventKind::Delete | EventKind::CloseRequested)
+                            && event.is_target(window.as_object())
+                        {
+                            close = true;
+                            break;
+                        }
                     }
-                }
-            });
+                    close
+                })
+                .unwrap_or(false);
         }
         if should_close {
             stopping.store(true, Ordering::Release);
@@ -627,15 +638,20 @@ mod window_setup_tests {
     #[test]
     fn debug_window_setup_failure_deletes_window_without_deadlocking() {
         let manager = headless_graphics_manager();
-        let baseline_windows = xila::task::block_on(manager.get_window_count()).unwrap();
+        let baseline_windows = manager
+            .with_lvgl_sync(|lvgl| manager.get_window_count(lvgl))
+            .unwrap();
 
         let (sender, receiver) = std::sync::mpsc::channel();
         let handle = std::thread::spawn(move || {
-            let result = xila::task::block_on(create_debug_window_with(manager, |window| {
-                let child = unsafe { graphics::lvgl::lv_obj_create(window.as_object_mutable()) };
-                assert!(!child.is_null());
-                Err(code(1))
-            }));
+            let result =
+                xila::task::block_on(create_debug_window_with(manager, |window, _guard| {
+                    // SAFETY: the guard held by the caller owns the graphics
+                    // lock and this closure runs inside its session scope.
+                    let child = unsafe { graphics::lvgl::lv_obj_create(window.as_object()) };
+                    assert!(!child.is_null());
+                    Err(code(1))
+                }));
             let _ = sender.send(result.err());
         });
 
@@ -657,7 +673,9 @@ mod window_setup_tests {
             "graphics lock must be released after debug window setup error"
         );
         assert_eq!(
-            xila::task::block_on(manager.get_window_count()).unwrap(),
+            manager
+                .with_lvgl_sync(|lvgl| manager.get_window_count(lvgl))
+                .unwrap(),
             baseline_windows
         );
     }

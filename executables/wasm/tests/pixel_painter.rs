@@ -61,8 +61,16 @@ unsafe fn class(
 async fn status(manager: &Manager, expected: &str) {
     let expected = localization::text("pixel_painter", expected);
     for _ in 0..400 {
-        if manager.get_window_count().await.unwrap() > 0 {
-            let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+        if manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap()
+            > 0
+        {
+            let root = manager
+                .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+                .await
+                .unwrap() as *mut lvgl::lv_obj_t;
             let _lock = manager.synchronous_lock();
             if unsafe { !label(root, &expected).is_null() } {
                 return;
@@ -74,7 +82,10 @@ async fn status(manager: &Manager, expected: &str) {
 }
 
 async fn click(manager: &Manager, key: &str) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let text = localization::text("pixel_painter", key);
@@ -171,43 +182,50 @@ async fn real_painter_guest_draws_saves_opens_and_preserves_work_on_errors() {
     status(manager, "status.ready_white_erases").await;
     // Queue two distinct pointer positions before the guest drains either one.
     // Re-reading the current input position at dequeue time would lose the start.
-    {
-        let _lock = manager.synchronous_lock();
-        let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
-        unsafe {
-            lvgl::lv_obj_update_layout(root);
-            let canvas = find(root, &|object| {
-                lvgl::lv_obj_check_type(object, &lvgl::lv_obj_class)
-                    && lvgl::lv_obj_get_child_count(object) == 0
-                    && lvgl::lv_obj_has_flag(object, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_CLICKABLE)
-            });
-            assert!(!canvas.is_null());
-            let mut area = lvgl::lv_area_t::default();
-            lvgl::lv_obj_get_content_coords(canvas, &mut area);
-            assert!(
-                area.y2 - area.y1 >= 100,
-                "compact canvas needs usable height"
-            );
-            let input = lvgl::lv_indev_create();
-            lvgl::lv_indev_set_type(input, lvgl::lv_indev_type_t_LV_INDEV_TYPE_POINTER);
-            let x = (area.x1 + area.x2) / 2;
-            let y = (area.y1 + area.y2) / 2;
-            (*input).pointer.act_point = lvgl::lv_point_t { x: x - 5, y };
-            lvgl::lv_obj_send_event(canvas, lvgl::lv_event_code_t_LV_EVENT_PRESSED, input.cast());
-            (*input).pointer.act_point.x = x + 5;
-            lvgl::lv_obj_send_event(
-                canvas,
-                lvgl::lv_event_code_t_LV_EVENT_PRESSING,
-                input.cast(),
-            );
-            lvgl::lv_obj_send_event(
-                canvas,
-                lvgl::lv_event_code_t_LV_EVENT_RELEASED,
-                input.cast(),
-            );
-            lvgl::lv_indev_delete(input);
-        }
-    }
+    manager
+        .with_lvgl(|lvgl| {
+            let root = manager.get_window_identifier(lvgl, 0)? as *mut lvgl::lv_obj_t;
+            unsafe {
+                lvgl::lv_obj_update_layout(root);
+                let canvas = find(root, &|object| {
+                    lvgl::lv_obj_check_type(object, &lvgl::lv_obj_class)
+                        && lvgl::lv_obj_get_child_count(object) == 0
+                        && lvgl::lv_obj_has_flag(object, lvgl::lv_obj_flag_t_LV_OBJ_FLAG_CLICKABLE)
+                });
+                assert!(!canvas.is_null());
+                let mut area = lvgl::lv_area_t::default();
+                lvgl::lv_obj_get_content_coords(canvas, &mut area);
+                assert!(
+                    area.y2 - area.y1 >= 100,
+                    "compact canvas needs usable height"
+                );
+                let input = lvgl::lv_indev_create();
+                lvgl::lv_indev_set_type(input, lvgl::lv_indev_type_t_LV_INDEV_TYPE_POINTER);
+                let x = (area.x1 + area.x2) / 2;
+                let y = (area.y1 + area.y2) / 2;
+                (*input).pointer.act_point = lvgl::lv_point_t { x: x - 5, y };
+                lvgl::lv_obj_send_event(
+                    canvas,
+                    lvgl::lv_event_code_t_LV_EVENT_PRESSED,
+                    input.cast(),
+                );
+                (*input).pointer.act_point.x = x + 5;
+                lvgl::lv_obj_send_event(
+                    canvas,
+                    lvgl::lv_event_code_t_LV_EVENT_PRESSING,
+                    input.cast(),
+                );
+                lvgl::lv_obj_send_event(
+                    canvas,
+                    lvgl::lv_event_code_t_LV_EVENT_RELEASED,
+                    input.cast(),
+                );
+                lvgl::lv_indev_delete(input);
+            }
+            Ok(())
+        })
+        .await
+        .unwrap();
     xila::task::sleep(Duration::from_millis(50)).await;
     action(manager, 2).await;
     status(manager, "status.saved").await;
@@ -251,7 +269,10 @@ async fn real_painter_guest_draws_saves_opens_and_preserves_work_on_errors() {
     status(manager, "warnings.unsaved_open_again").await;
     action(manager, 3).await;
     status(manager, "status.opened").await;
-    let root = manager.get_window_identifier(0).await.unwrap();
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap();
     {
         let _lock = manager.synchronous_lock();
         let long_path = std::ffi::CString::new(format!("/{}", "é".repeat(130))).unwrap();
@@ -278,14 +299,26 @@ async fn real_painter_guest_draws_saves_opens_and_preserves_work_on_errors() {
     assert_eq!(after_undo, saved);
     action(manager, 1).await;
     xila::task::sleep(Duration::from_millis(30)).await;
-    manager.send_window_close_request(root).await.unwrap();
+    manager
+        .with_lvgl(|lvgl| manager.send_window_close_request(lvgl, root))
+        .await
+        .unwrap();
     status(manager, "warnings.unsaved_close_again").await;
-    manager.send_window_close_request(root).await.unwrap();
+    manager
+        .with_lvgl(|lvgl| manager.send_window_close_request(lvgl, root))
+        .await
+        .unwrap();
     let mut join = core::pin::pin!(handle.join());
     for _ in 0..400 {
         if let Poll::Ready(exit) = poll_fn(|cx| Poll::Ready(join.as_mut().poll(cx))).await {
             assert_eq!(exit, 0);
-            assert_eq!(manager.get_window_count().await.unwrap(), 0);
+            assert_eq!(
+                manager
+                    .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                    .await
+                    .unwrap(),
+                0
+            );
             return;
         }
         xila::task::sleep(Duration::from_millis(5)).await;

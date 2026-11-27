@@ -72,7 +72,10 @@ unsafe fn find_key(root: *mut lvgl::lv_obj_t, text: &str) -> *mut lvgl::lv_obj_t
 /// Turns on the angle mode switch, the second child of the display card's
 /// first row; off means radians.
 async fn select_degrees(manager: &Manager) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let card = lvgl::lv_obj_get_child(root, 0);
@@ -88,7 +91,10 @@ async fn select_degrees(manager: &Manager) {
 }
 
 async fn press(manager: &Manager, key: &str) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         lvgl::lv_obj_send_event(
@@ -102,16 +108,19 @@ async fn press(manager: &Manager, key: &str) {
 /// Waits for the page markers and for the guest to drain the window event queue.
 async fn wait_for_keys(manager: &Manager, keys: &[&str]) {
     for _ in 0..200 {
-        let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+        let root = manager
+            .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+            .await
+            .unwrap() as *mut lvgl::lv_obj_t;
         {
             let _lock = manager.synchronous_lock();
-            // The identifier points to the live window while the lock is held.
+            // SAFETY: the guard's session holds the graphics lock and the
+            // identifier points to the live window, so the raw peek sees the
+            // queue the guest drains.
             let ready = unsafe {
                 keys.iter().all(|key| visible_keys(root, key).len() == 1)
                     && Window::from_raw(root)
-                        .unwrap()
-                        .as_ref()
-                        .peek_event()
+                        .and_then(|window| Window::peek_event(window))
                         .is_none()
             };
             if ready {
@@ -135,8 +144,16 @@ async fn wait_for_display_exactly(manager: &Manager, expected: &str) {
 
 async fn wait_for_display_text(manager: &Manager, expected: &str, exact: bool) {
     for _ in 0..200 {
-        if manager.get_window_count().await.unwrap() > 0 {
-            let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+        if manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap()
+            > 0
+        {
+            let root = manager
+                .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+                .await
+                .unwrap() as *mut lvgl::lv_obj_t;
             let _lock = manager.synchronous_lock();
             unsafe {
                 if label_text(display_label(root)).is_some_and(|text| {
@@ -265,14 +282,26 @@ async fn start_calculator(options: &[&str]) -> (&'static Manager, JoinHandle<isi
 
 /// Requests the window to close and waits for the guest to exit successfully.
 async fn close_calculator(manager: &Manager, handle: JoinHandle<isize>) {
-    let root = manager.get_window_identifier(0).await.unwrap();
-    manager.send_window_close_request(root).await.unwrap();
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap();
+    manager
+        .with_lvgl(|lvgl| manager.send_window_close_request(lvgl, root))
+        .await
+        .unwrap();
     let mut join = core::pin::pin!(handle.join());
     for _ in 0..200 {
         let result = poll_fn(|context| Poll::Ready(join.as_mut().poll(context))).await;
         if let Poll::Ready(status) = result {
             assert_eq!(status, 0);
-            assert_eq!(manager.get_window_count().await.unwrap(), 0);
+            assert_eq!(
+                manager
+                    .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                    .await
+                    .unwrap(),
+                0
+            );
             return;
         }
         xila::task::sleep(Duration::from_millis(5)).await;

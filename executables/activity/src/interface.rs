@@ -48,12 +48,16 @@ pub struct View {
 
 impl View {
     pub async fn new(graphics: &'static graphics::Manager) -> Result<Self, NonZeroUsize> {
-        // Drop the lock before OwnedWindow on every construction error.
-        let mut window;
-        let _lock = graphics.lock().await;
-        window = graphics.create_window().await.map_err(|_| crate::code(1))?;
-        window.set_icon("Ac", WINDOW_ICON_COLOR);
-        let root = window.as_object_mutable();
+        // The guard queues the window deletion when the lock is busy, so a
+        // construction error can drop OwnedWindow while the guard is held.
+        let mut guard = graphics.lock().await;
+        let mut window = guard
+            .with_lvgl(|lvgl| graphics.create_window(lvgl).map_err(|_| crate::code(1)))
+            .map_err(|_| crate::code(1))??;
+        guard
+            .with_lvgl(|lvgl| window.set_icon(lvgl, "Ac", WINDOW_ICON_COLOR))
+            .map_err(|_| crate::code(1))?;
+        let root = window.as_object();
         unsafe {
             lvgl::lv_obj_update_layout(root);
             let compact = lvgl::lv_obj_get_width(root) < COMPACT.0
@@ -225,27 +229,38 @@ impl View {
     }
 
     pub async fn action(&mut self) -> Option<Action> {
-        let _lock = self.graphics.lock().await;
-        while let Some(event) = self.window.pop_event() {
-            if matches!(event.code, EventKind::Delete | EventKind::CloseRequested)
-                && event.is_target(self.window.as_object())
-            {
-                return Some(Action::Close);
-            }
-            if event.code == EventKind::ValueChanged {
-                if event.is_target(self.toggle) {
-                    let on = unsafe { lvgl::lv_obj_has_state(self.toggle, lvgl::LV_STATE_CHECKED) };
-                    return Some(Action::Workload(on));
-                }
-                if event.is_target(self.interval) {
-                    let index = unsafe { lvgl::lv_buttonmatrix_get_selected_button(self.interval) };
-                    if let Some(interval) = INTERVALS.get(index as usize) {
-                        return Some(Action::Interval(*interval));
+        let mut guard = self.graphics.lock().await;
+        guard
+            .with_lvgl(|lvgl| {
+                while let Some(event) = self.window.pop_event(lvgl) {
+                    if matches!(event.code, EventKind::Delete | EventKind::CloseRequested)
+                        && event.is_target(self.window.as_object())
+                    {
+                        return Some(Action::Close);
+                    }
+                    if event.code == EventKind::ValueChanged {
+                        if event.is_target(self.toggle) {
+                            // SAFETY: the session holds the graphics lock and the
+                            // widget pointer stays live in the window.
+                            let on = unsafe {
+                                lvgl::lv_obj_has_state(self.toggle, lvgl::LV_STATE_CHECKED)
+                            };
+                            return Some(Action::Workload(on));
+                        }
+                        if event.is_target(self.interval) {
+                            // SAFETY: the session holds the graphics lock and the
+                            // widget pointer stays live in the window.
+                            let index =
+                                unsafe { lvgl::lv_buttonmatrix_get_selected_button(self.interval) };
+                            if let Some(interval) = INTERVALS.get(index as usize) {
+                                return Some(Action::Interval(*interval));
+                            }
+                        }
                     }
                 }
-            }
-        }
-        None
+                None
+            })
+            .unwrap_or(None)
     }
 
     pub async fn refresh(&mut self, uptime: u64, tasks: usize, memory: MemorySample) {
@@ -254,7 +269,7 @@ impl View {
         }
         self.history.push_back(memory.used);
         let (low, high) = model::chart_range(self.history.iter().copied());
-        let _lock = self.graphics.lock().await;
+        let _guard = self.graphics.lock().await;
         unsafe {
             text(self.uptime, &model::format_uptime(uptime));
             text(self.tasks, &format!("{tasks}"));
@@ -302,7 +317,7 @@ impl View {
     }
 
     pub async fn controls(&mut self, interval: u64, running: bool, failed: bool) {
-        let _lock = self.graphics.lock().await;
+        let _guard = self.graphics.lock().await;
         unsafe {
             for (index, value) in INTERVALS.iter().enumerate() {
                 let control = lvgl::lv_buttonmatrix_ctrl_t_LV_BUTTONMATRIX_CTRL_CHECKED;
@@ -329,7 +344,21 @@ impl View {
 
     pub async fn wait(&mut self, duration: core::time::Duration) {
         embassy_futures::select::select(
-            xila::task::suspend(|context| self.window.register_waker(context.waker())),
+            xila::task::suspend(|context| {
+                self.window.register_waker(context.waker());
+                // The atomic waker does not remember a wake that arrived before
+                // registration: check the queue again before returning pending.
+                if let Some(mut guard) = self.graphics.try_lock() {
+                    let pending = guard
+                        .with_lvgl(|lvgl| self.window.peek_event(lvgl))
+                        .unwrap_or(None)
+                        .is_some();
+                    drop(guard);
+                    if pending {
+                        context.waker().wake_by_ref();
+                    }
+                }
+            }),
             xila::task::sleep(duration),
         )
         .await;

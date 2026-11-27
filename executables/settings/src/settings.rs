@@ -26,17 +26,16 @@ pub struct FileItem {
 impl Settings {
     pub async fn new(context: &'static xila::executable::ExecutableContext) -> Result<Self> {
         let graphics_manager = graphics::ffi_manager();
-        // On construction failure, release the lock before OwnedWindow::drop
-        // acquires it to delete the partially built widget tree.
-        let mut window;
-        let _lock = graphics_manager.lock().await;
-        window = graphics_manager.create_window().await?;
+        // The guard queues the window deletion when the lock is busy, so a
+        // construction error can drop OwnedWindow while the guard is held.
+        let mut guard = graphics_manager.lock().await;
+        let mut window = guard.with_lvgl(|lvgl| graphics_manager.create_window(lvgl))??;
 
-        window.set_icon("Se", WINDOW_ICON_COLOR);
+        guard.with_lvgl(|lvgl| window.set_icon(lvgl, "Se", WINDOW_ICON_COLOR))?;
 
         // Flatten window chrome so the tabview fills the window edge-to-edge
         unsafe {
-            let window = window.as_object_mutable();
+            let window = window.as_object();
             lvgl::lv_obj_set_style_pad_all(window, 0, lvgl::LV_STATE_DEFAULT);
             lvgl::lv_obj_set_layout(window, lvgl::lv_layout_t_LV_LAYOUT_FLEX);
             lvgl::lv_obj_set_flex_flow(window, lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN);
@@ -44,7 +43,7 @@ impl Settings {
 
         // Create tabview
         let tabview = unsafe {
-            let tabview = lvgl::lv_tabview_create(window.as_object_mutable());
+            let tabview = lvgl::lv_tabview_create(window.as_object());
 
             if tabview.is_null() {
                 return Err(crate::error::Error::FailedToCreateUiElement);
@@ -81,36 +80,42 @@ impl Settings {
     pub async fn handle_events(&mut self) -> bool {
         let mut needs_refresh = false;
         let mut needs_preview = false;
-        graphics::lock!(self.graphics_manager, {
-            while let Some(event) = self.window.pop_event() {
-                // Logique de filtrage spécifique à Settings
-                if (event.code == EventKind::Delete || event.code == EventKind::CloseRequested)
-                    && event.is_target(self.window.as_object())
-                {
-                    return false;
-                }
+        let mut guard = self.graphics_manager.lock().await;
+        // Take each event in a short session; the guard is passed to the tabs
+        // and stays held across the awaited handlers below.
+        while let Some(event) = guard
+            .with_lvgl(|lvgl| self.window.pop_event(lvgl))
+            .ok()
+            .flatten()
+        {
+            // Logique de filtrage spécifique à Settings
+            if (event.code == EventKind::Delete || event.code == EventKind::CloseRequested)
+                && event.is_target(self.window.as_object())
+            {
+                return false;
+            }
 
-                for tab in &mut self.tabs {
-                    if tab.handle_event(&event).await {
-                        break;
-                    }
-                }
-            }
             for tab in &mut self.tabs {
-                match tab {
-                    Tab::Network(network) => {
-                        network.refresh().await;
-                        needs_refresh |= network.needs_refresh();
-                    }
-                    // The local time preview changes every second.
-                    Tab::General(general) if general.is_active() => {
-                        general.refresh();
-                        needs_preview = true;
-                    }
-                    _ => {}
+                if tab.handle_event(&event, &mut guard).await {
+                    break;
                 }
             }
-        });
+        }
+        for tab in &mut self.tabs {
+            match tab {
+                Tab::Network(network) => {
+                    network.refresh().await;
+                    needs_refresh |= network.needs_refresh();
+                }
+                // The local time preview changes every second.
+                Tab::General(general) if general.is_active() => {
+                    general.refresh();
+                    needs_preview = true;
+                }
+                _ => {}
+            }
+        }
+        drop(guard);
 
         // A time zone change is written after the graphics lock is released.
         for tab in &mut self.tabs {
@@ -119,8 +124,21 @@ impl Settings {
             }
         }
 
+        // The atomic waker does not remember a wake that arrived before
+        // registration: register it, then check the queue again before
+        // returning pending.
         let events = task::suspend(|ctx| {
             self.window.register_waker(ctx.waker());
+            if let Some(mut guard) = self.graphics_manager.try_lock() {
+                let pending = guard
+                    .with_lvgl(|lvgl| self.window.peek_event(lvgl))
+                    .unwrap_or(None)
+                    .is_some();
+                drop(guard);
+                if pending {
+                    ctx.waker().wake_by_ref();
+                }
+            }
         });
         if needs_refresh || needs_preview {
             let delay = if needs_refresh { 250 } else { 1000 };

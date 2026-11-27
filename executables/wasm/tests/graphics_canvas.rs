@@ -162,7 +162,10 @@ async fn indexed_canvas_and_text_entry_are_checked_and_reclaimed() {
         ),
         Err(GraphicsError::InvalidMemory)
     );
-    let native = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let native = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     {
         let _lock = manager.synchronous_lock();
         unsafe {
@@ -223,5 +226,11 @@ async fn indexed_canvas_and_text_entry_are_checked_and_reclaimed() {
         Err(GraphicsError::InvalidHandle)
     );
     drop(state);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
 }

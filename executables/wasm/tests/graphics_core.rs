@@ -51,7 +51,10 @@ async fn object_position_calls_round_trip_through_the_guest_memory_abi() {
     )
     .unwrap();
     let object = handle(&memory);
-    let window_pointer = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let window_pointer = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
 
     #[cfg(feature = "memory_64")]
     assert_eq!(
@@ -145,7 +148,13 @@ async fn object_position_calls_round_trip_through_the_guest_memory_abi() {
     )
     .unwrap();
     drop(state);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
 }
 
 #[xila::task::test(task_path = xila::task)]
@@ -168,7 +177,10 @@ async fn led_handles_expose_bounded_brightness_and_toggle_operations() {
         0,
     )
     .unwrap();
-    let native_window = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let native_window = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     {
         let _lock = manager.synchronous_lock();
         let native_led = unsafe { lvgl::lv_obj_get_child(native_window, 0) };
@@ -293,7 +305,10 @@ async fn calendar_copies_highlights_and_validates_dates() {
         Err(GraphicsError::InvalidMemory)
     );
 
-    let native_window = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let native_window = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     {
         let _lock = manager.synchronous_lock();
         let native_calendar = unsafe { lvgl::lv_obj_get_child(native_window, 0) };
@@ -606,7 +621,10 @@ async fn line_copies_bounded_points_and_releases_on_delete() {
     )
     .unwrap();
     memory.write(GuestPointer::<i32>::new(64), 777).unwrap();
-    let native_window = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let native_window = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     {
         let _lock = manager.synchronous_lock();
         let native_line = unsafe { lvgl::lv_obj_get_child(native_window, 0) };
@@ -762,7 +780,10 @@ async fn list_items_are_bounded_and_return_child_handles() {
     )
     .unwrap();
     let button = handle(&memory);
-    let native_window = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let native_window = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     memory.write(GuestPointer::<u8>::new(64), b'!').unwrap();
     memory.write(GuestPointer::<u8>::new(80), b'!').unwrap();
     {
@@ -1138,7 +1159,10 @@ async fn badge_card_and_input_use_shared_theme_roles() {
     )
     .unwrap();
 
-    let native_window = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let native_window = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     {
         let _lock = manager.synchronous_lock();
         let display = unsafe { lvgl::lv_display_get_default() };
@@ -1328,7 +1352,13 @@ async fn grid_layout_copies_bounded_track_arrays_from_guest_memory() {
         Err(GraphicsError::InvalidMemory)
     );
     drop(state);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
 }
 
 #[xila::task::test(task_path = xila::task)]
@@ -1387,7 +1417,13 @@ async fn style_and_font_calls_use_validated_host_tokens() {
         );
     }
     drop(state);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
 }
 
 #[xila::task::test(task_path = xila::task)]
@@ -1564,7 +1600,13 @@ async fn range_controls_expose_checked_values_modes_and_orientation() {
     .unwrap();
     assert_eq!(memory.read(GuestPointer::<u32>::new(1)), Some(90));
     drop(state);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
 }
 
 #[xila::task::test(task_path = xila::task)]
@@ -1745,7 +1787,13 @@ async fn dropdown_and_roller_copy_bounded_options_and_report_selected_text() {
     assert_eq!(memory.bytes(GuestSlice::new(220, 5)).unwrap(), b"Moon\0");
 
     drop(state);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
 }
 
 #[xila::task::test(task_path = xila::task)]
@@ -1787,10 +1835,19 @@ async fn checked_graphics_core_owns_objects_maps_and_events() {
         call(&mut state, &mut memory, Function::WindowCreate, &[], 0),
         Err(GraphicsError::InvalidMemory)
     );
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
     call(&mut state, &mut memory, Function::WindowCreate, &[], 1).unwrap();
     let window = handle(&memory);
-    let window_pointer = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let window_pointer = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     call(
         &mut state,
         &mut memory,
@@ -2112,13 +2169,22 @@ async fn checked_graphics_core_owns_objects_maps_and_events() {
         );
     }
     drop(state);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
     // Unknown native targets have no registry DELETE callback. Reusing their
     // address must not turn an already queued click into a newly issued handle.
     let mut state = GraphicsState::new(Some(manager));
     call(&mut state, &mut memory, Function::WindowCreate, &[], 1).unwrap();
     let root = handle(&memory);
-    let root_pointer = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root_pointer = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let old_pointer = {
         let _lock = manager.synchronous_lock();
         unsafe {
@@ -2180,13 +2246,22 @@ async fn checked_graphics_core_owns_objects_maps_and_events() {
     }
     assert!(recycled, "test must actually exercise native address reuse");
     drop(state);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
     let mut state = GraphicsState::new(Some(manager));
     call(&mut state, &mut memory, Function::WindowCreate, &[], 1).unwrap();
     let root = handle(&memory);
     call(&mut state, &mut memory, Function::LabelCreate, &[root], 1).unwrap();
     let label = handle(&memory);
-    let pointer = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let pointer = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     {
         let _lock = manager.synchronous_lock();
         unsafe { lvgl::lv_obj_delete(pointer) };
@@ -2202,7 +2277,13 @@ async fn checked_graphics_core_owns_objects_maps_and_events() {
         Err(GraphicsError::InvalidHandle)
     );
     drop(state);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
 
     // Clock widgets keep the same handle/type and borrowed-memory boundary.
     let mut state = GraphicsState::new(Some(manager));
@@ -2323,5 +2404,11 @@ async fn checked_graphics_core_owns_objects_maps_and_events() {
     .unwrap();
     assert_eq!(memory.read(GuestPointer::<u32>::new(1)), Some(0));
     drop(state);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
 }

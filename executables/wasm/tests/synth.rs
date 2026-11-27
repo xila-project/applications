@@ -125,8 +125,16 @@ unsafe fn label(root: *mut lvgl::lv_obj_t, text: &str) -> *mut lvgl::lv_obj_t {
 
 async fn wait_label(manager: &Manager, text: &str) {
     for _ in 0..400 {
-        if manager.get_window_count().await.unwrap() != 0 {
-            let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+        if manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap()
+            != 0
+        {
+            let root = manager
+                .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+                .await
+                .unwrap() as *mut lvgl::lv_obj_t;
             let _lock = manager.synchronous_lock();
             if unsafe { !label(root, text).is_null() } {
                 return;
@@ -139,7 +147,10 @@ async fn wait_label(manager: &Manager, text: &str) {
 
 /// Selects a value on the first widget of `class` and reports it to the guest.
 async fn change(manager: &Manager, class: *const lvgl::lv_obj_class_t, value: i32) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let widget = find_class(root, class);
@@ -176,7 +187,10 @@ unsafe fn find_class(
 }
 
 async fn event(manager: &Manager, text: &str, code: u32) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let found = label(root, text);
@@ -283,14 +297,23 @@ async fn real_synth_guest_recovers_from_silent_mode_plays_releases_and_closes() 
     change(manager, &raw const lvgl::lv_slider_class, 60).await;
     wait_label(manager, "Octave 5 | Square | Volume 60%").await;
     manager
-        .send_window_close_request(manager.get_window_identifier(0).await.unwrap())
+        .with_lvgl(|lvgl| {
+            let window = manager.get_window_identifier(lvgl, 0)?;
+            manager.send_window_close_request(lvgl, window)
+        })
         .await
         .unwrap();
     let mut join = core::pin::pin!(handle.join());
     for _ in 0..400 {
         if let Poll::Ready(status) = poll_fn(|cx| Poll::Ready(join.as_mut().poll(cx))).await {
             assert_eq!(status, 0);
-            assert_eq!(manager.get_window_count().await.unwrap(), 0);
+            assert_eq!(
+                manager
+                    .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                    .await
+                    .unwrap(),
+                0
+            );
             // Closing the guest releases its stream reservation.
             let streams: Vec<_> = (0..4).map(|_| system.open_stream().unwrap()).collect();
             drop(streams);

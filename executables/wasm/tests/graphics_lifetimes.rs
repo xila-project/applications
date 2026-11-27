@@ -55,7 +55,10 @@ async fn deleted_maps_are_reclaimed_with_generational_handles() {
     for mode in ["explicit", "parent", "external"] {
         let mut state = GraphicsState::new(Some(manager));
         let root = call(&mut state, &mut memory, Function::WindowCreate, &[]);
-        let root_pointer = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+        let root_pointer = manager
+            .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+            .await
+            .unwrap() as *mut lvgl::lv_obj_t;
         let mut previous = root;
         for _ in 0..16 {
             let parent = if mode == "parent" {
@@ -113,6 +116,12 @@ async fn deleted_maps_are_reclaimed_with_generational_handles() {
             }
         }
         drop(state);
-        assert_eq!(manager.get_window_count().await.unwrap(), 0);
+        assert_eq!(
+            manager
+                .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                .await
+                .unwrap(),
+            0
+        );
     }
 }

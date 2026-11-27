@@ -55,19 +55,20 @@ impl Terminal {
 
     async fn new_with(
         graphics_manager: &'static graphics::Manager,
-        build: impl FnOnce(&mut OwnedWindow) -> Result<TerminalWidgets>,
+        build: impl FnOnce(
+            &mut OwnedWindow,
+            &mut graphics::GraphicsGuard<'_>,
+        ) -> Result<TerminalWidgets>,
     ) -> Result<Self> {
-        let inner = graphics::lock!(graphics_manager, {
-            let mut window = graphics_manager.create_window().await?;
-            let widgets = match build(&mut window) {
+        let mut guard = graphics_manager.lock().await;
+        let inner = {
+            let mut window = guard.with_lvgl(|lvgl| graphics_manager.create_window(lvgl))??;
+            let widgets = match build(&mut window, &mut guard) {
                 Ok(widgets) => widgets,
                 Err(error) => {
-                    // SAFETY: the graphics lock is held, and this function owns
-                    // `window`. Delete it directly so `OwnedWindow::drop` does
-                    // not deadlock on the non-re-entrant lock already held here.
-                    unsafe {
-                        lvgl::lv_obj_delete(window.into_raw().as_ptr().cast());
-                    }
+                    // Delete the window in the current session instead of
+                    // letting `OwnedWindow::drop` queue it behind the held lock.
+                    let _ = guard.with_lvgl(|lvgl| window.delete(lvgl));
                     return Err(error);
                 }
             };
@@ -86,7 +87,7 @@ impl Terminal {
                 command_input,
                 command_output: CommandOutput::default(),
             }
-        });
+        };
 
         Ok(Self {
             input_waiters: xila::file_system::WaitQueue::new(),
@@ -97,12 +98,16 @@ impl Terminal {
         })
     }
 
-    fn build_widgets(window: &mut OwnedWindow) -> Result<TerminalWidgets> {
+    fn build_widgets(
+        window: &mut OwnedWindow,
+        guard: &mut graphics::GraphicsGuard<'_>,
+    ) -> Result<TerminalWidgets> {
+        guard
+            .with_lvgl(|lvgl| window.set_icon(lvgl, ">_", Color::BLACK))
+            .map_err(|_| Error::FailedToCreateObject)?;
         unsafe {
-            window.set_icon(">_", Color::BLACK);
-
             lvgl::lv_obj_set_flex_flow(
-                window.as_object_mutable(),
+                window.as_object(),
                 lvgl::lv_flex_flow_t_LV_FLEX_FLOW_COLUMN,
             );
             // Edge-to-edge window chrome: the shared window class already
@@ -371,10 +376,16 @@ impl Terminal {
     pub async fn handle_events(&self) -> Result<bool> {
         let mut running = true;
 
-        let notify_input = graphics::lock!(self.graphics_manager, {
+        let mut guard = self.graphics_manager.lock().await;
+        let notify_input = {
             let mut inner = self.inner.write().await;
 
-            while let Some(event) = inner.window.pop_event() {
+            // Drain the window events in a short session with the guard held.
+            while let Some(event) = guard
+                .with_lvgl(|lvgl| inner.window.pop_event(lvgl))
+                .ok()
+                .flatten()
+            {
                 match event.code {
                     EventKind::Delete | EventKind::CloseRequested
                         if event.is_target(inner.window.as_object()) =>
@@ -391,6 +402,8 @@ impl Terminal {
                         if !inner.command_input.attributes().is_canonical() {
                             inner.command_input.queue(b"\t");
                         }
+                        // SAFETY: the guard holds the graphics lock and the
+                        // input widget stays live in the window.
                         unsafe { lvgl::lv_group_focus_obj(inner.input) };
                     }
                     EventKind::Clicked if event.is_target(inner.clear) => {
@@ -399,6 +412,8 @@ impl Terminal {
                         let last_line = Self::last_line_start(&inner.buffer);
                         inner.buffer.drain(..last_line);
                         Self::print_internal(&mut inner, "")?;
+                        // SAFETY: the guard holds the graphics lock and the
+                        // input widget stays live in the window.
                         unsafe { lvgl::lv_group_focus_obj(inner.input) };
                     }
                     _ => {}
@@ -412,10 +427,13 @@ impl Terminal {
             } = &mut *inner;
             command_input.drain_into(validated_input);
             if command_input.take_completion_focus_request() {
+                // SAFETY: the guard holds the graphics lock and the input
+                // widget stays live in the window.
                 unsafe { lvgl::lv_group_focus_obj(*input) };
             }
             !validated_input.is_empty()
-        });
+        };
+        drop(guard);
 
         if !running {
             self.input_closed
@@ -511,12 +529,17 @@ mod setup_failure_tests {
     #[xila::task::test(task_path = xila::task)]
     async fn terminal_setup_failure_deletes_window_without_deadlocking() {
         let manager = headless_graphics_manager().await;
-        let baseline_windows = manager.get_window_count().await.unwrap();
+        let baseline_windows = manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap();
 
         let (sender, receiver) = std::sync::mpsc::channel();
         let handle = std::thread::spawn(move || {
-            let result = xila::task::block_on(Terminal::new_with(manager, |window| {
-                let child = unsafe { lvgl::lv_obj_create(window.as_object_mutable()) };
+            let result = xila::task::block_on(Terminal::new_with(manager, |window, _guard| {
+                // SAFETY: the guard held by the caller owns the graphics lock
+                // and this closure runs while it is held.
+                let child = unsafe { lvgl::lv_obj_create(window.as_object()) };
                 assert!(!child.is_null());
                 Err(Error::FailedToCreateObject)
             }));
@@ -538,7 +561,13 @@ mod setup_failure_tests {
             manager.try_lock().is_some(),
             "graphics lock must be released after Terminal setup error"
         );
-        assert_eq!(manager.get_window_count().await.unwrap(), baseline_windows);
+        assert_eq!(
+            manager
+                .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                .await
+                .unwrap(),
+            baseline_windows
+        );
     }
 
     #[xila::task::test(task_path = xila::task)]
