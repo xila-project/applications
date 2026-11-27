@@ -36,6 +36,7 @@ pub(crate) struct Inner {
 
 pub struct Terminal {
     pub(crate) input_waiters: xila::file_system::WaitQueue<16>,
+    pub(crate) graphics_waiters: xila::file_system::WaitQueue<16>,
     pub(crate) input_closed: portable_atomic::AtomicBool,
     inner: RwLock<CriticalSectionRawMutex, Inner>,
     graphics_manager: &'static graphics::Manager,
@@ -86,6 +87,7 @@ impl Terminal {
 
         Ok(Self {
             input_waiters: xila::file_system::WaitQueue::new(),
+            graphics_waiters: xila::file_system::WaitQueue::new(),
             input_closed: portable_atomic::AtomicBool::new(false),
             inner: RwLock::new(inner),
             graphics_manager,
@@ -231,12 +233,13 @@ impl Terminal {
         }
     }
 
-    pub fn print(&self, text: &str) -> Result<()> {
+    pub(crate) fn print(&self, bytes: &[u8]) -> Result<()> {
         let mut inner = self.inner.try_write().map_err(|_| Error::WouldBlock)?;
         let _lock = self.graphics_manager.try_lock().ok_or(Error::WouldBlock)?;
 
-        Self::print_internal(&mut inner, text)?;
-
+        for text in xila::shared::utf8_chunks(bytes) {
+            Self::print_internal(&mut inner, text)?;
+        }
         Ok(())
     }
 
@@ -271,6 +274,8 @@ impl Terminal {
 
     pub(crate) fn terminal_attributes(&self) -> Result<TerminalAttributes> {
         let inner = self.inner.try_read().map_err(|_| Error::WouldBlock)?;
+        // LVGL callbacks access the same input state under the graphics lock.
+        let _lock = self.graphics_manager.try_lock().ok_or(Error::WouldBlock)?;
         Ok(inner.command_input.attributes())
     }
 
@@ -400,6 +405,8 @@ impl Terminal {
         if notify_input || !running {
             self.input_waiters.wake_all();
         }
+        // Writers and control calls can retry now that the graphics lock is free.
+        self.graphics_waiters.wake_all();
         Ok(running)
     }
 }
@@ -545,7 +552,7 @@ mod setup_failure_tests {
         assert_eq!(&keys[..size], "\x1b[Dé".as_bytes());
 
         terminal
-            .print("prompt$ \x1b7\x1b8\x1b[Jrésumé\x1b8ré")
+            .print("prompt$ \x1b7\x1b8\x1b[Jrésumé\x1b8ré".as_bytes())
             .unwrap();
         manager
             .lock_function(|| unsafe {
@@ -563,7 +570,9 @@ mod setup_failure_tests {
         let manager = headless_graphics_manager().await;
         let terminal = Terminal::new(manager).await.unwrap();
         for line in 0..40 {
-            terminal.print(&std::format!("line {line}\n")).unwrap();
+            terminal
+                .print(std::format!("line {line}\n").as_bytes())
+                .unwrap();
         }
         manager
             .lock_function(|| unsafe {
