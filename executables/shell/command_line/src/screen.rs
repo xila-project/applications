@@ -26,10 +26,11 @@ pub(crate) const ASSUMED_TERMINAL_COLUMNS: usize = 80;
 /// (xila-project/platforms#200) has no room for them. The table covers CJK
 /// ideographs and radicals, Hiragana, Katakana, Bopomofo, Hangul, the Yi
 /// script, CJK compatibility ideographs and forms, the fullwidth forms and
-/// signs, emoji, and the combining diacritical marks; it does not cover the
-/// less common wide ranges (Tangut, Egyptian hieroglyphs, further CJK
-/// extension blocks) or the other combining blocks (for example Devanagari
-/// or Hebrew marks), which count as one column.
+/// signs, the East Asian Wide subranges of the emoji blocks, and the
+/// combining diacritical marks; it does not cover the less common wide
+/// ranges (miscellaneous symbols, the Tangut and Khitan scripts, the
+/// extended Kana blocks) or the other combining blocks (for example
+/// Devanagari or Hebrew marks), which count as one column.
 fn char_width(character: char) -> usize {
     if character.is_control() {
         return 0;
@@ -47,7 +48,7 @@ fn char_width(character: char) -> usize {
         || (0xFE30..=0xFE4F).contains(&value)
         || (0xFF00..=0xFF60).contains(&value)
         || (0xFFE0..=0xFFE6).contains(&value)
-        || (0x1F300..=0x1F9FF).contains(&value)
+        || is_wide_emoji(value)
         || (0x20000..=0x3FFFD).contains(&value)
     {
         2
@@ -60,6 +61,53 @@ fn char_width(character: char) -> usize {
     } else {
         1
     }
+}
+
+/// East Asian Wide subranges of the emoji blocks, from `EastAsianWidth.txt`
+/// of Unicode 17.0.0, the Unicode version of Rust 1.97. The rest of the
+/// emoji blocks is Neutral, including the text presentation emoji such as
+/// U+1F321, and takes one column.
+fn is_wide_emoji(value: u32) -> bool {
+    (0x1F300..=0x1F320).contains(&value)
+        || (0x1F32D..=0x1F335).contains(&value)
+        || (0x1F337..=0x1F37C).contains(&value)
+        || (0x1F37E..=0x1F393).contains(&value)
+        || (0x1F3A0..=0x1F3CA).contains(&value)
+        || (0x1F3CF..=0x1F3D3).contains(&value)
+        || (0x1F3E0..=0x1F3F0).contains(&value)
+        || (0x1F3F4..=0x1F3F4).contains(&value)
+        || (0x1F3F8..=0x1F3FA).contains(&value)
+        || (0x1F3FB..=0x1F3FF).contains(&value)
+        || (0x1F400..=0x1F43E).contains(&value)
+        || (0x1F440..=0x1F440).contains(&value)
+        || (0x1F442..=0x1F4FC).contains(&value)
+        || (0x1F4FF..=0x1F53D).contains(&value)
+        || (0x1F54B..=0x1F54E).contains(&value)
+        || (0x1F550..=0x1F567).contains(&value)
+        || (0x1F57A..=0x1F57A).contains(&value)
+        || (0x1F595..=0x1F596).contains(&value)
+        || (0x1F5A4..=0x1F5A4).contains(&value)
+        || (0x1F5FB..=0x1F5FF).contains(&value)
+        || (0x1F600..=0x1F64F).contains(&value)
+        || (0x1F680..=0x1F6C5).contains(&value)
+        || (0x1F6CC..=0x1F6CC).contains(&value)
+        || (0x1F6D0..=0x1F6D2).contains(&value)
+        || (0x1F6D5..=0x1F6D8).contains(&value)
+        || (0x1F6DC..=0x1F6DF).contains(&value)
+        || (0x1F6EB..=0x1F6EC).contains(&value)
+        || (0x1F6F4..=0x1F6FC).contains(&value)
+        || (0x1F7E0..=0x1F7EB).contains(&value)
+        || (0x1F7F0..=0x1F7F0).contains(&value)
+        || (0x1F90C..=0x1F93A).contains(&value)
+        || (0x1F93C..=0x1F945).contains(&value)
+        || (0x1F947..=0x1F9FF).contains(&value)
+        || (0x1FA70..=0x1FA7C).contains(&value)
+        || (0x1FA80..=0x1FA8A).contains(&value)
+        || (0x1FA8E..=0x1FAC6).contains(&value)
+        || (0x1FAC8..=0x1FAC8).contains(&value)
+        || (0x1FACD..=0x1FADC).contains(&value)
+        || (0x1FADF..=0x1FAEA).contains(&value)
+        || (0x1FAEF..=0x1FAF8).contains(&value)
 }
 
 /// Cell offset from column 0 of the prompt row after laying out `prompt` and
@@ -180,6 +228,16 @@ pub(crate) fn redraw(
     if cursor_position > start && cursor_position.is_multiple_of(columns) {
         leave_pending_wrap(out, cursor_position, columns);
     }
+}
+
+/// Whether a redraw of `line` with the cursor at its end already left the
+/// cursor at the start of a new row, because the line ends exactly at the
+/// terminal width: the redraw then emits the CR LF that leaves the pending
+/// wrap, and ending the line needs no extra line feed.
+pub(crate) fn redraw_ends_on_new_row(prompt: &str, line: &str, columns: usize) -> bool {
+    let start = position(prompt, "", columns);
+    let end = position(prompt, line, columns);
+    end > start && end.is_multiple_of(columns)
 }
 
 #[cfg(test)]
@@ -392,6 +450,10 @@ mod tests {
         assert_eq!(position("", "\u{FF41}\u{FF42}", 80), 4);
         assert_eq!(position("", "e\u{301}", 80), 1);
         assert_eq!(position("", "\u{1F600}", 80), 2);
+        // Text presentation emoji are East Asian Neutral and take one column.
+        assert_eq!(position("", "\u{1F321}", 80), 1);
+        assert_eq!(position("", "\u{1F336}", 80), 1);
+        assert_eq!(position("", "\u{1F3F4}", 80), 2);
         assert_eq!(position("", "\x1b[31mred\x1b[0m", 80), 3);
         assert_eq!(position("", "a\tb", 80), 2);
         // A double width character that does not fit wraps and leaves a cell
@@ -483,7 +545,13 @@ mod tests {
     fn wrapped_redraw_with_wide_and_combining_characters() {
         let columns = 80;
         let height = 6;
-        for line in ["\u{754C}".repeat(35), "e".repeat(50) + "\u{301}"] {
+        for line in [
+            "\u{754C}".repeat(35),
+            "e".repeat(50) + "\u{301}",
+            // A text presentation emoji takes one column: with the 13 column
+            // prompt and 66 letters, the line ends exactly at the width.
+            "x".repeat(66) + "\u{1F321}",
+        ] {
             let mut model = Model::new(columns, height);
             for _ in 1..height {
                 model.feed("output line\r\n");
@@ -562,6 +630,31 @@ mod tests {
                 check_screen_and_cursor(&model, &prompt, &extended, 1, columns);
             }
         }
+    }
+
+    #[test]
+    fn redraw_ends_on_new_row_only_at_the_terminal_width() {
+        // The 13 column prompt plus 67 columns of line end exactly at 80.
+        assert!(redraw_ends_on_new_row(
+            "root@xila:/$ ",
+            &("x".repeat(66) + "\u{1F321}"),
+            80
+        ));
+        assert!(redraw_ends_on_new_row(&"p".repeat(80), &"x".repeat(80), 80));
+        assert!(!redraw_ends_on_new_row(
+            "root@xila:/$ ",
+            &"x".repeat(66),
+            80
+        ));
+        assert!(!redraw_ends_on_new_row(
+            "root@xila:/$ ",
+            &"x".repeat(68),
+            80
+        ));
+        // An empty line on a prompt that fills a row exactly needs the line
+        // feed: the redraw did not emit one.
+        assert!(!redraw_ends_on_new_row(&"p".repeat(80), "", 80));
+        assert!(!redraw_ends_on_new_row("ab$ ", "hello", 80));
     }
 
     #[test]

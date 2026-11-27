@@ -135,7 +135,12 @@ impl Shell {
                         editor.line().len(),
                         columns,
                     );
-                    sequence.push_str("\r\n");
+                    // When the line ends exactly at the terminal width, the
+                    // redraw already moved the cursor to the start of a new
+                    // row; an extra line feed would leave a blank row.
+                    if !screen::redraw_ends_on_new_row(&prompt, editor.line(), columns) {
+                        sequence.push_str("\r\n");
+                    }
                     let _ = output
                         .write(self.standard.out(), format_args!("{sequence}"))
                         .await;

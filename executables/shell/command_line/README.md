@@ -28,8 +28,10 @@ past the bottom row still redraws correctly once the screen scrolls. It
 assumes an 80 column terminal, because no device control reports the terminal
 size yet. Display width is measured per character: East Asian Wide and
 Fullwidth characters take two columns and combining marks take none, from a
-small table that covers the common CJK, Hangul, fullwidth and combining
-diacritical ranges; rarer wide or combining characters count as one column.
+small table that covers the common CJK, Hangul and fullwidth ranges, the
+East Asian Wide subranges of the emoji blocks (the text presentation emoji
+are Neutral and take one column), and the combining diacritical marks;
+rarer wide or combining characters count as one column.
 
 ## Composing commands
 
