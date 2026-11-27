@@ -193,6 +193,7 @@ impl LineEditor {
             4 if self.line.is_empty() && self.rejected.is_none() => return Action::EndOfInput,
             27 => {
                 self.escape = Escape::Start;
+                self.rejected = None;
                 self.character_length = 0;
                 return Action::None;
             }
@@ -235,9 +236,19 @@ impl LineEditor {
                 return if unsupported {
                     Action::None
                 } else {
+                    // Cursor keys clear a rejection and a pending UTF-8 sequence.
+                    self.rejected = None;
+                    self.character_length = 0;
                     self.escape_key(byte, number)
                 };
             }
+        }
+
+        // Editing keys clear a rejection and a pending UTF-8 sequence, so the
+        // line recovers instead of blocking all input until Enter or Ctrl+C.
+        if matches!(byte, 1 | 4 | 5 | 8 | 11 | 21 | 23 | 127) {
+            self.rejected = None;
+            self.character_length = 0;
         }
 
         match byte {
@@ -401,5 +412,25 @@ mod tests {
         assert_eq!(editor.feed(b'x'), Action::Bell);
         assert_eq!(editor.feed(b'\r'), Action::Submit);
         assert_eq!(editor.finish(), Err(Rejection::TooLong));
+    }
+
+    #[test]
+    fn editing_keys_clear_a_rejection_and_a_pending_utf8_sequence() {
+        // An invalid byte on an empty line must not block further input.
+        let mut editor = LineEditor::new(0);
+        assert_eq!(editor.feed(0xFF), Action::Bell);
+        assert_eq!(editor.feed(b'a'), Action::None);
+        assert_eq!(editor.feed(8), Action::None);
+        assert_eq!(editor.feed(b'a'), Action::Redraw);
+        assert_eq!(editor.line(), "a");
+
+        // An incomplete lead byte must not combine with the next character.
+        let mut editor = LineEditor::new(0);
+        assert_eq!(editor.feed(0xC3), Action::None);
+        type_keys(&mut editor, "\x1b[D");
+        assert_eq!(editor.feed(b'a'), Action::Redraw);
+        assert_eq!(editor.line(), "a");
+        assert_eq!(editor.feed(b'\r'), Action::Submit);
+        assert_eq!(editor.finish().ok().as_deref(), Some("a"));
     }
 }

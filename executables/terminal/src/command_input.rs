@@ -138,11 +138,12 @@ enum Escape {
     #[default]
     None,
     Start,
-    /// A `CSI` sequence. `parameter` is set once a parameter byte was seen;
-    /// `two` remembers a lone `2` parameter, as in `CSI 2 J`.
+    /// A `CSI` sequence: `number` accumulates the decimal parameter value,
+    /// `other` marks a non-digit parameter byte, as the `?` of a private
+    /// sequence.
     Control {
-        parameter: bool,
-        two: bool,
+        number: u32,
+        other: bool,
     },
 }
 
@@ -184,22 +185,29 @@ impl CommandOutput {
                 }
                 (Escape::Start, '[') => {
                     self.escape = Escape::Control {
-                        parameter: false,
-                        two: false,
-                    }
+                        number: 0,
+                        other: false,
+                    };
                 }
-                (Escape::Control { parameter, two }, byte)
-                    if ('\u{30}'..='\u{3f}').contains(&byte) =>
-                {
+                (Escape::Control { number, other }, byte) if byte.is_ascii_digit() => {
                     // Parameter bytes stay in the sequence; the final byte ends it.
                     self.escape = Escape::Control {
-                        parameter: true,
-                        two: two || (!parameter && byte == '2'),
+                        number: number
+                            .saturating_mul(10)
+                            .saturating_add(u32::from(byte) - u32::from('0')),
+                        other,
+                    };
+                }
+                (Escape::Control { number, .. }, byte) if ('\u{3a}'..='\u{3f}').contains(&byte) => {
+                    self.escape = Escape::Control {
+                        number,
+                        other: true,
                     };
                 }
                 (
                     Escape::Control {
-                        parameter: false, ..
+                        number: 0,
+                        other: false,
                     },
                     'J',
                 ) if raw => {
@@ -207,7 +215,13 @@ impl CommandOutput {
                         text.truncate(*cursor);
                     }
                 }
-                (Escape::Control { two: true, .. }, 'J') => scrollback.clear(),
+                (
+                    Escape::Control {
+                        number: 2,
+                        other: false,
+                    },
+                    'J',
+                ) => scrollback.clear(),
                 (Escape::None, '\n') => {
                     if let Some((text, _)) = self.edit.take() {
                         scrollback.push_str(&text);
@@ -276,6 +290,17 @@ mod tests {
         output.write("\x1b8\x1b[J界な\r\n", &mut scrollback, true);
         assert_eq!(output.edit(), None);
         assert_eq!(scrollback, "prompt$ 界な\n");
+    }
+
+    #[test]
+    fn csi_parameters_are_parsed_as_a_full_number() {
+        let mut output = CommandOutput::default();
+        let mut scrollback = alloc::string::String::new();
+        output.write("keep\x1b[2J", &mut scrollback, false);
+        assert_eq!(scrollback, "");
+        // CSI 20 J is not CSI 2 J: it must not clear the scrollback.
+        output.write("keep\x1b[20Jmore", &mut scrollback, false);
+        assert_eq!(scrollback, "keepmore");
     }
 
     #[test]

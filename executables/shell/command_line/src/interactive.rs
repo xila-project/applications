@@ -82,17 +82,28 @@ impl Shell {
         let columns = screen::ASSUMED_TERMINAL_COLUMNS;
         // ESC 7 marks the start of the edited line for the graphical terminal.
         // On a serial console it only saves the cursor position, which the
-        // redraw never restores. Prompt write errors stay non-fatal, as in
-        // stream mode: the input read reports a broken terminal instead.
+        // redraw never restores. When the prompt fills a row exactly, the
+        // cursor is pending in the last column: move it to the next row, so
+        // the redrawn line never overwrites the prompt. Prompt write errors
+        // stay non-fatal, as in stream mode: the input read reports a broken
+        // terminal instead.
+        let mut sequence = String::new();
+        sequence.push_str(&prompt);
+        sequence.push_str("\x1b7");
+        screen::leave_pending_wrap(
+            &mut sequence,
+            screen::position(&prompt, "", columns),
+            columns,
+        );
         let _ = output
-            .write(self.standard.out(), format_args!("{prompt}\x1b7"))
+            .write(self.standard.out(), format_args!("{sequence}"))
             .await;
         let _ = self.standard.out().flush().await;
         loop {
             let mut byte = [0; 1];
-            // The line shown on the screen, before this key: the redraw moves
-            // relative to its cursor.
-            let displayed_columns = screen::width(editor.before_cursor());
+            // The position of the cursor in the line shown on the screen,
+            // before this key: the redraw moves relative to it.
+            let displayed_position = screen::position(&prompt, editor.before_cursor(), columns);
             let action = match self.read_input_byte(&mut byte).await? {
                 Some(0) if !editor.line().is_empty() => Action::Submit,
                 Some(1) => editor.feed(byte[0]),
@@ -105,7 +116,7 @@ impl Shell {
                     screen::redraw(
                         &mut sequence,
                         &prompt,
-                        displayed_columns,
+                        displayed_position,
                         editor.line(),
                         editor.before_cursor().len(),
                         columns,
@@ -119,7 +130,7 @@ impl Shell {
                     screen::redraw(
                         &mut sequence,
                         &prompt,
-                        displayed_columns,
+                        displayed_position,
                         editor.line(),
                         editor.line().len(),
                         columns,
@@ -132,7 +143,7 @@ impl Shell {
                 }
                 Action::Cancel | Action::EndOfInput => {
                     let mut sequence = String::new();
-                    screen::erase_line(&mut sequence, &prompt, displayed_columns, columns);
+                    screen::erase_line(&mut sequence, &prompt, displayed_position, columns);
                     sequence.push_str("\r\n");
                     let _ = execution::write_all(self.standard.out(), sequence.as_bytes()).await;
                     return Ok(action);
