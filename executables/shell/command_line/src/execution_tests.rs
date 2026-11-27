@@ -2901,3 +2901,76 @@ async fn the_new_commands_are_listed_in_help() {
         );
     }
 }
+
+#[cfg(feature = "crash-command")]
+#[xila::task::test(task_path = xila::task)]
+async fn crash_command_lists_shows_exports_and_clears_a_report() {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use xila::crash::{Architecture, BuildIdentifier, Header, Limits, RecordKind, Writer};
+
+    let mut shell = shell().await;
+    let mut slot = [0; 512];
+    let header = Header {
+        program_counter: 0x1234,
+        task_name: "Test",
+        build_identifier: BuildIdentifier::ElfSha256([0xAB; 32]),
+        ..Header::new(RecordKind::KernelPanic, Architecture::XtensaEsp32S3)
+    };
+    let original = Writer::new(&mut slot, &header, Limits::ESPRESSIF)
+        .unwrap()
+        .finish(format_args!("Test crash"), &[], |_| Some(0));
+    xila::crash::import(shell.context.virtual_file_system, original, 128 * 1024)
+        .await
+        .unwrap();
+
+    assert_eq!(shell.execute_line("crash").await.unwrap(), 0);
+    assert!(
+        contents(&shell, "/shell-output")
+            .await
+            .contains("1-kernel.xcr KernelPanic")
+    );
+    assert_eq!(shell.execute_line("crash show latest").await.unwrap(), 0);
+    assert!(
+        contents(&shell, "/shell-output")
+            .await
+            .contains("program_counter=0x1234")
+    );
+
+    assert_eq!(
+        shell
+            .execute_line("crash export > /temporary/export")
+            .await
+            .unwrap(),
+        0
+    );
+    let encoded = contents(&shell, "/temporary/export").await;
+    let encoded: String = encoded.lines().collect();
+    let mut decoded = [0; 512];
+    let length = STANDARD.decode_slice(encoded, &mut decoded).unwrap();
+    assert_eq!(&decoded[..length], original);
+    assert_eq!(
+        shell
+            .execute_line("crash export 1-kernel.xcr --raw > /temporary/raw")
+            .await
+            .unwrap(),
+        0
+    );
+    let mut raw = Vec::new();
+    File::read_from_path(
+        shell.context.virtual_file_system,
+        shell.task,
+        "/temporary/raw",
+        &mut raw,
+    )
+    .await
+    .unwrap();
+    assert_eq!(raw, original);
+
+    assert_eq!(shell.execute_line("crash clear").await.unwrap(), 0);
+    assert!(
+        xila::crash::list(shell.context.virtual_file_system, shell.task)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

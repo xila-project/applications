@@ -28,6 +28,7 @@
     "argument_parsing_error": "Argument parsing error: {arg0}",
     "authentication_failed": "Authentication failed: {arg0}",
     "before_build_date": "The time is earlier than the firmware build date.",
+    "crash_reports": "Cannot access crash reports: {arg0}",
     "failed_to_control_device": "Failed to send the control command: {arg0}",
     "failed_to_create_directory": "Failed to create directory: {arg0}",
     "failed_to_create_socket": "Failed to create socket: {arg0}",

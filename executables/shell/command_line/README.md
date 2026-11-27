@@ -179,3 +179,9 @@ as `USER`, for example
 - Every attempt is logged with the caller, the target user, the command and
   the outcome, with the fields that the caller chooses escaped.
 - Successful authentications are not remembered.
+
+## Crash reports
+
+On platforms that enable `crash-command`, use `crash list` to find reports and `crash show latest` to read the latest report. You can give `show` or `export` a report name from the list.
+
+Use `crash export latest` to copy a Base64 report from the terminal. Use `crash export latest --raw > /temporary/report.xcr` to save a binary report. Root and members of the administrator group can read reports and run `crash clear`.

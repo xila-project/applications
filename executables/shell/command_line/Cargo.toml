@@ -6,6 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
+base64 = { version = "0.22", default-features = false, optional = true }
 embassy-futures = { workspace = true }
 embedded-i18n = { workspace = true }
 device = { workspace = true, optional = true }
@@ -17,6 +18,7 @@ getargs-derive = { workspace = true }
 [features]
 default = ["network", "time-commands", "time-zone-command"]
 network = ["xila/network"]
+crash-command = ["xila/crash", "dep:base64"]
 # The date, uptime and real_time_clock commands. Off on flash-constrained
 # boards such as the Nano 33 BLE, which builds this shell with
 # default-features = false.
