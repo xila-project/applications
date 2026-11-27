@@ -415,8 +415,8 @@ mod tests {
     #[test]
     fn completes_mid_word_only_up_to_the_cursor() {
         // The cursor is after "ec": the match replaces "ec" and leaves "X".
-        let result = complete("ecX", 2, &["echo", "exit"]);
-        assert_eq!(result.replacement, Some((0..2, String::from("e"))));
+        let result = complete("ecX", 2, &["echo", "echidna"]);
+        assert_eq!(result.replacement, Some((0..2, String::from("ech"))));
         let result = complete("ecX", 2, &["echo"]);
         assert_eq!(result.replacement, Some((0..2, String::from("echo "))));
     }
@@ -426,7 +426,7 @@ mod tests {
         let result = complete("cp ../aX /output", 7, &["a file"]);
         assert_eq!(
             result.replacement,
-            Some((3..7, String::from("../a\\ file")))
+            Some((3..7, String::from("../a\\ file ")))
         );
         assert!(!Word::at("echo > lo", 9).unwrap().command);
         assert!(Word::at("echo; ec", 8).unwrap().command);

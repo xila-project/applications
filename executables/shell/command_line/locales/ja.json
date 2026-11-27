@@ -5,6 +5,12 @@
       "username": "ユーザー名: "
     }
   },
+  "completion": {
+    "listing": {
+      "hidden_matches": "他 {arg0} 件",
+      "search_limit_reached": "検索の上限に達しました。"
+    }
+  },
   "dns": {
     "errors": {
       "domain_name_too_long": "{arg0} を解決できません: ドメイン名が長すぎます",

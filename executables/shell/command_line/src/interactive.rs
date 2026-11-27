@@ -133,13 +133,14 @@ impl Shell {
                         .complete(editor.line(), editor.before_cursor().len())
                         .await
                     {
+                        let zero_matches = completion.matches.is_empty();
                         if completion.matches.is_ambiguous() {
                             pending_matches = Some(completion.matches);
                         }
                         match completion.replacement {
                             Some((range, text)) => editor.replace(range, &text),
                             // Zero matches ring the bell and leave the line as typed.
-                            None if completion.matches.is_empty() => Action::Bell,
+                            None if zero_matches => Action::Bell,
                             None => Action::None,
                         }
                     } else {

@@ -5,6 +5,12 @@
       "username": "Benutzername: "
     }
   },
+  "completion": {
+    "listing": {
+      "hidden_matches": "und {arg0} weitere",
+      "search_limit_reached": "Suchlimit erreicht."
+    }
+  },
   "dns": {
     "errors": {
       "domain_name_too_long": "{arg0} kann nicht aufgelöst werden: Der Domainname ist zu lang",

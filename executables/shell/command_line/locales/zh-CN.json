@@ -5,6 +5,12 @@
       "username": "用户名： "
     }
   },
+  "completion": {
+    "listing": {
+      "hidden_matches": "还有 {arg0} 条",
+      "search_limit_reached": "已达到搜索上限。"
+    }
+  },
   "dns": {
     "errors": {
       "domain_name_too_long": "无法解析 {arg0}：域名过长",
