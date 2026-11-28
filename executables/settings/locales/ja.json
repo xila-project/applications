@@ -66,6 +66,8 @@
   },
   "about": {
     "fields": {
+      "build_date": "ビルド日：",
+      "commit": "コミット：",
       "cpu": "CPU:",
       "description": "説明:",
       "developer": "開発者:",
@@ -131,7 +133,8 @@
     }
   },
   "common": {
-    "none": "なし"
+    "none": "なし",
+    "unknown": "不明"
   },
   "app": {
     "title": "設定"

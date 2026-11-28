@@ -1,6 +1,8 @@
 {
   "about": {
     "fields": {
+      "build_date": "构建日期：",
+      "commit": "提交：",
       "cpu": "CPU：",
       "description": "描述：",
       "developer": "开发者：",
@@ -38,7 +40,8 @@
     }
   },
   "common": {
-    "none": "无"
+    "none": "无",
+    "unknown": "未知"
   },
   "errors": {
     "authentication_failed": "身份验证失败：{arg0}",

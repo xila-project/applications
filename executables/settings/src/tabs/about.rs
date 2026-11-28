@@ -66,6 +66,22 @@ impl AboutTab {
             .map_err(|_| crate::error::Error::FailedToCreateUiElement)?;
         self.create_list_item(t!(c"about.fields.version"), &version)?;
 
+        // The platform build exports the commit and date of the final firmware;
+        // a plain build has neither and shows unknown instead.
+        let build_date = match about::get_build_date() {
+            Some(build_date) => CString::new(build_date),
+            None => CString::new(t!(c"common.unknown").to_bytes()),
+        }
+        .map_err(|_| crate::error::Error::FailedToCreateUiElement)?;
+        self.create_list_item(t!(c"about.fields.build_date"), &build_date)?;
+
+        let commit = match about::get_commit() {
+            Some(commit) => CString::new(commit),
+            None => CString::new(t!(c"common.unknown").to_bytes()),
+        }
+        .map_err(|_| crate::error::Error::FailedToCreateUiElement)?;
+        self.create_list_item(t!(c"about.fields.commit"), &commit)?;
+
         let locale = CString::new(internationalization::locale!())?;
         self.create_list_item(t!(c"general.fields.locale"), &locale)?;
 
