@@ -54,10 +54,11 @@ impl FileManager {
         graphics_manager: &'static graphics::Manager,
         initial_path: PathOwned,
     ) -> Result<Self> {
-        let manager = graphics::lock!(graphics_manager, {
-            let mut window = graphics_manager.create_window().await?;
+        let mut guard = graphics_manager.lock().await;
+        let manager = {
+            let mut window = guard.with_lvgl(|lvgl| graphics_manager.create_window(lvgl))??;
 
-            window.set_icon("Fm", WINDOW_ICON_COLOR);
+            guard.with_lvgl(|lvgl| window.set_icon(lvgl, "Fm", WINDOW_ICON_COLOR))?;
 
             let mut manager = Self {
                 context,
@@ -77,17 +78,14 @@ impl FileManager {
             };
 
             if let Err(error) = manager.setup_ui(initial_path).await {
-                // SAFETY: the graphics lock is held, and `manager` owns the
-                // window. Delete it directly so `OwnedWindow::drop` does not
-                // deadlock on the non-re-entrant lock already held here.
-                unsafe {
-                    lvgl::lv_obj_delete(manager.window.into_raw().as_ptr().cast());
-                }
+                // Delete the window in the current session instead of letting
+                // `OwnedWindow::drop` queue it behind the held lock.
+                let _ = guard.with_lvgl(|lvgl| manager.window.delete(lvgl));
                 return Err(error);
             }
 
             manager
-        });
+        };
 
         Ok(manager)
     }
@@ -125,16 +123,36 @@ impl FileManager {
     }
 
     pub async fn handle_events(&mut self) -> bool {
-        graphics::lock!(self.graphics_manager, {
-            while let Some(event) = self.window.pop_event() {
+        {
+            let mut guard = self.graphics_manager.lock().await;
+            // Take each event in a short session; the guard stays held across
+            // the awaited handlers below.
+            while let Some(event) = guard
+                .with_lvgl(|lvgl| self.window.pop_event(lvgl))
+                .ok()
+                .flatten()
+            {
                 if let Err(e) = self.handle_event(event).await {
                     log::error!("{}", t!("errors.event_handling_failed", arg0 = e));
                 }
             }
-        });
+        }
 
+        // The atomic waker does not remember a wake that arrived before
+        // registration: register it, then check the queue again before
+        // returning pending.
         task::suspend(|ctx| {
             self.window.register_waker(ctx.waker());
+            if let Some(mut guard) = self.graphics_manager.try_lock() {
+                let pending = guard
+                    .with_lvgl(|lvgl| self.window.peek_event(lvgl))
+                    .unwrap_or(None)
+                    .is_some();
+                drop(guard);
+                if pending {
+                    ctx.waker().wake_by_ref();
+                }
+            }
         })
         .await;
 
@@ -674,11 +692,13 @@ mod tests {
             lvgl::lv_init();
             lvgl::lv_display_create(320, 240);
             let screen = lvgl::lv_obj_create(core::ptr::null_mut());
-            let mut window = Window::new(screen).unwrap();
-            let window = window.as_mut();
-            let list = lvgl::lv_list_create(window.as_object_mutable());
+            // SAFETY: the test lock serializes access to this private LVGL
+            // instance and the screen stays live for the whole test.
+            let window = Window::new(screen).unwrap();
+            let list = lvgl::lv_list_create(window.as_ptr().cast());
             let folder = lvgl::lv_list_add_button(list, core::ptr::null(), c"folder".as_ptr());
-            while window.pop_event().is_some() {}
+            // SAFETY: the test holds LVGL and keeps the window live.
+            while Window::pop_event(window).is_some() {}
             for _ in 0..2 {
                 lvgl::lv_obj_send_event(
                     folder,
@@ -687,7 +707,8 @@ mod tests {
                 );
             }
 
-            let mut clicks = core::iter::from_fn(|| window.pop_event())
+            // SAFETY: the test holds LVGL and keeps the window live.
+            let mut clicks = core::iter::from_fn(|| Window::pop_event(window))
                 .filter(|event| event.code == EventKind::Clicked);
             let first = clicks.next().unwrap();
             assert_eq!(clicked_list_button(list, &first), Some(folder));
@@ -700,7 +721,7 @@ mod tests {
             assert_eq!(clicked_list_button(list, &second), None);
             drop(clicks);
 
-            lvgl::lv_obj_delete(window.as_object_mutable());
+            lvgl::lv_obj_delete(window.as_ptr().cast());
         }
     }
 
@@ -813,8 +834,10 @@ mod tests {
                                 async move |_| {
                                     let standard = testing::initialize(false, false).await;
                                     let manager = headless_graphics_manager().await;
-                                    let baseline_windows =
-                                        manager.get_window_count().await.unwrap();
+                                    let baseline_windows = manager
+                                        .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                                        .await
+                                        .unwrap();
                                     let path = PathOwned::new("/does-not-exist".into()).unwrap();
                                     let result =
                                         FileManager::new_at(standard.context, manager, path).await;
@@ -827,7 +850,10 @@ mod tests {
                                         "graphics lock must be released after FileManager setup error"
                                     );
                                     assert_eq!(
-                                        manager.get_window_count().await.unwrap(),
+                                        manager
+                                            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                                            .await
+                                            .unwrap(),
                                         baseline_windows
                                     );
                                     let _ = sender.send(());

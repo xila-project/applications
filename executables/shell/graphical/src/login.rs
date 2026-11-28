@@ -33,46 +33,48 @@ impl Login {
 
     pub async fn new(context: &'static xila::executable::ExecutableContext) -> Result<Self> {
         let graphics_manager = graphics::ffi_manager();
-        Self::new_with(context, graphics_manager, Self::build_widgets).await
+        Self::new_with(context, graphics_manager, |window, guard| {
+            Self::build_widgets(window, guard)
+        })
+        .await
     }
 
     pub(crate) async fn new_with(
         context: &'static xila::executable::ExecutableContext,
         graphics_manager: &'static graphics::Manager,
-        build: impl FnOnce(&mut OwnedWindow) -> Result<LoginWidgets>,
+        build: impl FnOnce(&mut OwnedWindow, &mut graphics::GraphicsGuard<'_>) -> Result<LoginWidgets>,
     ) -> Result<Self> {
         // - Lock the graphics
-        graphics::lock!(graphics_manager, {
-            // - Create a window
-            let mut window = graphics_manager.create_window().await?;
+        let mut guard = graphics_manager.lock().await;
+        // - Create a window in a session
+        let mut window = guard.with_lvgl(|lvgl| graphics_manager.create_window(lvgl))??;
 
-            let widgets = match build(&mut window) {
-                Ok(widgets) => widgets,
-                Err(error) => {
-                    // SAFETY: the graphics lock is held, and this function owns
-                    // `window`. Delete it directly so `OwnedWindow::drop` does
-                    // not deadlock on the non-re-entrant lock already held here.
-                    unsafe {
-                        lvgl::lv_obj_delete(window.into_raw().as_ptr().cast());
-                    }
-                    return Err(error);
-                }
-            };
+        let widgets = match build(&mut window, &mut guard) {
+            Ok(widgets) => widgets,
+            Err(error) => {
+                // Delete the window in the current session instead of letting
+                // `OwnedWindow::drop` queue it behind the held lock.
+                let _ = guard.with_lvgl(|lvgl| window.delete(lvgl));
+                return Err(error);
+            }
+        };
 
-            Ok(Login {
-                context,
-                graphics_manager,
-                window,
-                user_name_text_area: widgets.user_name_text_area,
-                password_text_area: widgets.password_text_area,
-                button: widgets.button,
-                error_label: widgets.error_label,
-                user: None,
-            })
+        Ok(Login {
+            context,
+            graphics_manager,
+            window,
+            user_name_text_area: widgets.user_name_text_area,
+            password_text_area: widgets.password_text_area,
+            button: widgets.button,
+            error_label: widgets.error_label,
+            user: None,
         })
     }
 
-    fn build_widgets(window: &mut OwnedWindow) -> Result<LoginWidgets> {
+    fn build_widgets(
+        window: &mut OwnedWindow,
+        _guard: &mut graphics::GraphicsGuard<'_>,
+    ) -> Result<LoginWidgets> {
         // One centered card: logo, the two fields, the error line and the
         // primary action. Small displays drop the logo to keep the form on
         // screen.
@@ -283,27 +285,30 @@ impl Login {
     }
 
     pub async fn event_handler(&mut self) {
-        graphics::lock!(self.graphics_manager, {
+        let mut guard = self.graphics_manager.lock().await;
+        // Take each event in a short session; the guard stays held across the
+        // awaited authentication below.
+        while let Some(event) = guard
+            .with_lvgl(|lvgl| self.window.pop_event(lvgl))
+            .ok()
+            .flatten()
+        {
+            // If we are typing the user name or the password
+            if event.code == EventKind::ValueChanged
+                && (event.is_target(self.user_name_text_area)
+                    || event.is_target(self.password_text_area))
             {
-                while let Some(event) = self.window.pop_event() {
-                    // If we are typing the user name or the password
-                    if event.code == EventKind::ValueChanged
-                        && (event.is_target(self.user_name_text_area)
-                            || event.is_target(self.password_text_area))
-                    {
-                        self.clear_error();
-                    }
-                    // If the "Login" button is clicked
-                    else if event.code == EventKind::Clicked && event.is_target(self.button) {
-                        let result = self.authenticate().await;
+                self.clear_error();
+            }
+            // If the "Login" button is clicked
+            else if event.code == EventKind::Clicked && event.is_target(self.button) {
+                let result = self.authenticate().await;
 
-                        if let Err(error) = result {
-                            self.print_error(error);
-                        }
-                    }
+                if let Err(error) = result {
+                    self.print_error(error);
                 }
             }
-        })
+        }
     }
 
     pub fn get_logged_user(&self) -> Option<UserIdentifier> {

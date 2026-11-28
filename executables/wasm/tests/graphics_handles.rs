@@ -96,7 +96,13 @@ async fn handles_check_vm_isolation_generation_class_and_slot() {
     );
     drop(first);
     drop(second);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
     assert_eq!(GraphicsState::registered_state_count(manager), 0);
     let mut replacement = GraphicsState::new(Some(manager));
     assert_eq!(
@@ -129,7 +135,13 @@ async fn multiple_vms_exceed_legacy_cap_and_teardown_releases_registry() {
         states.push(state);
         objects.push((root, child));
     }
-    assert_eq!(manager.get_window_count().await.unwrap(), 20);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        20
+    );
     assert_eq!(
         call(
             &mut states[0],
@@ -140,10 +152,22 @@ async fn multiple_vms_exceed_legacy_cap_and_teardown_releases_registry() {
         Err(GraphicsError::InvalidHandle)
     );
     states.truncate(10);
-    assert_eq!(manager.get_window_count().await.unwrap(), 10);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        10
+    );
     assert_eq!(GraphicsState::registered_state_count(manager), 10);
     drop(states);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
     assert_eq!(GraphicsState::registered_state_count(manager), 0);
 }
 
@@ -418,6 +442,12 @@ async fn cascade_delete_and_teardown_release_all_retained_resources() {
     .unwrap();
 
     drop(state);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
     assert_eq!(GraphicsState::registered_state_count(manager), 0);
 }

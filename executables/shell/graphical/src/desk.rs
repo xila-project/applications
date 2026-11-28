@@ -169,61 +169,62 @@ impl Desk {
         context: &'static xila::executable::ExecutableContext,
         graphics: &'static graphics::Manager,
         windows_parent: *mut lvgl::lv_obj_t,
-        build: impl FnOnce(&mut OwnedWindow) -> Result<DeskWidgets>,
+        build: impl FnOnce(&mut OwnedWindow, &mut graphics::GraphicsGuard<'_>) -> Result<DeskWidgets>,
     ) -> Result<Self> {
-        let desk = graphics::lock!(graphics, {
-            // - Create a window
-            let mut window = graphics.create_window().await?;
+        let mut guard = graphics.lock().await;
+        // - Create a window in a session
+        let mut window = guard.with_lvgl(|lvgl| graphics.create_window(lvgl))??;
 
-            let widgets = match build(&mut window) {
-                Ok(widgets) => widgets,
-                Err(error) => {
-                    // SAFETY: the graphics lock is held, and this function owns
-                    // `window`. Delete it directly so `OwnedWindow::drop` does
-                    // not deadlock on the non-re-entrant lock already held here.
-                    unsafe {
-                        lvgl::lv_obj_delete(window.into_raw().as_ptr().cast());
-                    }
-                    return Err(error);
-                }
-            };
-
-            // Register on `windows_parent` only once every fallible setup step
-            // has succeeded, so `Desk::drop` is guaranteed to detach it.
-            unsafe {
-                lvgl::lv_obj_add_event_cb(
-                    windows_parent,
-                    Some(event_handler),
-                    EventKind::All as u32,
-                    window.as_object_mutable().cast(),
-                );
+        let widgets = match build(&mut window, &mut guard) {
+            Ok(widgets) => widgets,
+            Err(error) => {
+                // Delete the window in the current session instead of letting
+                // `OwnedWindow::drop` queue it behind the held lock.
+                let _ = guard.with_lvgl(|lvgl| window.delete(lvgl));
+                return Err(error);
             }
+        };
 
-            Self {
-                context,
-                graphics_manager: graphics,
+        // Register on `windows_parent` only once every fallible setup step
+        // has succeeded, so `Desk::drop` is guaranteed to detach it.
+        unsafe {
+            lvgl::lv_obj_add_event_cb(
                 windows_parent,
-                window,
-                tile_view: widgets.tile_view,
-                desk_tile: widgets.desk_tile,
-                drawer_tile: widgets.drawer_tile,
-                dock: widgets.dock,
-                main_button: widgets.main_button,
-                logo: widgets.logo,
-                dock_menu: None,
-                dock_menu_target_window: None,
-                dock_menu_maximize_button: None,
-                dock_menu_close_button: None,
-                shortcuts: BTreeMap::new(),
-                reported_shortcut_directory_failure: None,
-            }
-        });
+                Some(event_handler),
+                EventKind::All as u32,
+                window.as_object().cast(),
+            );
+        }
+
+        let desk = Self {
+            context,
+            graphics_manager: graphics,
+            windows_parent,
+            window,
+            tile_view: widgets.tile_view,
+            desk_tile: widgets.desk_tile,
+            drawer_tile: widgets.drawer_tile,
+            dock: widgets.dock,
+            main_button: widgets.main_button,
+            logo: widgets.logo,
+            dock_menu: None,
+            dock_menu_target_window: None,
+            dock_menu_maximize_button: None,
+            dock_menu_close_button: None,
+            shortcuts: BTreeMap::new(),
+            reported_shortcut_directory_failure: None,
+        };
 
         Ok(desk)
     }
 
-    fn build_widgets(window: &mut OwnedWindow) -> Result<DeskWidgets> {
-        window.set_icon("De", Color::BLACK);
+    fn build_widgets(
+        window: &mut OwnedWindow,
+        guard: &mut graphics::GraphicsGuard<'_>,
+    ) -> Result<DeskWidgets> {
+        guard
+            .with_lvgl(|lvgl| window.set_icon(lvgl, "De", Color::BLACK))
+            .map_err(|_| Error::FailedToCreateObject)?;
 
         unsafe {
             // Edge-to-edge window content: the shared window class already
@@ -694,11 +695,17 @@ impl Desk {
         }
     }
 
-    async fn close_app_for_window(&mut self, window_identifier: usize) {
-        if let Err(error) = self
-            .graphics_manager
-            .send_window_close_request(window_identifier)
-            .await
+    async fn close_app_for_window(
+        &mut self,
+        window_identifier: usize,
+        guard: &mut graphics::GraphicsGuard<'_>,
+    ) {
+        if let Err(error) = guard
+            .with_lvgl(|lvgl| {
+                self.graphics_manager
+                    .send_window_close_request(lvgl, window_identifier)
+            })
+            .flatten()
         {
             warning!(
                 "Failed to send close request to window {}: {:?}",
@@ -759,36 +766,43 @@ impl Desk {
         core::ptr::NonNull::new(search.1)
     }
 
-    async fn get_visible_windows(&self) -> Result<Vec<(usize, String, Color)>> {
+    async fn get_visible_windows(
+        &self,
+        guard: &mut graphics::GraphicsGuard<'_>,
+    ) -> Result<Vec<(usize, String, Color)>> {
         let graphics_manager = self.graphics_manager;
-        let window_count = graphics_manager.get_window_count().await?;
+        // Enumerate the windows in one session.
+        guard.with_lvgl(|lvgl| {
+            let window_count = graphics_manager.get_window_count(lvgl)?;
 
-        let mut windows = Vec::new();
+            let mut windows = Vec::new();
 
-        for index in 0..window_count {
-            let Ok(window_identifier) = graphics_manager.get_window_identifier(index).await else {
-                continue;
-            };
+            for index in 0..window_count {
+                let Ok(window_identifier) = graphics_manager.get_window_identifier(lvgl, index)
+                else {
+                    continue;
+                };
 
-            if window_identifier == self.window.get_identifier() {
-                continue;
+                if window_identifier == self.window.get_identifier() {
+                    continue;
+                }
+
+                match graphics_manager.get_window_icon(lvgl, index) {
+                    Ok((icon_string, icon_color)) => {
+                        windows.push((window_identifier, icon_string, icon_color));
+                    }
+                    Err(error) => {
+                        warning!(
+                            "Failed to fetch icon for window {} during dock rebuild: {:?}",
+                            window_identifier,
+                            error
+                        );
+                    }
+                }
             }
 
-            match graphics_manager.get_window_icon(index).await {
-                Ok((icon_string, icon_color)) => {
-                    windows.push((window_identifier, icon_string, icon_color));
-                }
-                Err(error) => {
-                    warning!(
-                        "Failed to fetch icon for window {} during dock rebuild: {:?}",
-                        window_identifier,
-                        error
-                    );
-                }
-            }
-        }
-
-        Ok(windows)
+            Ok(windows)
+        })?
     }
 
     unsafe fn clear_dock_icons(&self) {
@@ -822,8 +836,8 @@ impl Desk {
     }
 
     // This function is intentionally private and is only used within this module.
-    async fn refresh_dock(&mut self) -> Result<()> {
-        let visible_windows = self.get_visible_windows().await?;
+    async fn refresh_dock(&mut self, guard: &mut graphics::GraphicsGuard<'_>) -> Result<()> {
+        let visible_windows = self.get_visible_windows(guard).await?;
 
         unsafe {
             self.clear_dock_icons();
@@ -847,18 +861,27 @@ impl Desk {
     }
 
     pub async fn handle_events(&mut self) -> bool {
-        graphics::lock!(self.graphics_manager, {
-            while let Some(event) = self.window.pop_event() {
-                if let Err(error) = self.handle_event(event).await {
-                    log::error!("Failed to handle desk event: {error:?}");
-                }
+        let mut guard = self.graphics_manager.lock().await;
+        // Take each event in a short session; the guard stays held across the
+        // awaited handlers below.
+        while let Some(event) = guard
+            .with_lvgl(|lvgl| self.window.pop_event(lvgl))
+            .ok()
+            .flatten()
+        {
+            if let Err(error) = self.handle_event(event, &mut guard).await {
+                log::error!("Failed to handle desk event: {error:?}");
             }
-        });
+        }
 
         true
     }
 
-    pub async fn handle_event(&mut self, event: Event) -> Result<()> {
+    pub async fn handle_event(
+        &mut self,
+        event: Event,
+        guard: &mut graphics::GraphicsGuard<'_>,
+    ) -> Result<()> {
         // Resolve pointer events against the live window tree before
         // inspecting their widgets. The graphics lock is held by the caller.
         let target = match event.code {
@@ -897,10 +920,12 @@ impl Desk {
                     })
                 {
                     if let Some(window_identifier) = self.dock_menu_target_window
-                        && let Err(error) = self
-                            .graphics_manager
-                            .maximize_window(window_identifier)
-                            .await
+                        && let Err(error) = guard
+                            .with_lvgl(|lvgl| {
+                                self.graphics_manager
+                                    .maximize_window(lvgl, window_identifier)
+                            })
+                            .flatten()
                     {
                         warning!(
                             "Failed to maximize window {} from dock menu: {:?}",
@@ -921,7 +946,7 @@ impl Desk {
                         || unsafe { lvgl::lv_obj_get_parent(target) == close_button }
                 }) {
                     if let Some(window_identifier) = self.dock_menu_target_window {
-                        self.close_app_for_window(window_identifier).await;
+                        self.close_app_for_window(window_identifier, guard).await;
                     }
 
                     unsafe {
@@ -973,10 +998,12 @@ impl Desk {
 
                     let window_identifier = unsafe { lvgl::lv_obj_get_user_data(target) as usize };
 
-                    if let Err(error) = self
-                        .graphics_manager
-                        .maximize_window(window_identifier)
-                        .await
+                    if let Err(error) = guard
+                        .with_lvgl(|lvgl| {
+                            self.graphics_manager
+                                .maximize_window(lvgl, window_identifier)
+                        })
+                        .flatten()
                     {
                         warning!(
                             "Failed to maximize window {} from dock click: {:?}",
@@ -1019,15 +1046,18 @@ impl Desk {
             },
             WINDOWS_PARENT_CHILD_CHANGED => {
                 // Ignore consecutive windows parent child changed events
+                let pending = guard
+                    .with_lvgl(|lvgl| self.window.peek_event(lvgl))
+                    .unwrap_or(None);
                 if let Some(Event {
                     code: WINDOWS_PARENT_CHILD_CHANGED,
                     ..
-                }) = self.window.peek_event()
+                }) = pending
                 {
                     return Ok(());
                 }
 
-                if let Err(error) = self.refresh_dock().await {
+                if let Err(error) = self.refresh_dock(guard).await {
                     warning!(
                         "Failed to refresh dock after window tree update: {:?}",
                         error

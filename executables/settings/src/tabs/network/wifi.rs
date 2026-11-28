@@ -409,9 +409,13 @@ pub(crate) mod tests {
             )
             .await
             .unwrap();
-        let lock = graphics.lock().await;
-        let mut window = core::mem::ManuallyDrop::new(graphics.create_window().await.unwrap());
-        let tabview = unsafe { lvgl::lv_tabview_create(window.as_object_mutable()) };
+        let mut lock = graphics.lock().await;
+        let mut window = core::mem::ManuallyDrop::new(
+            lock.with_lvgl(|lvgl| graphics.create_window(lvgl))
+                .unwrap()
+                .unwrap(),
+        );
+        let tabview = unsafe { lvgl::lv_tabview_create(window.as_object()) };
         let mut network = super::super::NetworkTab::new(context);
         network.create_ui(tabview).await.unwrap();
         let file = super::super::open_interface(context.virtual_file_system, "wlan0")

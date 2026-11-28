@@ -45,8 +45,16 @@ unsafe fn find_label(root: *mut lvgl::lv_obj_t, text: &str, contains: bool) -> *
 
 async fn wait_label(manager: &Manager, text: &str, contains: bool) {
     for _ in 0..1000 {
-        if manager.get_window_count().await.unwrap() != 0 {
-            let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+        if manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap()
+            != 0
+        {
+            let root = manager
+                .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+                .await
+                .unwrap() as *mut lvgl::lv_obj_t;
             let found = {
                 let _lock = manager.synchronous_lock();
                 unsafe { !find_label(root, text, contains).is_null() }
@@ -91,7 +99,10 @@ unsafe fn open_tab(root: *mut lvgl::lv_obj_t, index: i32) -> *mut lvgl::lv_obj_t
 
 /// Selects roller values in a tab's picker, in on-screen order.
 async fn set_rollers(manager: &Manager, tab: i32, values: &[u32]) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let page = open_tab(root, tab);
@@ -106,7 +117,10 @@ async fn set_rollers(manager: &Manager, tab: i32, values: &[u32]) {
 
 /// Reads the selected value of a tab's first roller.
 async fn first_roller(manager: &Manager, tab: i32) -> u32 {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let page = open_tab(root, tab);
@@ -117,7 +131,10 @@ async fn first_roller(manager: &Manager, tab: i32) -> u32 {
 }
 
 async fn click(manager: &Manager, tab: Option<i32>, text: &str) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let parent = if let Some(index) = tab {
@@ -266,7 +283,10 @@ async fn real_clock_guest_runs_stopwatch_timer_saves_alarm_and_closes() {
 }
 
 async fn open_alarm_tab(manager: &Manager) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         open_tab(root, 1);
@@ -274,15 +294,27 @@ async fn open_alarm_tab(manager: &Manager) {
 }
 
 async fn close_and_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
-    let root = manager.get_window_identifier(0).await.unwrap();
-    manager.send_window_close_request(root).await.unwrap();
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap();
+    manager
+        .with_lvgl(|lvgl| manager.send_window_close_request(lvgl, root))
+        .await
+        .unwrap();
     let mut join = core::pin::pin!(handle.join());
     for _ in 0..1000 {
         if let Poll::Ready(status) =
             poll_fn(|context| Poll::Ready(join.as_mut().poll(context))).await
         {
             assert_eq!(status, 0);
-            assert_eq!(manager.get_window_count().await.unwrap(), 0);
+            assert_eq!(
+                manager
+                    .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                    .await
+                    .unwrap(),
+                0
+            );
             return;
         }
         xila::task::sleep(Duration::from_millis(10)).await;

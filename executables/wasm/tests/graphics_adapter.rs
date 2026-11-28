@@ -69,7 +69,13 @@ async fn wasmi_adapter_uses_context_and_checked_exports() {
             .unwrap();
         assert_eq!(result, if export.starts_with("(memory") { 0 } else { 2 });
         drop(store);
-        assert_eq!(manager.get_window_count().await.unwrap(), 0);
+        assert_eq!(
+            manager
+                .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                .await
+                .unwrap(),
+            0
+        );
     }
     let missing = support::context(&standard, None);
     let wasm = wat::parse_str(format!(r#"(module {import} (memory (export "memory") 1)
@@ -234,7 +240,10 @@ async fn wasmi_adapter_uses_context_and_checked_exports() {
     memory.data_mut(&mut store)[600..605].fill(0xff);
     {
         use xila::graphics::lvgl;
-        let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+        let root = manager
+            .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+            .await
+            .unwrap() as *mut lvgl::lv_obj_t;
         let _lock = manager.synchronous_lock();
         unsafe {
             let label = lvgl::lv_obj_get_child(root, 0);
@@ -300,5 +309,11 @@ async fn wasmi_adapter_uses_context_and_checked_exports() {
     );
     assert_eq!(&memory.data(&store)[820..824], &[0, 0, 0, 0]);
     drop(store);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
 }

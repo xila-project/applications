@@ -102,10 +102,14 @@ impl Tab {
         }
     }
 
-    pub async fn handle_event(&mut self, event: &Event) -> bool {
+    pub async fn handle_event(
+        &mut self,
+        event: &Event,
+        guard: &mut xila::graphics::GraphicsGuard<'_>,
+    ) -> bool {
         match self {
             Tab::General(tab) => tab.handle_event(event).await,
-            Tab::Appearance(tab) => tab.handle_event(event).await,
+            Tab::Appearance(tab) => tab.handle_event(event, guard).await,
             Tab::Password(tab) => tab.handle_event(event).await,
             Tab::About(tab) => tab.handle_event(event).await,
             Tab::Network(tab) => tab.handle_event(event).await,

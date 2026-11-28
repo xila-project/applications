@@ -165,7 +165,10 @@ unsafe fn find_field(root: *mut lvgl::lv_obj_t, caption: &str) -> *mut lvgl::lv_
 
 /// Taps the button whose caption is `caption`.
 async fn tap(manager: &Manager, caption: &str) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let button = find_button(root, caption);
@@ -184,7 +187,10 @@ async fn tap(manager: &Manager, caption: &str) {
 /// host event queue and drop later events, so the values typed here stay
 /// short on purpose.
 async fn type_into(manager: &Manager, caption: &str, value: &str) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let field = find_field(root, caption);
@@ -201,7 +207,10 @@ async fn type_into(manager: &Manager, caption: &str, value: &str) {
 
 /// The text of the field that follows the caption `caption`, if it exists.
 async fn field_text(manager: &Manager, caption: &str) -> Option<String> {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let field = find_field(root, caption);
@@ -219,7 +228,11 @@ async fn field_text(manager: &Manager, caption: &str) -> Option<String> {
 /// Waits until the field that follows the caption `caption` holds `expected`.
 async fn wait_field_text(manager: &Manager, caption: &str, expected: &str) {
     for _ in 0..1000 {
-        if manager.get_window_count().await.unwrap() != 0
+        if manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap()
+            != 0
             && field_text(manager, caption).await.as_deref() == Some(expected)
         {
             return;
@@ -231,7 +244,10 @@ async fn wait_field_text(manager: &Manager, caption: &str, expected: &str) {
 
 /// The maximum length of the field that follows the caption `caption`.
 async fn field_max_length(manager: &Manager, caption: &str) -> u32 {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
         let field = find_field(root, caption);
@@ -243,8 +259,16 @@ async fn field_max_length(manager: &Manager, caption: &str) -> u32 {
 /// Waits until no label of the window shows `text`.
 async fn wait_no_label(manager: &Manager, text: &str) {
     for _ in 0..1000 {
-        if manager.get_window_count().await.unwrap() != 0 {
-            let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+        if manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap()
+            != 0
+        {
+            let root = manager
+                .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+                .await
+                .unwrap() as *mut lvgl::lv_obj_t;
             let found = {
                 let _lock = manager.synchronous_lock();
                 unsafe { find_label(root, text) }
@@ -302,8 +326,16 @@ async fn read_file(
 
 async fn wait_label(manager: &Manager, text: &str) {
     for _ in 0..1000 {
-        if manager.get_window_count().await.unwrap() != 0 {
-            let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+        if manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap()
+            != 0
+        {
+            let root = manager
+                .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+                .await
+                .unwrap() as *mut lvgl::lv_obj_t;
             let found = {
                 let _lock = manager.synchronous_lock();
                 unsafe { find_label(root, text) }
@@ -318,15 +350,27 @@ async fn wait_label(manager: &Manager, text: &str) {
 }
 
 async fn close_and_join(manager: &Manager, handle: xila::task::JoinHandle<isize>) {
-    let root = manager.get_window_identifier(0).await.unwrap();
-    manager.send_window_close_request(root).await.unwrap();
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap();
+    manager
+        .with_lvgl(|lvgl| manager.send_window_close_request(lvgl, root))
+        .await
+        .unwrap();
     let mut join = core::pin::pin!(handle.join());
     for _ in 0..1000 {
         if let Poll::Ready(status) =
             poll_fn(|context| Poll::Ready(join.as_mut().poll(context))).await
         {
             assert_eq!(status, 0);
-            assert_eq!(manager.get_window_count().await.unwrap(), 0);
+            assert_eq!(
+                manager
+                    .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                    .await
+                    .unwrap(),
+                0
+            );
             return;
         }
         xila::task::sleep(Duration::from_millis(10)).await;

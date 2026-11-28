@@ -47,8 +47,16 @@ unsafe fn find(
 
 async fn wait_label(manager: &Manager, expected: &str) {
     for _ in 0..400 {
-        if manager.get_window_count().await.unwrap() > 0 {
-            let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+        if manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap()
+            > 0
+        {
+            let root = manager
+                .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+                .await
+                .unwrap() as *mut lvgl::lv_obj_t;
             let _lock = manager.synchronous_lock();
             if unsafe { !find(root, &lvgl::lv_label_class, Some(expected)).is_null() } {
                 return;
@@ -60,11 +68,17 @@ async fn wait_label(manager: &Manager, expected: &str) {
 }
 
 async fn action(manager: &Manager, key: &str) {
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     let _lock = manager.synchronous_lock();
     unsafe {
-        let mut window = Window::from_raw(root).unwrap();
-        while window.as_mut().pop_event().is_some() {}
+        // SAFETY: the guard holds the graphics lock and the identifier points
+        // to the live window, so the raw pointer and pop share one session.
+        let window = Window::from_raw(root).unwrap();
+        // SAFETY: the same lock and live window protect the queue.
+        while Window::pop_event(window).is_some() {}
         let label = find(
             root,
             &lvgl::lv_label_class,
@@ -86,7 +100,10 @@ async fn action(manager: &Manager, key: &str) {
 
 async fn confirm_picker(manager: &Manager) {
     for _ in 0..400 {
-        let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+        let root = manager
+            .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+            .await
+            .unwrap() as *mut lvgl::lv_obj_t;
         {
             let _lock = manager.synchronous_lock();
             unsafe {
@@ -174,7 +191,10 @@ async fn guest_opens_pages_edits_and_saves_large_file() {
     )
     .await;
     let path_text = std::ffi::CString::new(path).unwrap();
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     {
         let _lock = manager.synchronous_lock();
         unsafe {
@@ -190,7 +210,10 @@ async fn guest_opens_pages_edits_and_saves_large_file() {
     action(manager, "navigation.next_page").await;
     wait_label(manager, "8192 / 9000").await;
     xila::task::sleep(Duration::from_millis(30)).await;
-    let root = manager.get_window_identifier(0).await.unwrap() as *mut lvgl::lv_obj_t;
+    let root = manager
+        .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+        .await
+        .unwrap() as *mut lvgl::lv_obj_t;
     {
         let _lock = manager.synchronous_lock();
         unsafe {
@@ -233,8 +256,13 @@ async fn guest_opens_pages_edits_and_saves_large_file() {
         &localization::text("text_editor", "status.folder_selected"),
     )
     .await;
-    let window = manager.get_window_identifier(0).await.unwrap();
-    manager.send_window_close_request(window).await.unwrap();
+    manager
+        .with_lvgl(|lvgl| {
+            let window = manager.get_window_identifier(lvgl, 0)?;
+            manager.send_window_close_request(lvgl, window)
+        })
+        .await
+        .unwrap();
     let exit = handle.join().await;
     assert_eq!(exit, 0);
     let directory =

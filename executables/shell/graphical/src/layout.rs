@@ -180,15 +180,19 @@ pub struct Layout {
 impl Drop for Layout {
     fn drop(&mut self) {
         // `self.window` is the display's active screen, not a container owned
-        // by `Layout`. Hand future windows back to that screen before taking
-        // the graphics lock so concurrent `create_window` calls cannot attach
-        // new windows to `self.body` as it is torn down.
+        // by `Layout`. Hand future windows back to that screen in a session, so
+        // concurrent `create_window` calls cannot attach new windows to
+        // `self.body` as it is torn down.
         let graphics_manager = graphics::ffi_manager();
         let screen = self.window;
-        // SAFETY: `screen` is the display's active screen, which is owned by
-        // the display, is not inside a window, and is never deleted by
-        // `Layout::drop`, so it stays alive while it holds windows.
-        let _ = xila::task::block_on(unsafe { graphics_manager.set_window_parent(screen) });
+        let _ = graphics_manager.with_lvgl_sync(|lvgl| {
+            // SAFETY: the session holds the graphics lock, and `screen` is the
+            // display's active screen, which is owned by the display, is not
+            // inside a window, and is never deleted by `Layout::drop`, so it
+            // stays alive while it holds windows.
+            unsafe { graphics_manager.set_window_parent(lvgl, screen) };
+            Ok(())
+        });
         let _ = graphics_manager.lock_function_sync(|| {
             // SAFETY: the graphics lock is held. Move remaining windows to
             // the screen so their owners remain responsible for deletion.
@@ -411,10 +415,16 @@ impl Layout {
             unsafe { Self::build_layout(context, create_widget)? }
         });
 
-        // SAFETY: the body is not inside a window, and it lives as long as
-        // the layout, which hands the windows still inside it back to the
-        // screen before deleting it.
-        unsafe { graphics_manager.set_window_parent(layout.body) }.await?;
+        graphics_manager
+            .with_lvgl(|lvgl| {
+                // SAFETY: the session holds the graphics lock, the body is not
+                // inside a window, and it lives as long as the layout, which
+                // hands the windows still inside it back to the screen before
+                // deleting it.
+                unsafe { graphics_manager.set_window_parent(lvgl, layout.body) };
+                Ok(())
+            })
+            .await?;
 
         // Windows that a previous shell left on the screen, or that were
         // created there before the line above, belong in the new body.

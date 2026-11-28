@@ -332,7 +332,10 @@ mod tests {
 
             let standard = testing::initialize(false, false).await;
             let manager = headless_graphics_manager().await;
-            let screen = manager.get_current_screen().unwrap();
+            let screen = manager
+                .with_lvgl(|lvgl| manager.get_current_screen(lvgl))
+                .await
+                .unwrap();
 
             let baseline_screen_events = manager
                 .lock_function_sync(|| unsafe {
@@ -362,8 +365,10 @@ mod tests {
             shell._home = Some(home);
 
             // Open an application window while the shell is active.
-            let mut app_window =
-                graphics::lock!(manager, { manager.create_window().await.unwrap() });
+            let mut app_window = manager
+                .with_lvgl(|lvgl| manager.create_window(lvgl))
+                .await
+                .unwrap();
             let app_window_object = app_window.as_object_mutable();
             let app_textarea = manager
                 .lock_function_sync(|| unsafe {
@@ -446,8 +451,10 @@ mod tests {
                 .unwrap();
 
             // New windows created after shell teardown go onto the live screen.
-            let mut later_window =
-                graphics::lock!(manager, { manager.create_window().await.unwrap() });
+            let mut later_window = manager
+                .with_lvgl(|lvgl| manager.create_window(lvgl))
+                .await
+                .unwrap();
             let later_window_object = later_window.as_object_mutable();
             manager
                 .lock_function_sync(|| unsafe {
@@ -491,13 +498,20 @@ mod tests {
             let standard = testing::initialize(false, false).await;
             let context = standard.context;
             let manager = headless_graphics_manager().await;
-            let screen = manager.get_current_screen().unwrap();
+            let screen = manager
+                .with_lvgl(|lvgl| manager.get_current_screen(lvgl))
+                .await
+                .unwrap();
 
             let first_layout = Layout::new(context).await.unwrap();
-            let mut first_window =
-                graphics::lock!(manager, { manager.create_window().await.unwrap() });
-            let mut second_window =
-                graphics::lock!(manager, { manager.create_window().await.unwrap() });
+            let mut first_window = manager
+                .with_lvgl(|lvgl| manager.create_window(lvgl))
+                .await
+                .unwrap();
+            let mut second_window = manager
+                .with_lvgl(|lvgl| manager.create_window(lvgl))
+                .await
+                .unwrap();
             let first_window_object = first_window.as_object_mutable();
             let second_window_object = second_window.as_object_mutable();
             drop(first_layout);
@@ -529,9 +543,18 @@ mod tests {
                     Ok(())
                 })
                 .unwrap();
-            assert_eq!(manager.get_window_count().await.unwrap(), 2);
             assert_eq!(
-                manager.get_window_identifier(0).await.unwrap(),
+                manager
+                    .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                    .await
+                    .unwrap(),
+                2
+            );
+            assert_eq!(
+                manager
+                    .with_lvgl(|lvgl| manager.get_window_identifier(lvgl, 0))
+                    .await
+                    .unwrap(),
                 first_window_object as usize,
                 "adopted windows are listed by the dock"
             );
@@ -849,7 +872,10 @@ mod tests {
             assert!(desk_in_front());
 
             // An application window opens in front of the desk.
-            let mut app = graphics::lock!(manager, { manager.create_window().await.unwrap() });
+            let mut app = manager
+                .with_lvgl(|lvgl| manager.create_window(lvgl))
+                .await
+                .unwrap();
             assert!(!desk_in_front());
             assert!(!pill_hidden(), "the pill shows over an application");
 
@@ -1111,8 +1137,14 @@ mod tests {
 
             let standard = testing::initialize(false, false).await;
             let manager = headless_graphics_manager().await;
-            let screen = manager.get_current_screen().unwrap();
-            let baseline_windows = manager.get_window_count().await.unwrap();
+            let screen = manager
+                .with_lvgl(|lvgl| manager.get_current_screen(lvgl))
+                .await
+                .unwrap();
+            let baseline_windows = manager
+                .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                .await
+                .unwrap();
             let baseline_screen_events = manager
                 .lock_function_sync(|| unsafe { Ok(lvgl::lv_obj_get_event_count(screen)) })
                 .unwrap();
@@ -1126,12 +1158,14 @@ mod tests {
                     context,
                     manager,
                     windows_parent as *mut lvgl::lv_obj_t,
-                    |window| {
+                    |window, _guard| {
+                        // SAFETY: the guard held by `Desk::new_with` owns the
+                        // graphics lock while this closure runs.
                         unsafe {
-                            let child = lvgl::lv_obj_create(window.as_object_mutable());
+                            let child = lvgl::lv_obj_create(window.as_object());
                             assert!(!child.is_null());
                             attach_probe(
-                                window.as_object_mutable(),
+                                window.as_object(),
                                 lvgl::lv_event_code_t_LV_EVENT_DELETE,
                                 &DESK_FAIL_DELETE,
                             );
@@ -1152,7 +1186,13 @@ mod tests {
                 manager.try_lock().is_some(),
                 "graphics lock must be released after Desk setup error"
             );
-            assert_eq!(manager.get_window_count().await.unwrap(), baseline_windows);
+            assert_eq!(
+                manager
+                    .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                    .await
+                    .unwrap(),
+                baseline_windows
+            );
             let screen_events = manager
                 .lock_function_sync(|| unsafe { Ok(lvgl::lv_obj_get_event_count(screen)) })
                 .unwrap();
@@ -1195,8 +1235,14 @@ mod tests {
 
             let standard = testing::initialize(false, false).await;
             let manager = headless_graphics_manager().await;
-            let baseline_windows = manager.get_window_count().await.unwrap();
-            let screen = manager.get_current_screen().unwrap();
+            let baseline_windows = manager
+                .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                .await
+                .unwrap();
+            let screen = manager
+                .with_lvgl(|lvgl| manager.get_current_screen(lvgl))
+                .await
+                .unwrap();
             let baseline_screen = screen_counts(manager, screen);
             let baseline_style = screen_style(manager, screen);
 
@@ -1204,12 +1250,14 @@ mod tests {
 
             let error = run_with_timeout("Shell::new_with", Duration::from_secs(5), move || {
                 let layout = Layout::new(standard.context);
-                let login = Login::new_with(standard.context, manager, |window| {
+                let login = Login::new_with(standard.context, manager, |window, _guard| {
+                    // SAFETY: the guard held by `Login::new_with` owns the
+                    // graphics lock while this closure runs.
                     unsafe {
-                        let child = lvgl::lv_obj_create(window.as_object_mutable());
+                        let child = lvgl::lv_obj_create(window.as_object());
                         assert!(!child.is_null());
                         attach_probe(
-                            window.as_object_mutable(),
+                            window.as_object(),
                             lvgl::lv_event_code_t_LV_EVENT_DELETE,
                             &LOGIN_FAIL_DELETE,
                         );
@@ -1229,7 +1277,13 @@ mod tests {
                 manager.try_lock().is_some(),
                 "graphics lock must be released after Login setup error"
             );
-            assert_eq!(manager.get_window_count().await.unwrap(), baseline_windows);
+            assert_eq!(
+                manager
+                    .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                    .await
+                    .unwrap(),
+                baseline_windows
+            );
             assert_eq!(screen_counts(manager, screen), baseline_screen);
             assert_eq!(screen_style(manager, screen), baseline_style);
         }
@@ -1242,8 +1296,14 @@ mod tests {
             let standard = testing::initialize(false, false).await;
             let context = standard.context;
             let manager = headless_graphics_manager().await;
-            let baseline_windows = manager.get_window_count().await.unwrap();
-            let screen = manager.get_current_screen().unwrap();
+            let baseline_windows = manager
+                .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                .await
+                .unwrap();
+            let screen = manager
+                .with_lvgl(|lvgl| manager.get_current_screen(lvgl))
+                .await
+                .unwrap();
             let baseline_screen = screen_counts(manager, screen);
             let baseline_style = screen_style(manager, screen);
 
@@ -1311,7 +1371,13 @@ mod tests {
                     manager.try_lock().is_some(),
                     "graphics lock must be released after failing at {fail_at:?}"
                 );
-                assert_eq!(manager.get_window_count().await.unwrap(), baseline_windows);
+                assert_eq!(
+                    manager
+                        .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+                        .await
+                        .unwrap(),
+                    baseline_windows
+                );
                 assert_eq!(
                     screen_counts(manager, screen),
                     baseline_screen,
@@ -1382,7 +1448,10 @@ mod tests {
         async fn main_returns_exit_status_two_on_layout_object_creation_failure() {
             let standard = testing::initialize(false, false).await;
             let manager = headless_graphics_manager().await;
-            let screen = manager.get_current_screen().unwrap();
+            let screen = manager
+                .with_lvgl(|lvgl| manager.get_current_screen(lvgl))
+                .await
+                .unwrap();
             let baseline_screen = screen_counts(manager, screen);
             let baseline_style = screen_style(manager, screen);
 

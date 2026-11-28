@@ -131,8 +131,13 @@ impl AppearanceTab {
         }
     }
 
-    /// Settings dispatches events while holding the LVGL lock.
-    pub async fn handle_event(&mut self, event: &Event) -> bool {
+    /// Settings dispatches events while holding the LVGL lock; the guard is
+    /// the session source for the theme change.
+    pub async fn handle_event(
+        &mut self,
+        event: &Event,
+        guard: &mut graphics::GraphicsGuard<'_>,
+    ) -> bool {
         if !self.brightness.is_null() && event.is_target(self.brightness) {
             // A press that is lost, for example to a scroll of the tab, ends
             // like a release: the level on screen must not stay unsaved.
@@ -160,7 +165,7 @@ impl AppearanceTab {
                 ..self.appearance
             }
         };
-        if let Err(error) = appearance.apply(graphics::ffi_manager()).await {
+        if let Err(error) = appearance.apply(graphics::ffi_manager(), guard).await {
             xila::log::warning!("Could not apply appearance: {}", error);
             unsafe {
                 self.sync_controls();
@@ -293,7 +298,7 @@ pub(crate) mod tests {
         context: &'static xila::executable::ExecutableContext,
         graphics: &'static xila::graphics::Manager,
     ) {
-        let _lock = graphics.lock().await;
+        let mut guard = graphics.lock().await;
         unsafe {
             let display = lvgl::lv_display_get_default();
             let saved = *lvgl::lv_theme_shadcn_get_palette(display);
@@ -310,22 +315,39 @@ pub(crate) mod tests {
 
             // Keep assertion unwinding from dropping a window while this test
             // holds the LVGL lock. Successful runs clean up after unlocking.
-            let mut window = core::mem::ManuallyDrop::new(graphics.create_window().await.unwrap());
-            let mut other = core::mem::ManuallyDrop::new(graphics.create_window().await.unwrap());
-            let button = lvgl::lv_button_create(other.as_object_mutable());
-            let tabview = lvgl::lv_tabview_create(window.as_object_mutable());
+            let mut window = core::mem::ManuallyDrop::new(
+                guard
+                    .with_lvgl(|lvgl| graphics.create_window(lvgl))
+                    .unwrap()
+                    .unwrap(),
+            );
+            let mut other = core::mem::ManuallyDrop::new(
+                guard
+                    .with_lvgl(|lvgl| graphics.create_window(lvgl))
+                    .unwrap()
+                    .unwrap(),
+            );
+            let button = lvgl::lv_button_create(other.as_object());
+            let tabview = lvgl::lv_tabview_create(window.as_object());
             let mut tab = AppearanceTab::new(context).await;
             let container = tab.create_ui(tabview).await.unwrap();
             assert!(!container.is_null());
             assert_eq!(lvgl::lv_tabview_get_tab_count(tabview), 1);
 
-            while window.pop_event().is_some() {}
+            while guard
+                .with_lvgl(|lvgl| window.pop_event(lvgl))
+                .unwrap()
+                .is_some()
+            {}
             lvgl::lv_obj_send_event(
                 tab.dark_mode,
                 lvgl::lv_event_code_t_LV_EVENT_VALUE_CHANGED,
                 core::ptr::null_mut(),
             );
-            let bubbled = window.pop_event().unwrap();
+            let bubbled = guard
+                .with_lvgl(|lvgl| window.pop_event(lvgl))
+                .unwrap()
+                .unwrap();
             assert_eq!(bubbled.code, EventKind::ValueChanged);
             assert!(bubbled.is_target(tab.dark_mode));
 
@@ -336,14 +358,20 @@ pub(crate) mod tests {
                 lvgl::LV_STATE_CHECKED
             ));
             assert!(
-                !tab.handle_event(&Event::new(EventKind::Clicked, tab.dark_mode, None))
-                    .await
+                !tab.handle_event(
+                    &Event::new(EventKind::Clicked, tab.dark_mode, None),
+                    &mut guard
+                )
+                .await
             );
 
             lvgl::lv_obj_add_state(tab.dark_mode, lvgl::LV_STATE_CHECKED);
             assert!(
-                tab.handle_event(&Event::new(EventKind::ValueChanged, tab.dark_mode, None))
-                    .await
+                tab.handle_event(
+                    &Event::new(EventKind::ValueChanged, tab.dark_mode, None),
+                    &mut guard
+                )
+                .await
             );
             let palette = *lvgl::lv_theme_shadcn_get_palette(display);
             assert!(palette.dark);
@@ -353,8 +381,11 @@ pub(crate) mod tests {
             for (control, selected) in [(tab.primary, 1), (tab.secondary, 3)] {
                 lvgl::lv_dropdown_set_selected(control, selected);
                 assert!(
-                    tab.handle_event(&Event::new(EventKind::ValueChanged, control, None))
-                        .await
+                    tab.handle_event(
+                        &Event::new(EventKind::ValueChanged, control, None),
+                        &mut guard
+                    )
+                    .await
                 );
             }
             let palette = *lvgl::lv_theme_shadcn_get_palette(display);
@@ -397,29 +428,41 @@ pub(crate) mod tests {
             lvgl::lv_obj_add_state(tab.brightness, lvgl::LV_STATE_PRESSED);
             lvgl::lv_slider_set_value(tab.brightness, 40, false);
             assert!(
-                tab.handle_event(&Event::new(EventKind::ValueChanged, tab.brightness, None))
-                    .await
+                tab.handle_event(
+                    &Event::new(EventKind::ValueChanged, tab.brightness, None),
+                    &mut guard
+                )
+                .await
             );
             assert_eq!(screen_brightness(), percent_to_brightness(40));
             assert_eq!(load().await.brightness, xila::graphics::BRIGHTNESS_FULL);
             lvgl::lv_obj_remove_state(tab.brightness, lvgl::LV_STATE_PRESSED);
             assert!(
-                tab.handle_event(&Event::new(EventKind::Released, tab.brightness, None))
-                    .await
+                tab.handle_event(
+                    &Event::new(EventKind::Released, tab.brightness, None),
+                    &mut guard
+                )
+                .await
             );
             assert_eq!(load().await.brightness, percent_to_brightness(40));
             // A press lost to a scroll saves like a release.
             lvgl::lv_obj_add_state(tab.brightness, lvgl::LV_STATE_PRESSED);
             lvgl::lv_slider_set_value(tab.brightness, 60, false);
             assert!(
-                tab.handle_event(&Event::new(EventKind::ValueChanged, tab.brightness, None))
-                    .await
+                tab.handle_event(
+                    &Event::new(EventKind::ValueChanged, tab.brightness, None),
+                    &mut guard
+                )
+                .await
             );
             assert_eq!(load().await.brightness, percent_to_brightness(40));
             lvgl::lv_obj_remove_state(tab.brightness, lvgl::LV_STATE_PRESSED);
             assert!(
-                tab.handle_event(&Event::new(EventKind::PressLost, tab.brightness, None))
-                    .await
+                tab.handle_event(
+                    &Event::new(EventKind::PressLost, tab.brightness, None),
+                    &mut guard
+                )
+                .await
             );
             assert_eq!(load().await.brightness, percent_to_brightness(60));
             // Keypad steps save at once; the slider stops at the minimum.
@@ -429,8 +472,11 @@ pub(crate) mod tests {
                 i32::from(MINIMUM_BRIGHTNESS_PERCENT)
             );
             assert!(
-                tab.handle_event(&Event::new(EventKind::ValueChanged, tab.brightness, None))
-                    .await
+                tab.handle_event(
+                    &Event::new(EventKind::ValueChanged, tab.brightness, None),
+                    &mut guard
+                )
+                .await
             );
             let minimum = percent_to_brightness(MINIMUM_BRIGHTNESS_PERCENT);
             assert_eq!(screen_brightness(), minimum);
@@ -438,8 +484,11 @@ pub(crate) mod tests {
             // Other controls keep the saved brightness.
             lvgl::lv_dropdown_set_selected(tab.primary, 1);
             assert!(
-                tab.handle_event(&Event::new(EventKind::ValueChanged, tab.primary, None))
-                    .await
+                tab.handle_event(
+                    &Event::new(EventKind::ValueChanged, tab.primary, None),
+                    &mut guard
+                )
+                .await
             );
             assert_eq!(
                 load().await,
@@ -462,7 +511,7 @@ pub(crate) mod tests {
                 lvgl::LV_STATE_CHECKED
             ));
             // OwnedWindow::drop acquires the graphics lock itself.
-            drop(_lock);
+            drop(guard);
             core::mem::ManuallyDrop::drop(&mut other);
             core::mem::ManuallyDrop::drop(&mut window);
         }

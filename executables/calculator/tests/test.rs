@@ -57,11 +57,18 @@ async fn main() {
     });
     let manager = context.graphics_manager.unwrap();
     loop {
-        if close.load(std::sync::atomic::Ordering::Acquire)
-            && manager.get_window_count().await.unwrap() > 0
-        {
-            let identifier = manager.get_window_identifier(0).await.unwrap();
-            manager.send_window_close_request(identifier).await.unwrap();
+        let window_count = manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap();
+        if close.load(std::sync::atomic::Ordering::Acquire) && window_count > 0 {
+            manager
+                .with_lvgl(|lvgl| {
+                    let identifier = manager.get_window_identifier(lvgl, 0)?;
+                    manager.send_window_close_request(lvgl, identifier)
+                })
+                .await
+                .unwrap();
             break;
         }
         xila::task::sleep(std::time::Duration::from_millis(10)).await;
@@ -70,5 +77,11 @@ async fn main() {
     let result = handle.join().await;
 
     assert!(result == 0);
-    assert_eq!(manager.get_window_count().await.unwrap(), 0);
+    assert_eq!(
+        manager
+            .with_lvgl(|lvgl| manager.get_window_count(lvgl))
+            .await
+            .unwrap(),
+        0
+    );
 }
