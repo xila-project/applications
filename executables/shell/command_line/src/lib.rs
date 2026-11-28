@@ -18,13 +18,17 @@ use xila::{
     virtual_file_system::File,
 };
 mod commands;
+#[cfg(feature = "completion")]
 mod completion;
 mod error;
 mod execution;
+#[cfg(feature = "line-editing")]
 mod interactive;
+#[cfg(feature = "line-editing")]
 mod line_editor;
 mod parser;
 mod resolver;
+#[cfg(feature = "line-editing")]
 mod screen;
 mod sudo;
 mod tokenizer;
@@ -346,7 +350,10 @@ impl Shell {
                 }
             }
         } else {
+            #[cfg(feature = "line-editing")]
             self.main_interactive().await?;
+            #[cfg(not(feature = "line-editing"))]
+            self.main_stream().await?;
         }
         // Keep task/stream ownership explicit; an interactive prompt is free while jobs run.
         for job in self.background_jobs.drain(..) {

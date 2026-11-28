@@ -15,7 +15,17 @@ getargs = { version = "0.5", default-features = false }
 getargs-derive = { workspace = true }
 
 [features]
-default = ["network", "time-commands", "time-zone-command"]
+default = [
+  "network",
+  "time-commands",
+  "time-zone-command",
+  "line-editing",
+  "history",
+  "completion",
+]
+line-editing = []
+history = ["line-editing"]
+completion = ["line-editing"]
 network = ["xila/network"]
 # The date, uptime and real_time_clock commands. Off on flash-constrained
 # boards such as the Nano 33 BLE, which builds this shell with

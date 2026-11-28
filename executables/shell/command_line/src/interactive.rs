@@ -1,8 +1,10 @@
+#[cfg(feature = "completion")]
+use crate::completion::Matches;
+#[cfg(feature = "history")]
+use crate::line_editor::DEFAULT_HISTORY_CAPACITY;
 use crate::{
-    OutputBuffer, Result, Shell,
-    completion::Matches,
-    execution,
-    line_editor::{Action, DEFAULT_HISTORY_CAPACITY, LineEditor, Rejection},
+    OutputBuffer, Result, Shell, execution,
+    line_editor::{Action, LineEditor, Rejection},
     screen,
 };
 use alloc::string::String;
@@ -10,6 +12,7 @@ use xila::file_system::character_device::{
     GET_TERMINAL_ATTRIBUTES, IS_A_TERMINAL, SET_TERMINAL_ATTRIBUTES, TerminalAttributes,
 };
 
+#[cfg(feature = "history")]
 const HISTORY_CAPACITY_VARIABLE: &str = "XILA_SHELL_HISTORY_CAPACITY";
 
 impl Shell {
@@ -25,15 +28,20 @@ impl Shell {
         else {
             return self.main_stream().await;
         };
-        let capacity = self
-            .context
-            .task_manager
-            .get_environment_variable(self.task, HISTORY_CAPACITY_VARIABLE)
-            .await
-            .ok()
-            .and_then(|value| value.get_value().parse().ok())
-            .unwrap_or(DEFAULT_HISTORY_CAPACITY);
-        let mut editor = LineEditor::new(capacity);
+        #[cfg(feature = "history")]
+        let mut editor = {
+            let capacity = self
+                .context
+                .task_manager
+                .get_environment_variable(self.task, HISTORY_CAPACITY_VARIABLE)
+                .await
+                .ok()
+                .and_then(|value| value.get_value().parse().ok())
+                .unwrap_or(DEFAULT_HISTORY_CAPACITY);
+            LineEditor::with_history(capacity)
+        };
+        #[cfg(not(feature = "history"))]
+        let mut editor = LineEditor::default();
         while self.running {
             if self
                 .standard
@@ -101,17 +109,21 @@ impl Shell {
             .write(self.standard.out(), format_args!("{sequence}"))
             .await;
         let _ = self.standard.out().flush().await;
+        #[cfg(feature = "completion")]
         let mut pending_matches: Option<Matches> = None;
         loop {
             let mut byte = [0; 1];
             // The position of the cursor in the line shown on the screen,
             // before this key: the redraw moves relative to it.
-            let mut displayed_position = screen::position(&prompt, editor.before_cursor(), columns);
+            let displayed_position = screen::position(&prompt, editor.before_cursor(), columns);
             let action = match self.read_input_byte(&mut byte).await? {
                 Some(0) if !editor.line().is_empty() => Action::Submit,
                 Some(1) => editor.feed(byte[0]),
                 _ => Action::EndOfInput,
             };
+            #[cfg(feature = "completion")]
+            let mut displayed_position = displayed_position;
+            #[cfg(feature = "completion")]
             let action = match action {
                 Action::Complete => {
                     if let Some(matches) = pending_matches.take() {
@@ -153,7 +165,9 @@ impl Shell {
             };
 
             match action {
-                Action::None | Action::Complete => continue,
+                Action::None => continue,
+                #[cfg(feature = "completion")]
+                Action::Complete => continue,
                 Action::Redraw => {
                     let mut sequence = String::new();
                     screen::redraw(
@@ -206,6 +220,7 @@ impl Shell {
 
     /// Echo the line on its own row, list the matches below it and reprint
     /// the prompt for the line that follows the listing.
+    #[cfg(feature = "completion")]
     async fn list_completions(
         &mut self,
         output: &mut OutputBuffer,
