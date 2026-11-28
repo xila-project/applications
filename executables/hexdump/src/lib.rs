@@ -16,7 +16,7 @@ executable::linked_executable!(
     /// Dump or reverse hexadecimal data with the SDK's POSIX example.
     ///
     /// The program receives read and write access to the user's home directory.
-    /// File arguments must refer to paths under that directory.
+    /// The POSIX layer uses that directory as its root for absolute paths.
     unsafe pub HexdumpExecutable => xila_linked_hexdump,
     exclusive,
     stack_size = STACK_SIZE,

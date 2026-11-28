@@ -4,9 +4,10 @@ Enable the `native-linked` feature of `xila-hexdump`. Mount
 `hexdump::HexdumpExecutable` at `/applications/executables/hexdump` with the
 firmware's executable mount helper. The crate uses the linked runner without
 the native ELF loader. The program receives read and write access to the
-user's home directory. `hexdump <file>` only accepts paths under that
-directory. One instance can run at a time because the POSIX library uses
-shared state. Keep `--gc-sections` in the firmware link flags.
+user's home directory. The POSIX layer uses that directory
+(`XilaStartup.home`) as its root and resolves absolute paths relative to it.
+One instance can run at a time because the POSIX library uses shared state.
+Keep `--gc-sections` in the firmware link flags.
 
 Build the SDK from the same Core revision that the firmware uses. In the Core
 checkout, set `XILA_SDK_TARGET` and run `mise run sdk:build`. Use
@@ -23,5 +24,7 @@ The Applications lockfile uses an older Core revision. To build with
 `native-linked`, use a firmware workspace that selects a Core revision with
 SDK `link-example` support.
 
-Use the same Core source for the firmware and the Core entries in the
-Applications workspace manifest when you pin the firmware dependencies.
+Declare Core with `branch = "main"`, the same Cargo source as Applications.
+Record the selected commit in the consumer's lockfile. Declaring Core with
+`rev` creates a separate Cargo source and causes a
+`links = "xila_abi_application"` conflict.
