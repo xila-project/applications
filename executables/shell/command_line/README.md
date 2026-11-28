@@ -7,9 +7,9 @@ Run a VFS script with `shell -s PATH`; relative paths use the shell's current di
 ## Interactive editing
 
 The `line-editing`, `history` and `completion` Cargo features are enabled by
-default. History and completion each enable line editing. A build without
-`line-editing` reads lines from standard input with the terminal's existing
-settings. The terminal handles basic input such as backspace.
+default. History and completion each enable line editing.
+
+### With line editing
 
 Use Left, Right, Home and End to move the cursor. Backspace and Delete remove
 the character before or after the cursor. Ctrl+A and Ctrl+E move to the start
@@ -34,6 +34,14 @@ East Asian Wide subranges of the emoji blocks (the text presentation emoji
 are Neutral and take one column), and the combining diacritical marks;
 rarer wide or combining characters count as one column.
 
+### Without line editing
+
+The shell reads lines from standard input with the device's existing settings.
+An input device with a line discipline, such as Platforms' shared
+`TerminalInputDevice`, handles backspace. The device's line capacity and the
+shell's 4096-byte input limit (`MAX_INPUT_BYTES`) both apply. Cursor keys have
+no effect in the shell, and Tab does not trigger completion.
+
 ## Command history
 
 With `history` enabled, Up and Down recall commands from this session. Down
@@ -49,7 +57,9 @@ With `completion` enabled, press Tab to complete the command name or the
 current component of a path.
 The shell searches built-in commands and executable entries in `Paths` for a
 command name. It searches the named directory or the current directory for a
-path. The graphical terminal also has a completion button beside Send.
+path. The graphical terminal's completion button beside Send sends a Tab
+when line editing is active. The editor ignores that Tab when `completion`
+is disabled.
 
 One match completes the word. If several matches share a prefix, the first
 Tab fills in that prefix, replacing only the text before the cursor. Press Tab

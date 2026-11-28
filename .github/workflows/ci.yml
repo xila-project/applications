@@ -79,6 +79,8 @@ jobs:
         run: cargo clippy --locked -p xila-wasm --all-targets --features graphics,xila/graphics_rendering_xrgb8888 --target x86_64-unknown-linux-gnu -- -D warnings
       - name: "Test | Application workspace"
         run: mise run test:workspace
+      - name: "Test | Reduced shell feature sets"
+        run: mise run ci:test-shell-feature-sets
   abi:
     name: "Test / ABI (${{ matrix.memory }})"
     runs-on: ubuntu-latest

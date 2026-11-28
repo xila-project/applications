@@ -380,6 +380,31 @@ mod tests {
         assert_eq!(editor.history.len(), 2);
     }
 
+    #[cfg(not(feature = "history"))]
+    #[test]
+    fn up_and_down_have_no_effect_without_history() {
+        let mut editor = LineEditor::default();
+        type_keys(&mut editor, "previous");
+        assert_eq!(editor.finish().as_deref(), Ok("previous"));
+        type_keys(&mut editor, "draft");
+        for key in [b'A', b'B'] {
+            type_keys(&mut editor, "\x1b[");
+            assert_eq!(editor.feed(key), Action::None);
+        }
+        assert_eq!(editor.line(), "draft");
+        assert_eq!(editor.before_cursor(), "draft");
+    }
+
+    #[cfg(not(feature = "completion"))]
+    #[test]
+    fn tab_has_no_effect_without_completion() {
+        let mut editor = LineEditor::default();
+        type_keys(&mut editor, "ec");
+        assert_eq!(editor.feed(b'\t'), Action::None);
+        assert_eq!(editor.line(), "ec");
+        assert_eq!(editor.before_cursor(), "ec");
+    }
+
     #[test]
     fn input_is_bounded() {
         let mut editor = LineEditor::default();

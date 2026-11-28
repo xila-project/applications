@@ -23,8 +23,14 @@ default = [
   "history",
   "completion",
 ]
+# These three features are off with default-features = false unless the
+# target enables them.
+
+# Edit and redraw the command line on the terminal.
 line-editing = []
+# Recall commands from this session. Enables line-editing.
 history = ["line-editing"]
+# Complete command names and paths with Tab. Enables line-editing.
 completion = ["line-editing"]
 network = ["xila/network"]
 # The date, uptime and real_time_clock commands. Off on flash-constrained
