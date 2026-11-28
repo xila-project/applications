@@ -387,7 +387,7 @@ mod tests {
         type_keys(&mut editor, "previous");
         assert_eq!(editor.finish().as_deref(), Ok("previous"));
         type_keys(&mut editor, "draft");
-        for key in [b'A', b'B'] {
+        for &key in b"AB" {
             type_keys(&mut editor, "\x1b[");
             assert_eq!(editor.feed(key), Action::None);
         }
