@@ -66,6 +66,8 @@
   },
   "about": {
     "fields": {
+      "build_date": "Build date:",
+      "commit": "Commit:",
       "cpu": "CPU:",
       "description": "Description:",
       "developer": "Developed by:",
@@ -131,7 +133,8 @@
     }
   },
   "common": {
-    "none": "None"
+    "none": "None",
+    "unknown": "unknown"
   },
   "app": {
     "title": "Settings"

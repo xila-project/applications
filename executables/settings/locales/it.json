@@ -66,6 +66,8 @@
   },
   "about": {
     "fields": {
+      "build_date": "Data di compilazione:",
+      "commit": "Commit:",
       "cpu": "CPU:",
       "description": "Descrizione:",
       "developer": "Sviluppato da:",
@@ -131,7 +133,8 @@
     }
   },
   "common": {
-    "none": "Nessuno"
+    "none": "Nessuno",
+    "unknown": "sconosciuto"
   },
   "app": {
     "title": "Impostazioni"
