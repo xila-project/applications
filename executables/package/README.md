@@ -126,7 +126,7 @@ The application must be explicitly registered in each native platform's
 The `dev.xila.<name>` package has a separate installation and upgrade
 origin from `xila.<name>`. An upgrade of `xila.<name>` still looks for
 versions of that identifier in its original repository. Install the new
-identifier separately. The device keeps existing data under
+identifier separately once the device and registry support per-package keys. The device keeps existing data under
 `<home>/applications/xila.<name>` and uses a separate data directory
 for the new installation. Save or export data you need before you remove
 the old package.

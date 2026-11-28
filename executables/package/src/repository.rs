@@ -3,7 +3,7 @@
 //! Each repository is pinned to a root key chosen by the user (passed with
 //! `--root-key`, or accepted on first use after comparing its fingerprint).
 //! Everything else is verified from that key with `xila_package_manager::trust`:
-//! The repository key signs the index, namespace, entry and developer key.
+//! root → repository key → index, entry and developer key → archive.
 
 use alloc::{
     format,
@@ -20,7 +20,7 @@ use xila_package_manager::trust::{self, TrustedRoot};
 use xila_package_manifest::{
     INDEX_PATH, Index, MAX_MANIFEST_BYTES, ORIGIN_SCHEMA_URL, Origin, REPOSITORY_FORMAT_VERSION,
     ROOT_PATH, RegistryEntry, Repository, SIGNATURE_SUFFIX, decode_repository, encode_repository,
-    index_packages, index_versions, namespace_path,
+    index_packages, index_versions,
 };
 use xila_package_verification::{ContentVerifier, PublicKey};
 
@@ -389,34 +389,7 @@ async fn publisher(
         .trusted
         .verify_developer_key(&bytes, &signature)
         .map_err(|e| rejected(name, &path, e))?;
-    let namespace = if let Some(namespace_file) =
-        trust::namespace_candidates(&found.index, &found.entry.name)
-            .into_iter()
-            .next()
-    {
-        let (bytes, signature) = fetch_signed(
-            vfs,
-            task,
-            &found.repository,
-            &namespace_file,
-            MAX_MANIFEST_BYTES,
-        )
-        .await?;
-        trust::check_listed(&found.index, &namespace_file, &bytes)
-            .map_err(|e| rejected(name, &namespace_file, e))?;
-        let namespace = found
-            .trusted
-            .verify_namespace(&bytes, &signature)
-            .map_err(|e| rejected(name, &namespace_file, e))?;
-        if namespace_path(&namespace.namespace) != namespace_file {
-            return Err(rejected(name, &namespace_file, trust::Error::Unauthorized));
-        }
-        Some(namespace)
-    } else {
-        None
-    };
-    trust::namespace_publisher_key(&found.entry, &key, namespace.as_ref())
-        .map_err(|e| rejected(name, &path, e))
+    trust::publisher_key(&found.entry, &key).map_err(|e| rejected(name, &path, e))
 }
 
 fn digest(hex: &str) -> Option<[u8; 32]> {
@@ -841,28 +814,28 @@ mod tests {
 
     #[test]
     fn searches_names_in_the_signed_index() {
-        let files = [
-            "keys/developers/xila.json",
-            "packages/dev/xila/clock/0.1.0.json",
-            "packages/dev/xila/clock/0.2.0.json",
-            "packages/dev/xila/clock/0.3.0-rc.1.json",
-            "packages/dev/xila/clockwork/1.0.0-rc.1.json",
-            "packages/example/xila/weather/2.0.0.json",
-        ]
-        .map(|path| {
-            format!(
-                r#"{{"path":"{path}","sha256":"{}","size":1}}"#,
-                "a".repeat(64)
-            )
-        });
-        let index = xila_package_manifest::decode_index(
-            format!(
-                r#"{{"format_version":1,"version":1,"expires":2,"files":[{}]}}"#,
-                files.join(",")
-            )
-            .as_bytes(),
-        )
-        .unwrap();
+        use xila_package_manifest::{INDEX_SCHEMA_URL, IndexFile, TRUST_FORMAT_VERSION};
+        let file = |path: &str| IndexFile {
+            path: path.into(),
+            sha256: "a".repeat(64),
+            size: 1,
+        };
+        let mut files = alloc::vec![
+            file("keys/developers/xila.json"),
+            file("packages/dev/xila/clock/0.1.0.json"),
+            file("packages/dev/xila/clock/0.2.0.json"),
+            file("packages/dev/xila/clock/0.3.0-rc.1.json"),
+            file("packages/dev/xila/clockwork/1.0.0-rc.1.json"),
+            file("packages/example/xila/weather/2.0.0.json"),
+        ];
+        files.sort_by(|a, b| a.path.cmp(&b.path));
+        let index = Index {
+            schema: Some(INDEX_SCHEMA_URL.into()),
+            format_version: TRUST_FORMAT_VERSION,
+            version: 1,
+            expires: 2,
+            files,
+        };
         let listed = |name: &str, version: &str| Listed {
             name: name.into(),
             version: version.into(),
