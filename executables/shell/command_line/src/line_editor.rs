@@ -1,9 +1,15 @@
 //! Bounded UTF-8 input and history for one interactive shell session.
-use alloc::{collections::VecDeque, string::String};
-use core::{mem, ops::Range};
+#[cfg(feature = "history")]
+use alloc::collections::VecDeque;
+use alloc::string::String;
+use core::mem;
+#[cfg(feature = "completion")]
+use core::ops::Range;
 
 pub const MAXIMUM_LINE_BYTES: usize = 512;
+#[cfg(feature = "history")]
 pub const DEFAULT_HISTORY_CAPACITY: usize = 8;
+#[cfg(feature = "history")]
 pub const MAXIMUM_HISTORY_CAPACITY: usize = 32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,6 +20,7 @@ pub enum Action {
     Cancel,
     EndOfInput,
     Bell,
+    #[cfg(feature = "completion")]
     Complete,
 }
 
@@ -37,12 +44,17 @@ enum Escape {
     },
 }
 
+#[derive(Default)]
 pub struct LineEditor {
     line: String,
     cursor: usize,
+    #[cfg(feature = "history")]
     history: VecDeque<String>,
+    #[cfg(feature = "history")]
     capacity: usize,
+    #[cfg(feature = "history")]
     recalled: Option<usize>,
+    #[cfg(feature = "history")]
     draft: String,
     escape: Escape,
     character: [u8; 4],
@@ -52,19 +64,11 @@ pub struct LineEditor {
 }
 
 impl LineEditor {
-    pub fn new(capacity: usize) -> Self {
+    #[cfg(feature = "history")]
+    pub fn with_history(capacity: usize) -> Self {
         Self {
-            line: String::new(),
-            cursor: 0,
-            history: VecDeque::new(),
             capacity: capacity.min(MAXIMUM_HISTORY_CAPACITY),
-            recalled: None,
-            draft: String::new(),
-            escape: Escape::None,
-            character: [0; 4],
-            character_length: 0,
-            previous_was_carriage_return: false,
-            rejected: None,
+            ..Self::default()
         }
     }
 
@@ -76,6 +80,7 @@ impl LineEditor {
         &self.line[..self.cursor]
     }
 
+    #[cfg(feature = "completion")]
     pub fn replace(&mut self, range: Range<usize>, text: &str) -> Action {
         if self.line.len() - range.len() + text.len() > MAXIMUM_LINE_BYTES {
             return Action::Bell;
@@ -90,14 +95,18 @@ impl LineEditor {
 
     pub fn finish(&mut self) -> Result<String, Rejection> {
         self.cursor = 0;
-        self.recalled = None;
-        self.draft.clear();
+        #[cfg(feature = "history")]
+        {
+            self.recalled = None;
+            self.draft.clear();
+        }
         self.escape = Escape::None;
         self.character_length = 0;
         let line = mem::take(&mut self.line);
         if let Some(rejection) = mem::take(&mut self.rejected) {
             return Err(rejection);
         }
+        #[cfg(feature = "history")]
         if self.capacity != 0 && !line.trim().is_empty() && self.history.back() != Some(&line) {
             if self.history.len() == self.capacity {
                 self.history.pop_front();
@@ -113,6 +122,7 @@ impl LineEditor {
         let _ = self.finish();
     }
 
+    #[cfg(feature = "history")]
     fn recall(&mut self, previous: bool) -> Action {
         let line = match (self.recalled, previous) {
             (None, true) if !self.history.is_empty() => {
@@ -176,7 +186,9 @@ impl LineEditor {
 
     fn escape_key(&mut self, byte: u8, number: Option<u8>) -> Action {
         match (byte, number) {
+            #[cfg(feature = "history")]
             (b'A', None) => self.recall(true),
+            #[cfg(feature = "history")]
             (b'B', None) => self.recall(false),
             (b'C', None) => self.move_cursor(self.next_character()),
             (b'D', None) => self.move_cursor(self.previous_character()),
@@ -267,6 +279,7 @@ impl LineEditor {
         match byte {
             1 => self.move_cursor(0),
             5 => self.move_cursor(self.line.len()),
+            #[cfg(feature = "completion")]
             b'\t' => Action::Complete,
             // Backspace still works on a rejected line.
             8 | 127 => self.remove(self.previous_character(), self.cursor),
@@ -328,7 +341,7 @@ mod tests {
 
     #[test]
     fn edits_at_utf8_character_boundaries() {
-        let mut editor = LineEditor::new(0);
+        let mut editor = LineEditor::default();
         type_keys(&mut editor, "a界c\x1b[D\x1b[D★\x1b[3~");
         assert_eq!(editor.line(), "a★c");
         assert_eq!(editor.before_cursor(), "a★");
@@ -339,7 +352,7 @@ mod tests {
 
     #[test]
     fn control_keys_remove_text_on_either_side() {
-        let mut editor = LineEditor::new(0);
+        let mut editor = LineEditor::default();
         type_keys(&mut editor, "one two  three\x01\x1b[C\x15\x05\x17");
         assert_eq!(editor.line(), "ne two  ");
         type_keys(&mut editor, "\x17\x1b[D\x0b");
@@ -347,9 +360,14 @@ mod tests {
         assert_eq!(editor.before_cursor(), "ne");
     }
 
+    #[cfg(feature = "history")]
     #[test]
     fn history_evicts_oldest_entries_and_restores_draft() {
-        let mut editor = LineEditor::new(2);
+        assert_eq!(
+            LineEditor::with_history(usize::MAX).capacity,
+            MAXIMUM_HISTORY_CAPACITY
+        );
+        let mut editor = LineEditor::with_history(2);
         for command in ["one", "two", "two", " ", "three"] {
             type_keys(&mut editor, command);
             assert_eq!(editor.finish().ok().as_deref(), Some(command));
@@ -362,13 +380,34 @@ mod tests {
         assert_eq!(editor.history.len(), 2);
     }
 
+    #[cfg(not(feature = "history"))]
     #[test]
-    fn capacity_and_input_are_bounded() {
-        assert_eq!(
-            LineEditor::new(usize::MAX).capacity,
-            MAXIMUM_HISTORY_CAPACITY
-        );
-        let mut editor = LineEditor::new(0);
+    fn up_and_down_have_no_effect_without_history() {
+        let mut editor = LineEditor::default();
+        type_keys(&mut editor, "previous");
+        assert_eq!(editor.finish().as_deref(), Ok("previous"));
+        type_keys(&mut editor, "draft");
+        for &key in b"AB" {
+            type_keys(&mut editor, "\x1b[");
+            assert_eq!(editor.feed(key), Action::None);
+        }
+        assert_eq!(editor.line(), "draft");
+        assert_eq!(editor.before_cursor(), "draft");
+    }
+
+    #[cfg(not(feature = "completion"))]
+    #[test]
+    fn tab_has_no_effect_without_completion() {
+        let mut editor = LineEditor::default();
+        type_keys(&mut editor, "ec");
+        assert_eq!(editor.feed(b'\t'), Action::None);
+        assert_eq!(editor.line(), "ec");
+        assert_eq!(editor.before_cursor(), "ec");
+    }
+
+    #[test]
+    fn input_is_bounded() {
+        let mut editor = LineEditor::default();
         for _ in 0..MAXIMUM_LINE_BYTES {
             assert_eq!(editor.feed(b'x'), Action::Redraw);
         }
@@ -379,12 +418,13 @@ mod tests {
         assert_eq!(editor.feed(b'\n'), Action::None);
         type_keys(&mut editor, "next");
         assert_eq!(editor.finish().ok().as_deref(), Some("next"));
+        #[cfg(feature = "history")]
         assert!(editor.history.is_empty());
     }
 
     #[test]
     fn control_d_deletes_under_the_cursor_and_ends_empty_input() {
-        let mut editor = LineEditor::new(0);
+        let mut editor = LineEditor::default();
         type_keys(&mut editor, "ab");
         // At the end of the line there is no character under the cursor.
         assert_eq!(editor.feed(4), Action::None);
@@ -398,7 +438,7 @@ mod tests {
 
     #[test]
     fn invalid_utf8_rejects_the_line_but_backspace_recovers() {
-        let mut editor = LineEditor::new(0);
+        let mut editor = LineEditor::default();
         type_keys(&mut editor, "ok");
         assert_eq!(editor.feed(0xFF), Action::Bell);
         // While the line is rejected, further input is refused.
@@ -413,13 +453,13 @@ mod tests {
 
     #[test]
     fn a_rejected_line_reports_why() {
-        let mut editor = LineEditor::new(0);
+        let mut editor = LineEditor::default();
         // An incomplete UTF-8 sequence at Enter is invalid input.
         assert_eq!(editor.feed(0xC3), Action::None);
         assert_eq!(editor.feed(b'\r'), Action::Submit);
         assert_eq!(editor.finish(), Err(Rejection::InvalidUtf8));
 
-        let mut editor = LineEditor::new(0);
+        let mut editor = LineEditor::default();
         for _ in 0..MAXIMUM_LINE_BYTES {
             editor.feed(b'x');
         }
@@ -431,7 +471,7 @@ mod tests {
     #[test]
     fn editing_keys_clear_a_rejection_and_a_pending_utf8_sequence() {
         // An invalid byte on an empty line must not block further input.
-        let mut editor = LineEditor::new(0);
+        let mut editor = LineEditor::default();
         assert_eq!(editor.feed(0xFF), Action::Bell);
         assert_eq!(editor.feed(b'a'), Action::None);
         assert_eq!(editor.feed(8), Action::None);
@@ -439,7 +479,7 @@ mod tests {
         assert_eq!(editor.line(), "a");
 
         // An incomplete lead byte must not combine with the next character.
-        let mut editor = LineEditor::new(0);
+        let mut editor = LineEditor::default();
         assert_eq!(editor.feed(0xC3), Action::None);
         type_keys(&mut editor, "\x1b[D");
         assert_eq!(editor.feed(b'a'), Action::Redraw);
@@ -448,9 +488,10 @@ mod tests {
         assert_eq!(editor.finish().ok().as_deref(), Some("a"));
     }
 
+    #[cfg(feature = "completion")]
     #[test]
     fn replace_clears_a_rejection() {
-        let mut editor = LineEditor::new(0);
+        let mut editor = LineEditor::default();
         type_keys(&mut editor, "ec");
         assert_eq!(editor.feed(0xFF), Action::Bell);
         assert_eq!(editor.replace(0..2, "ls"), Action::Redraw);

@@ -6,22 +6,23 @@ Run a VFS script with `shell -s PATH`; relative paths use the shell's current di
 
 ## Interactive editing
 
+The `line-editing`, `history` and `completion` Cargo features are enabled by
+default. History and completion each enable line editing.
+
+### With line editing
+
 Use Left, Right, Home and End to move the cursor. Backspace and Delete remove
 the character before or after the cursor. Ctrl+A and Ctrl+E move to the start
 and end of the line. Ctrl+U and Ctrl+K remove text before and after the cursor.
 Ctrl+W removes the preceding word. Ctrl+D deletes the character under the
-cursor and ends input on an empty line. Up and Down recall commands from this
-session. Down past the newest command restores the line you were editing.
+cursor and ends input on an empty line.
 
 Input that is not valid UTF-8 is refused with a bell. Backspace and the other
 editing keys still work on a refused line, and Enter refuses the line with an
 invalid UTF-8 message instead of running it.
 
 The terminal editor accepts up to 512 bytes per command. The shell discards
-an overlong command on Enter. History defaults to eight commands. Set the
-`XILA_SHELL_HISTORY_CAPACITY` environment variable before launching the shell
-to select a capacity from 0 to 32. A capacity of 0 disables history. The
-shell omits blank lines and consecutive duplicate commands from history.
+an overlong command on Enter.
 
 The shell redraws the line with relative cursor movement, so a line that wraps
 past the bottom row still redraws correctly once the screen scrolls. It
@@ -33,12 +34,32 @@ East Asian Wide subranges of the emoji blocks (the text presentation emoji
 are Neutral and take one column), and the combining diacritical marks;
 rarer wide or combining characters count as one column.
 
+### Without line editing
+
+The shell reads lines from standard input with the device's existing settings.
+An input device with a line discipline, such as Platforms' shared
+`TerminalInputDevice`, handles backspace. The device's line capacity and the
+shell's 4096-byte input limit (`MAX_INPUT_BYTES`) both apply. Cursor keys have
+no effect in the shell, and Tab does not trigger completion.
+
+## Command history
+
+With `history` enabled, Up and Down recall commands from this session. Down
+past the newest command restores the line you were editing. History defaults
+to eight commands. Set the `XILA_SHELL_HISTORY_CAPACITY` environment variable
+before launching the shell to select a capacity from 0 to 32. A capacity of 0
+disables history. The shell omits blank lines and consecutive duplicate
+commands from history.
+
 ## Tab completion
 
-Press Tab to complete the command name or the current component of a path.
+With `completion` enabled, press Tab to complete the command name or the
+current component of a path.
 The shell searches built-in commands and executable entries in `Paths` for a
 command name. It searches the named directory or the current directory for a
-path. The graphical terminal also has a completion button beside Send.
+path. The graphical terminal's completion button beside Send sends a Tab
+when line editing is active. The editor ignores that Tab when `completion`
+is disabled.
 
 One match completes the word. If several matches share a prefix, the first
 Tab fills in that prefix, replacing only the text before the cursor. Press Tab

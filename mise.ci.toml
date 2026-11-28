@@ -72,6 +72,18 @@ run = "cargo clippy --locked --target wasm32-wasip1 -p xila-calculator -p xila-c
 extends = "ci:rust-wasi"
 run = "cargo clippy --locked -p xila-c-demo -p xila-hexdump -p xila-activity -p xila-debug-application -p xila-file-manager -p xila-settings -p xila-terminal -p xila-command-line-shell -p xila-graphical-shell -p xila-package-application --all-targets --features xila/graphics_rendering_xrgb8888 -- -D warnings"
 
+[tasks."ci:test-shell-feature-sets"]
+description = "Lint and test the shell with defaults disabled and with only line editing"
+extends = "ci:rust-wasi"
+tools."github:nextest-rs/nextest" = "cargo-nextest-{{ vars.nextest_version }}"
+run = """
+set -eu
+cargo clippy --locked -p xila-command-line-shell --all-targets --no-default-features -- -D warnings
+cargo nextest run --locked -p xila-command-line-shell --no-default-features
+cargo clippy --locked -p xila-command-line-shell --all-targets --no-default-features --features line-editing -- -D warnings
+cargo nextest run --locked -p xila-command-line-shell --no-default-features --features line-editing
+"""
+
 [tasks."ci:localization"]
 extends = "ci:rust-wasi"
 run = """

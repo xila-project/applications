@@ -2433,7 +2433,7 @@ async fn sudo_stops_the_shell_when_hidden_input_cannot_be_drained() {
     let (mut shell, state, _, _) = sudo_shell("sudo_read_error", true, &input).await;
     *state.read_error_after.lock().unwrap() = Some(error_after);
 
-    shell.main_interactive().await.unwrap();
+    shell.main_stream().await.unwrap();
 
     assert_eq!(state.unread(), b"unread password bytes\n");
     assert_eq!(
