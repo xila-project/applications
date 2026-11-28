@@ -51,13 +51,19 @@ Disabling Wasmi's memory64 support in `memory_32` builds saves about 2 KiB.
 
 ## Guest linear memory
 
-Every guest built by this repository (`mise run build:applications`, the
-`release-wasm` profile, host tests and the release packages all use the same
-build script, the `xila-wasm-guest-build` crate in `tools/wasm_guest_build`)
-is linked with 1-byte linear
-memory pages (`--page-size=1`, the custom page sizes proposal) and a 32 KiB
-stack (`-zstack-size=32768`). The initial memory is then exactly the stack
-plus the data the module needs, instead of a multiple of 64 KiB.
+The runner reserves one block per guest when it starts. If the module declares
+a maximum, the block has that size. Otherwise the block holds the initial
+memory plus a growth allowance of 64 KiB by default. Platforms can set the
+allowance in bytes with `WasmExecutable::with_memory_growth_allowance` when they
+mount the runner. A guest grows in whole pages. If a request exceeds the block,
+`memory.grow` returns `-1`. Growth keeps existing data at the same address.
+The runner releases the block when the guest exits.
+
+The shared guest build script, `tools/wasm_guest_build`, sets 1-byte linear
+memory pages (`--page-size=1`), a 32 KiB stack (`-zstack-size=32768`), and a
+maximum (`--max-memory`) for each bundled application. The initial memory
+holds the stack and the static data without rounding up to a multiple of
+64 KiB. Each application's `build.rs` selects its maximum in bytes.
 
 The stack is placed first in memory, so an overflow stops the guest with an
 out-of-bounds memory access trap instead of corrupting its data. The deepest
@@ -75,7 +81,11 @@ configuration:
 ```text
 --page-size=1
 -zstack-size=32768
+--max-memory=65536
 ```
+
+Adjust the example maximum for the guest's stack, static data and peak heap
+use. The full maximum must fit in a contiguous block on the target.
 
 The proposal allows only 1-byte and 65,536-byte pages. Run Binaryen with
 `--enable-custom-page-sizes` when optimizing these modules, as

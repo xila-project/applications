@@ -9,7 +9,7 @@ struct ShortcutIcon {
 
 /// Shared build script of the Wasm guest applications, invoked from each
 /// application's own `build.rs`. Cargo reruns it when this crate changes.
-pub fn run() {
+pub fn run(maximum_memory_bytes: usize) {
     let shortcut = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("shortcut.json");
     println!("cargo:rerun-if-changed={}", shortcut.display());
 
@@ -17,6 +17,7 @@ pub fn run() {
         // Use 1-byte linear memory pages (custom page sizes proposal) so the initial memory is
         // exactly what the module needs instead of a multiple of 64 KiB.
         println!("cargo:rustc-link-arg-bins=--page-size=1");
+        println!("cargo:rustc-link-arg-bins=--max-memory={maximum_memory_bytes}");
         // The stack is placed first, so an overflow traps instead of corrupting data. The deepest
         // call chain is the calculator's at its parser's nesting limit, between 16 and 20 KiB
         // (tested in executables/wasm/tests/calculator.rs); the other guests stay under 12 KiB.

@@ -319,9 +319,8 @@ async fn expected_content(
 /// Read a managed executable into memory, refusing it unless its exact
 /// bytes match the size and SHA-256 recorded by its installed manifest.
 ///
-/// The returned buffer is the one that was hashed, so the verified bytes
-/// are exactly the bytes compiled; a concurrent modification of the file
-/// makes the digest differ. Working memory beyond that buffer is the
+/// The returned buffer is the one that was hashed. A concurrent modification
+/// of the file makes the digest differ. Working memory beyond that buffer is the
 /// transient manifest (at most `MAX_MANIFEST_BYTES`, released before the
 /// executable is read) and the fixed-size SHA-256 state.
 pub async fn read_package_executable(
@@ -380,7 +379,9 @@ pub async fn read_package_executable(
         let length = usize::try_from(expected_size).map_err(|_| IntegrityError::SizeMismatch)?;
         let mut verifier = ContentVerifier::new(expected_size, expected_digest)
             .map_err(|_| IntegrityError::SizeMismatch)?;
-        let mut buffer = vec![0_u8; length];
+        let mut buffer =
+            Vec::with_capacity(length.saturating_add(super::linear_memory::SOURCE_HEADROOM));
+        buffer.resize(length, 0);
         read_exact_and_end(&mut file, &mut buffer, |chunk| {
             verifier
                 .update(chunk)
