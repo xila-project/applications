@@ -14,17 +14,16 @@ fn main() {
         | "riscv32imac-unknown-none-elf"
         | "riscv32imafc-unknown-none-elf"
         | "thumbv7em-none-eabihf" => &target,
-        _ => return,
+        _ => panic!("xila-hexdump does not support native-linked on {target}"),
     };
     println!("cargo:rerun-if-env-changed=XILA_SDK_DIRECTORY");
     println!("cargo:rerun-if-env-changed=PATH");
+    let tool = PathBuf::from(env::var_os("DEP_XILA_ABI_APPLICATION_SDK_BUILD").expect(
+        "xila-hexdump with native-linked requires a Core revision with SDK link-example support",
+    ));
     let sdk = PathBuf::from(
         env::var_os("XILA_SDK_DIRECTORY")
             .expect("set XILA_SDK_DIRECTORY to the target's built SDK"),
-    );
-    let tool = PathBuf::from(
-        env::var_os("DEP_XILA_ABI_APPLICATION_SDK_BUILD")
-            .expect("use a Core revision that provides the SDK link-example command"),
     );
     println!("cargo:rerun-if-changed={}", tool.display());
     for relative in [

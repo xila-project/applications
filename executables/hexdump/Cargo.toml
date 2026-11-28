@@ -1,13 +1,11 @@
 [package]
 name = "xila-hexdump"
-version = "0.1.0"
-edition = "2024"
-rust-version = "1.97"
-license = "Apache-2.0"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
 publish = false
 description = "Linked POSIX hexdump for Xila firmware"
-
-[workspace]
 
 [lib]
 name = "hexdump"
@@ -16,7 +14,5 @@ name = "hexdump"
 native-linked = ["dep:abi_application", "dep:executable"]
 
 [target.'cfg(any(all(target_os = "linux", any(target_arch = "x86_64", target_arch = "aarch64")), all(target_os = "none", any(target_arch = "arm", target_arch = "riscv32", target_arch = "xtensa"))))'.dependencies]
-abi_application = { package = "xila-abi-application", git = "https://github.com/xila-project/core", branch = "main", optional = true }
-executable = { package = "xila-executable", git = "https://github.com/xila-project/core", branch = "main", optional = true, features = [
-  "native-linked",
-] }
+abi_application = { workspace = true, optional = true }
+executable = { workspace = true, optional = true, features = ["native-linked"] }

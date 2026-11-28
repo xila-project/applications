@@ -2470,6 +2470,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "xila-hexdump"
+version = "0.1.0"
+dependencies = [
+ "xila-abi-application",
+ "xila-executable",
+]
+
+[[package]]
 name = "xila-home-assistant"
 version = "0.1.0"
 dependencies = [
