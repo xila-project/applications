@@ -17,3 +17,8 @@ building the firmware. Keep the SDK compiler and linker tools on `PATH`.
 The crate uses Python 3 and Core's SDK build tool to compile the packaged
 `hexdump.c` and link it with the SDK libraries. The archive exports only the
 program's entry symbol.
+
+To build this crate by itself, pass
+`--manifest-path executables/hexdump/Cargo.toml --features native-linked` to
+Cargo. The crate has its own workspace because it uses the linked SDK support
+from a newer Core revision than the Applications workspace uses.

@@ -115,7 +115,6 @@ getargs-derive = { git = "https://github.com/AlixANNERAUD/getargs-derive.git", r
 resolver = "3"
 members = [
   "executables/c_demo",
-  "executables/hexdump",
   "executables/wasm",
   "executables/wasm/tests/wasm_test",
   "executables/package",
