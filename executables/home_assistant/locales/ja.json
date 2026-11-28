@@ -68,7 +68,7 @@
     "title": "設定",
     "token": "長期アクセス トークン",
     "token_help_create": "Home Assistant でトークンを作成：プロフィール、セキュリティ、長期アクセストークンの順に選択します。",
-    "token_help_terminal": "または Xila ターミナルから: echo '<token>' > /users/<user>/applications/xila.home-assistant/configuration/token",
+    "token_help_terminal": "または Xila ターミナルから: echo '<token>' > /users/<user>/applications/dev.xila.home-assistant/configuration/token",
     "token_hint": "表示を押して入力または変更します。",
     "too_many_entities": "表示できるのは最大 {count} 個のエンティティです。先に 1 つ削除してください",
     "up": "上へ",

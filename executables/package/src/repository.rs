@@ -822,10 +822,10 @@ mod tests {
         };
         let mut files = alloc::vec![
             file("keys/developers/xila.json"),
-            file("packages/xila/clock/0.1.0.json"),
-            file("packages/xila/clock/0.2.0.json"),
-            file("packages/xila/clock/0.3.0-rc.1.json"),
-            file("packages/xila/clockwork/1.0.0-rc.1.json"),
+            file("packages/dev/xila/clock/0.1.0.json"),
+            file("packages/dev/xila/clock/0.2.0.json"),
+            file("packages/dev/xila/clock/0.3.0-rc.1.json"),
+            file("packages/dev/xila/clockwork/1.0.0-rc.1.json"),
             file("packages/example/xila/weather/2.0.0.json"),
         ];
         files.sort_by(|a, b| a.path.cmp(&b.path));
@@ -843,8 +843,8 @@ mod tests {
         assert_eq!(
             matching(&index, Some("CLOCK")),
             [
-                listed("xila.clock", "0.2.0"),
-                listed("xila.clockwork", "1.0.0-rc.1")
+                listed("dev.xila.clock", "0.2.0"),
+                listed("dev.xila.clockwork", "1.0.0-rc.1")
             ]
         );
         assert_eq!(matching(&index, None).len(), 3);

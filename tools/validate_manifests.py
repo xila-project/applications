@@ -119,7 +119,7 @@ def validate_application(root: Path, application: str, sync: bool = False) -> No
     format_version = metadata.get("format_version")
     if type(format_version) is not int or format_version != 2 or metadata.get("$schema") != SCHEMA:
         raise SystemExit(f"unexpected developer manifest version/schema for {application}")
-    expected = (f"xila.{application.replace('_', '-')}", cargo["package"]["version"], "wasm32-wasip1")
+    expected = (f"dev.xila.{application.replace('_', '-')}", cargo["package"]["version"], "wasm32-wasip1")
     actual = tuple(metadata.get(key) for key in ("name", "version", "target"))
     if actual != expected:
         raise SystemExit(f"invalid package identity/version/target for {application}")

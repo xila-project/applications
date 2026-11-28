@@ -91,7 +91,7 @@ space.
 The WebAssembly runner gives each application a private configuration
 directory for each user, created with owner-only permissions (`0700`) and
 passed in `XILA_APPLICATION_CONFIGURATION`. Installed from its package, the
-directory is `/users/<user>/applications/xila.dashboard/configuration`. It
+directory is `/users/<user>/applications/dev.xila.dashboard/configuration`. It
 holds:
 
 - `configuration.json`: the connection, the panels, the hidden panels and the
@@ -150,7 +150,7 @@ Platforms' `tools/dev/serial_shell.py`, log in as the user who runs the
 application and write both files. Single quotes keep the JSON literal:
 
 ```text
-cd /users/<user>/applications/xila.dashboard/configuration
+cd /users/<user>/applications/dev.xila.dashboard/configuration
 echo '{"url": "https://grafana.example.com", "data_source": "prometheus", "dashboard": "servers"}' > configuration.json
 echo '<token>' > token
 chmod 600 token

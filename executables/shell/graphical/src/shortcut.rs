@@ -127,12 +127,12 @@ mod shortcut_tests {
     fn resolves_bundle_relative_executable_without_manifest() {
         let mut shortcut = Shortcut::from_str(SHORTCUT).unwrap();
         shortcut
-            .resolve_bundle_paths(Path::from_str("/applications/bundles/xila.calculator"))
+            .resolve_bundle_paths(Path::from_str("/applications/bundles/dev.xila.calculator"))
             .unwrap();
         assert_eq!(shortcut.command, "/applications/executables/wasm");
         assert_eq!(
             shortcut.arguments[0],
-            "/applications/bundles/xila.calculator/executables/calculator.wasm"
+            "/applications/bundles/dev.xila.calculator/executables/calculator.wasm"
         );
         assert_eq!(shortcut.arguments[1], "--");
         assert_eq!(shortcut.arguments[2], "hello");
@@ -142,47 +142,47 @@ mod shortcut_tests {
     fn packaged_application_shortcuts_are_readable_and_bundle_relative() {
         for (identifier, executable, source) in [
             (
-                "xila.calculator",
+                "dev.xila.calculator",
                 "calculator",
                 include_str!("../../../calculator/shortcut.json"),
             ),
             (
-                "xila.clock",
+                "dev.xila.clock",
                 "clock",
                 include_str!("../../../clock/shortcut.json"),
             ),
             (
-                "xila.weather",
+                "dev.xila.weather",
                 "weather",
                 include_str!("../../../weather/shortcut.json"),
             ),
             (
-                "xila.pixel-painter",
+                "dev.xila.pixel-painter",
                 "pixel_painter",
                 include_str!("../../../pixel_painter/shortcut.json"),
             ),
             (
-                "xila.text-editor",
+                "dev.xila.text-editor",
                 "text_editor",
                 include_str!("../../../text_editor/shortcut.json"),
             ),
             (
-                "xila.synth",
+                "dev.xila.synth",
                 "synth",
                 include_str!("../../../synth/shortcut.json"),
             ),
             (
-                "xila.dashboard",
+                "dev.xila.dashboard",
                 "dashboard",
                 include_str!("../../../dashboard/shortcut.json"),
             ),
             (
-                "xila.home-assistant",
+                "dev.xila.home-assistant",
                 "home_assistant",
                 include_str!("../../../home_assistant/shortcut.json"),
             ),
             (
-                "xila.shortcuts",
+                "dev.xila.shortcuts",
                 "shortcuts",
                 include_str!("../../../shortcuts/shortcut.json"),
             ),

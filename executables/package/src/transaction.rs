@@ -191,8 +191,8 @@ mod tests {
         TRANSACTION_FORMAT_VERSION, TRANSACTION_SCHEMA_URL, Transaction, encode_transaction,
     };
 
-    const NAME: &str = "xila.clock";
-    const DATA: &str = "/configuration/applications/xila.clock.json";
+    const NAME: &str = "dev.xila.clock";
+    const DATA: &str = "/configuration/applications/dev.xila.clock.json";
 
     fn origin(version: &str) -> Origin {
         Origin {
@@ -349,7 +349,7 @@ mod tests {
         let mut session = begin(vfs, task).await.unwrap();
         assert_eq!(
             describe(&session.recovery).as_deref(),
-            Some("Recovered the interrupted upgrade of xila.clock: completed.")
+            Some("Recovered the interrupted upgrade of dev.xila.clock: completed.")
         );
         assert_eq!(
             session.recovery.transaction.as_ref().unwrap().1,

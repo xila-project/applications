@@ -23,68 +23,68 @@ features_always_increment_minor = false
 name = "xila-calculator"
 release = true
 git_release_enable = true
-git_tag_name = "xila.calculator-v{{ version }}"
-git_release_name = "xila.calculator v{{ version }}"
+git_tag_name = "dev.xila.calculator-v{{ version }}"
+git_release_name = "dev.xila.calculator v{{ version }}"
 
 [[package]]
 name = "xila-clock"
 release = true
 git_release_enable = true
-git_tag_name = "xila.clock-v{{ version }}"
-git_release_name = "xila.clock v{{ version }}"
+git_tag_name = "dev.xila.clock-v{{ version }}"
+git_release_name = "dev.xila.clock v{{ version }}"
 
 [[package]]
 name = "xila-weather"
 release = true
 git_release_enable = true
-git_tag_name = "xila.weather-v{{ version }}"
-git_release_name = "xila.weather v{{ version }}"
+git_tag_name = "dev.xila.weather-v{{ version }}"
+git_release_name = "dev.xila.weather v{{ version }}"
 
 [[package]]
 name = "xila-pixel-painter"
 release = true
 git_release_enable = true
-git_tag_name = "xila.pixel-painter-v{{ version }}"
-git_release_name = "xila.pixel-painter v{{ version }}"
+git_tag_name = "dev.xila.pixel-painter-v{{ version }}"
+git_release_name = "dev.xila.pixel-painter v{{ version }}"
 
 [[package]]
 name = "xila-text-editor"
 release = true
 git_release_enable = true
-git_tag_name = "xila.text-editor-v{{ version }}"
-git_release_name = "xila.text-editor v{{ version }}"
+git_tag_name = "dev.xila.text-editor-v{{ version }}"
+git_release_name = "dev.xila.text-editor v{{ version }}"
 
 [[package]]
 name = "xila-synth"
 release = true
 git_release_enable = true
-git_tag_name = "xila.synth-v{{ version }}"
-git_release_name = "xila.synth v{{ version }}"
+git_tag_name = "dev.xila.synth-v{{ version }}"
+git_release_name = "dev.xila.synth v{{ version }}"
 
 [[package]]
 name = "xila-digits"
 release = true
 git_release_enable = true
-git_tag_name = "xila.digits-v{{ version }}"
-git_release_name = "xila.digits v{{ version }}"
+git_tag_name = "dev.xila.digits-v{{ version }}"
+git_release_name = "dev.xila.digits v{{ version }}"
 
 [[package]]
 name = "xila-dashboard"
 release = true
 git_release_enable = true
-git_tag_name = "xila.dashboard-v{{ version }}"
-git_release_name = "xila.dashboard v{{ version }}"
+git_tag_name = "dev.xila.dashboard-v{{ version }}"
+git_release_name = "dev.xila.dashboard v{{ version }}"
 
 [[package]]
 name = "xila-home-assistant"
 release = true
 git_release_enable = true
-git_tag_name = "xila.home-assistant-v{{ version }}"
-git_release_name = "xila.home-assistant v{{ version }}"
+git_tag_name = "dev.xila.home-assistant-v{{ version }}"
+git_release_name = "dev.xila.home-assistant v{{ version }}"
 
 [[package]]
 name = "xila-shortcuts"
 release = true
 git_release_enable = true
-git_tag_name = "xila.shortcuts-v{{ version }}"
-git_release_name = "xila.shortcuts v{{ version }}"
+git_tag_name = "dev.xila.shortcuts-v{{ version }}"
+git_release_name = "dev.xila.shortcuts v{{ version }}"

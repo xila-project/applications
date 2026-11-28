@@ -68,7 +68,7 @@
     "title": "Réglages",
     "token": "Jeton d’accès longue durée",
     "token_help_create": "Créez le jeton dans Home Assistant : Profil, puis Sécurité, puis Jetons d’accès longue durée.",
-    "token_help_terminal": "Ou depuis le terminal Xila : `echo '<token>' > /users/<user>/applications/xila.home-assistant/configuration/token`",
+    "token_help_terminal": "Ou depuis le terminal Xila : `echo '<token>' > /users/<user>/applications/dev.xila.home-assistant/configuration/token`",
     "token_hint": "Appuyez sur Afficher pour le saisir ou le modifier.",
     "too_many_entities": "Au plus {count} entités sont affichées : supprimez-en une d’abord",
     "up": "Monter",

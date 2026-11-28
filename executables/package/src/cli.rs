@@ -86,7 +86,7 @@ pub enum RepositoryOperation<'a> {
 /// Show one package: the installed copy, or what the repositories offer.
 #[derive(Debug, Clone, PartialEq, Eq, GetArgs)]
 pub struct Information<'a> {
-    /// Package name, e.g. xila.clock, or name@version.
+    /// Package name, e.g. dev.xila.clock, or name@version.
     pub package: &'a str,
     /// Look only in this repository (implies a repository lookup).
     #[arg(long)]
@@ -127,7 +127,7 @@ pub enum Command<'a> {
     Upgrade(Install<'a>),
     /// Remove an installed package; its user data is kept.
     Remove {
-        /// Package name, e.g. xila.clock.
+        /// Package name, e.g. dev.xila.clock.
         name: &'a str,
     },
     /// Finish or undo an interrupted package operation.
@@ -203,17 +203,17 @@ mod tests {
     #[test]
     fn package_names_select_repositories() {
         assert_eq!(
-            install(&["install", "xila.clock"]).target(),
+            install(&["install", "dev.xila.clock"]).target(),
             Target::Package {
-                name: "xila.clock",
+                name: "dev.xila.clock",
                 version: None
             }
         );
-        let pinned = install(&["install", "xila.clock@0.1.0", "--repository", "xila"]);
+        let pinned = install(&["install", "dev.xila.clock@0.1.0", "--repository", "xila"]);
         assert_eq!(
             pinned.target(),
             Target::Package {
-                name: "xila.clock",
+                name: "dev.xila.clock",
                 version: Some("0.1.0")
             }
         );
@@ -255,12 +255,12 @@ mod tests {
 
     #[test]
     fn lifecycle_commands() {
-        let input = args(&["upgrade", "xila.clock"]);
+        let input = args(&["upgrade", "dev.xila.clock"]);
         match parse(&input).unwrap() {
             Command::Upgrade(upgrade) => assert_eq!(
                 upgrade.target(),
                 Target::Package {
-                    name: "xila.clock",
+                    name: "dev.xila.clock",
                     version: None
                 }
             ),
@@ -274,32 +274,37 @@ mod tests {
                 ..
             }))
         ));
-        let input = args(&["remove", "xila.clock"]);
-        assert_eq!(parse(&input), Ok(Command::Remove { name: "xila.clock" }));
+        let input = args(&["remove", "dev.xila.clock"]);
+        assert_eq!(
+            parse(&input),
+            Ok(Command::Remove {
+                name: "dev.xila.clock"
+            })
+        );
         assert!(parse(&args(&["remove"])).is_err());
         assert_eq!(parse(&args(&["recover"])), Ok(Command::Recover));
     }
 
     #[test]
     fn information_and_search() {
-        let input = args(&["info", "xila.clock"]);
+        let input = args(&["info", "dev.xila.clock"]);
         let Ok(Command::Info(information)) = parse(&input) else {
             panic!("info not parsed");
         };
-        assert_eq!(information.name_and_version(), ("xila.clock", None));
+        assert_eq!(information.name_and_version(), ("dev.xila.clock", None));
         assert!(!information.queries_repositories());
 
-        let input = args(&["info", "xila.clock@0.2.0"]);
+        let input = args(&["info", "dev.xila.clock@0.2.0"]);
         let Ok(Command::Info(information)) = parse(&input) else {
             panic!("info not parsed");
         };
         assert_eq!(
             information.name_and_version(),
-            ("xila.clock", Some("0.2.0"))
+            ("dev.xila.clock", Some("0.2.0"))
         );
         assert!(information.queries_repositories());
 
-        let input = args(&["info", "xila.clock", "--repository", "xila"]);
+        let input = args(&["info", "dev.xila.clock", "--repository", "xila"]);
         let Ok(Command::Info(information)) = parse(&input) else {
             panic!("info not parsed");
         };

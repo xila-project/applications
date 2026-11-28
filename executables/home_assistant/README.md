@@ -72,7 +72,7 @@ temporary file, then a rename) and returns to the cards.
 The WebAssembly runner gives each application a private configuration
 directory for each user, created with owner-only permissions (`0700`) and
 passed in `XILA_APPLICATION_CONFIGURATION`. Installed from its package, the
-directory is `/users/<user>/applications/xila.home-assistant/configuration`.
+directory is `/users/<user>/applications/dev.xila.home-assistant/configuration`.
 It holds:
 
 - `configuration.json`: the URL of the Home Assistant server, the refresh
@@ -141,7 +141,7 @@ application and write the files. The shell supports `>` redirection, which
 creates or truncates the file. Single quotes keep the JSON literal:
 
 ```text
-cd /users/<user>/applications/xila.home-assistant/configuration
+cd /users/<user>/applications/dev.xila.home-assistant/configuration
 echo '{"url": "http://homeassistant.local:8123", "refresh_seconds": 30, "entities": ["light.living_room", "sensor.outdoor_temperature"]}' > configuration.json
 echo '<token>' > token
 chmod 600 token
